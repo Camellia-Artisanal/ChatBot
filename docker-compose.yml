@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  camellia-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: camellia_artisanal_bot
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - META_VERIFY_TOKEN=camellia_verify_secret_2026
+      - META_APP_SECRET=${META_APP_SECRET}
+      - WHATSAPP_ACCESS_TOKEN=${WHATSAPP_ACCESS_TOKEN}
+      - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID}
+      - INSTAGRAM_PAGE_ID=${INSTAGRAM_PAGE_ID}
+      - HUMAN_ESCALATION_PHONE=${HUMAN_ESCALATION_PHONE:-+918796551990}
+      - HUMAN_ESCALATION_EMAIL=${HUMAN_ESCALATION_EMAIL:-owner@camelliaartisanal.com}
+      - DB_PATH=camellia.db
+    volumes:
+      - camellia_db_data:/app/data
+
+volumes:
+  camellia_db_data:
