@@ -1,0 +1,149 @@
+{
+  "matching_rules": {
+    "how_it_works": "Each template has 'triggers' (keywords/phrases). If a customer message contains ANY trigger from a template's list, that template fires. If multiple templates match, the one with the MOST matched keywords wins. If nothing matches confidently, escalate to human — never guess.",
+    "matching_type": "case-insensitive substring / fuzzy keyword match (no LLM reasoning, no semantic guessing)",
+    "min_confidence": "At least 1 strong keyword match required. Generic words alone (e.g. 'price', 'have') should NOT fire a template without a product keyword alongside them."
+  },
+
+  "templates": [
+
+    {
+      "id": "greeting",
+      "triggers": ["hi", "hello", "hey", "namaste", "good morning", "good evening"],
+      "response": "Hi! 👋 Welcome to Camellia Artisanal — Bengal-rooted, artisanal food. Ask us about our Sondesh flavours & prices, weekly menu, or delivery — happy to help!",
+      "escalate": false
+    },
+
+    {
+      "id": "sondesh_price_general",
+      "triggers": ["sondesh price", "sondesh cost", "how much sondesh", "sondesh rate"],
+      "response": "Our Sondesh comes in two collections:\n\n🔸 Aamar Mishti (everyday): Classic/Rose ₹450 (250g/9pcs), Mango/Kesar ₹550, Nolen Gur ₹600\n🔸 Signature: Classic/Rose ₹600, Mango/Vanilla/Cinnamon/Kesar ₹650, Nolen Gur/Thandai/Dates/Chocolate ₹700, Mahua ₹900 (all 250g/9pcs)\n\nWant details on 500g/1kg packs or a specific flavour?",
+      "escalate": false,
+      "source_ref": "menu.json > collections.aamar_mishti/signature_collection > Sondesh"
+    },
+
+    {
+      "id": "sondesh_classic_rose",
+      "triggers": ["classic sondesh", "rose sondesh", "classic rose"],
+      "response": "Classic/Rose Sondesh:\n• Aamar Mishti collection: 250g (9pcs) ₹450 | 500g (18pcs) ₹800 | 1kg (36pcs) ₹1500\n• Signature collection: 250g (9pcs) ₹600 | 500g (18pcs) ₹1100 | 1kg (36pcs) ₹2000\n\nWhich collection and pack size would you like?",
+      "escalate": false,
+      "source_ref": "menu.json > Sondesh > Classic/Rose"
+    },
+
+    {
+      "id": "sondesh_mango_kesar",
+      "triggers": ["mango sondesh", "kesar sondesh", "aam ada"],
+      "response": "Mango/Kesar Sondesh:\n• Aamar Mishti: 250g (9pcs) ₹550 | 500g (18pcs) ₹1000 | 1kg (36pcs) ₹1800\n• Signature (Mango/Vanilla/Cinnamon/Dalchini/Kesar): 250g (9pcs) ₹650 | 500g (18pcs) ₹1200 | 1kg (36pcs) ₹2200\n\nWhich would you like?",
+      "escalate": false,
+      "source_ref": "menu.json > Sondesh > Mango/Kesar"
+    },
+
+    {
+      "id": "sondesh_nolen_gur",
+      "triggers": ["nolen gur sondesh", "nolen gur price"],
+      "response": "Nolen Gur Sondesh:\n• Aamar Mishti: 250g (9pcs) ₹600 | 500g (18pcs) ₹1100 | 1kg (36pcs) ₹2000\n• Signature: 250g (9pcs) ₹700 | 500g (18pcs) ₹1300 | 1kg (36pcs) ₹2500\n\nWhich collection would you like?",
+      "escalate": false,
+      "source_ref": "menu.json > Sondesh > Nolen Gur"
+    },
+
+    {
+      "id": "jolbhora",
+      "triggers": ["jolbhora", "liquid filling", "jol bhora"],
+      "response": "Jolbhora (Nolen Gur sondesh with a liquid filling):\n• Aamar Mishti: 250g (6pcs) ₹750 | 500g (12pcs) ₹1400 | 1kg (24pcs) ₹2500\n• Signature: 250g (6pcs) ₹900 | 500g (12pcs) ₹1600 | 1kg (24pcs) ₹2900\n\nWhich would you like?",
+      "escalate": false,
+      "source_ref": "menu.json > Jolbhora"
+    },
+
+    {
+      "id": "kanchagolla",
+      "triggers": ["kanchagolla", "kancha golla"],
+      "response": "Kanchagolla is priced the same as Sondesh (Classic or Nolen Gur available). Ask me for Sondesh pricing and it applies here too!",
+      "escalate": false,
+      "source_ref": "menu.json > Kanchagolla"
+    },
+
+    {
+      "id": "mahua_signature_special",
+      "triggers": ["mahua"],
+      "response": "Mahua Sondesh (Signature Collection only): 250g (9pcs) ₹900 | 500g (18pcs) ₹1600 | 1kg (36pcs) ₹2900",
+      "escalate": false,
+      "source_ref": "menu.json > signature_collection > Mahua"
+    },
+
+    {
+      "id": "weekly_menu_veg",
+      "triggers": ["veg menu", "vegetarian menu", "this week veg", "veg dishes"],
+      "response": "This week's Vegetarian menu is available Friday Lunch–Thursday Dinner. It includes dishes like Aloor Dom, Dhokar Dalna, Chhanar Kofta, and Basonti Polao, priced ₹150–₹300. Menu rotates weekly — want the current full list with prices?",
+      "escalate": false,
+      "note": "Response is generic on purpose — weekly menu CHANGES. This template should trigger a lookup against the CURRENT week's block in menu.json (weekly_menus[], match by today's date), not a hardcoded week.",
+      "source_ref": "menu.json > weekly_menus[] > vegetarian"
+    },
+
+    {
+      "id": "weekly_menu_nonveg",
+      "triggers": ["non veg menu", "nonveg menu", "chicken", "mutton", "fish", "prawn", "bhetki", "chingri"],
+      "response": "This week's Non-Vegetarian menu (Friday Lunch–Thursday Dinner) includes dishes like Chicken Kosha, Bhetki Paturi, Golda Chingri, and Mutton Kosha, priced ₹400–₹900. Want the full current list with exact prices?",
+      "escalate": false,
+      "note": "Same weekly-rotation caveat as weekly_menu_veg — must pull from CURRENT week block.",
+      "source_ref": "menu.json > weekly_menus[] > non_vegetarian"
+    },
+
+    {
+      "id": "combo_bento",
+      "triggers": ["combo", "bento", "luchi combo", "bengali bento"],
+      "response": "We have combo/bento options each week — typically a Veg combo (~₹400) and Non-Veg combo (~₹700), including Luchi, a main dish, chutney, and 1 Classic Sondesh. Exact combo depends on the current week's menu — want me to check this week's?",
+      "escalate": false,
+      "source_ref": "menu.json > weekly_menus[] > combos / bengali_bento"
+    },
+
+    {
+      "id": "delivery_area",
+      "triggers": ["delivery", "deliver to", "do you deliver", "ship to", "courier"],
+      "response": "We deliver across Delhi NCR. Courier charges are on actuals (added above listed prices) and shipped from Sushant Arcade, Gurgaon. Which area are you in? I can confirm if we cover it.",
+      "escalate": false,
+      "source_ref": "menu.json > delivery"
+    },
+
+    {
+      "id": "packaging",
+      "triggers": ["packaging", "plastic", "eco friendly", "box"],
+      "response": "All our food is packed in eco-friendly cornstarch-based boxes — completely plastic-free!",
+      "escalate": false,
+      "source_ref": "menu.json > delivery.packaging_note"
+    },
+
+    {
+      "id": "contact_social",
+      "triggers": ["instagram", "contact number", "whatsapp number", "facebook page"],
+      "response": "You can reach us on WhatsApp at +91 8796551990, or find us on Instagram & Facebook @camellia.artisanal 🌸",
+      "escalate": false,
+      "source_ref": "menu.json > contact"
+    },
+
+    {
+      "id": "how_to_order",
+      "triggers": ["how to order", "how do i order", "place an order", "want to order"],
+      "response": "Great! Just tell me what you'd like (item, flavour, pack size, and quantity) along with your delivery area, and I'll get it confirmed for you. What would you like to order?",
+      "escalate": false
+    }
+  ],
+
+  "escalation_triggers": {
+    "description": "These are NOT answered by the bot — always forwarded to human team, per client requirement #4",
+    "examples": [
+      "custom/bulk order pricing negotiation",
+      "complaints or refund requests",
+      "payment method / payment link requests",
+      "delivery date/time-slot commitments",
+      "questions about ingredients for allergies (health/safety sensitive — never guess)",
+      "anything not matching any template above with sufficient confidence"
+    ],
+    "fallback_response": "Thanks for reaching out! Let me connect you with our team for this — they'll get back to you shortly. 🙏"
+  },
+
+  "open_questions_for_client": [
+    "Payment methods accepted — needed before we can auto-answer 'how do I pay'",
+    "Order minimums / lead time / cutoff — needed for 'how to order' template to be complete",
+    "Should weekly curry/combo items be answered with exact current-week prices, or always redirect to 'ask us for this week's menu'? (affects whether weekly_menu templates can be fully automated or need a human touch)"
+  ]
+}

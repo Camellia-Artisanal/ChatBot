@@ -1,0 +1,22 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables
+.env
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# SQLite databases & test databases
+*.db
+camellia.db
+test_camellia.db
+
+# IDE settings
+.vscode/
+.idea/
+.ds_store

@@ -1,0 +1,336 @@
+{
+  "brand": "camellia.artisanal",
+  "tagline": "Artisanal Food. Bengal Rooted.",
+  "contact": {
+    "whatsapp": "+91 8796551990",
+    "instagram": "@camellia.artisanal",
+    "facebook": "camellia.artisanal"
+  },
+  "delivery": {
+    "area": "Delivery across Delhi NCR",
+    "courier_note": "Food courier charges on actuals above the listed rates, from Sushant Arcade, Gurgaon",
+    "packaging_note": "Food is packed in eco-friendly cornstarch-based boxes, free from plastic and better for the planet"
+  },
+  "collections": {
+    "aamar_mishti": {
+      "collection_name": "Aamar Mishti Collection",
+      "updated_as_of": "April 2026",
+      "note": "Everyday / accessible sweets collection",
+      "products": [
+        {
+          "item": "Sondesh",
+          "flavours": [
+            {
+              "flavour": "Classic / Rose",
+              "prices": [
+                {"pack_size": "250g", "pieces": 9, "price_inr": 450},
+                {"pack_size": "500g", "pieces": 18, "price_inr": 800},
+                {"pack_size": "1kg", "pieces": 36, "price_inr": 1500}
+              ]
+            },
+            {
+              "flavour": "Mango / Kesar",
+              "note": "marked with * on menu (may indicate seasonal/premium ingredient)",
+              "prices": [
+                {"pack_size": "250g", "pieces": 9, "price_inr": 550},
+                {"pack_size": "500g", "pieces": 18, "price_inr": 1000},
+                {"pack_size": "1kg", "pieces": 36, "price_inr": 1800}
+              ]
+            },
+            {
+              "flavour": "Nolen Gur",
+              "prices": [
+                {"pack_size": "250g", "pieces": 9, "price_inr": 600},
+                {"pack_size": "500g", "pieces": 18, "price_inr": 1100},
+                {"pack_size": "1kg", "pieces": 36, "price_inr": 2000}
+              ]
+            }
+          ]
+        },
+        {
+          "item": "Jolbhora",
+          "description": "Nolen Gur sondesh with a liquid filling",
+          "prices": [
+            {"pack_size": "250g", "pieces": 6, "price_inr": 750},
+            {"pack_size": "500g", "pieces": 12, "price_inr": 1400},
+            {"pack_size": "1kg", "pieces": 24, "price_inr": 2500}
+          ]
+        },
+        {
+          "item": "Kanchagolla",
+          "pricing_note": "Same price as Sondesh (see Sondesh flavours/prices above)"
+        }
+      ]
+    },
+    "signature_collection": {
+      "collection_name": "Signature Collection",
+      "updated_as_of": "April 2026",
+      "note": "Premium sweets collection with more elaborate flavours",
+      "products": [
+        {
+          "item": "Sondesh",
+          "flavours": [
+            {
+              "flavour": "Classic / Rose",
+              "prices": [
+                {"pack_size": "250g", "pieces": 9, "price_inr": 600},
+                {"pack_size": "500g", "pieces": 18, "price_inr": 1100},
+                {"pack_size": "1kg", "pieces": 36, "price_inr": 2000}
+              ]
+            },
+            {
+              "flavour": "Mango / Real Vanilla / Cinnamon / Dalchini / Kesar",
+              "note": "Mango marked with * on menu",
+              "prices": [
+                {"pack_size": "250g", "pieces": 9, "price_inr": 650},
+                {"pack_size": "500g", "pieces": 18, "price_inr": 1200},
+                {"pack_size": "1kg", "pieces": 36, "price_inr": 2200}
+              ]
+            },
+            {
+              "flavour": "Nolen Gur / Thandai / Medjool Dates / Chocolate",
+              "prices": [
+                {"pack_size": "250g", "pieces": 9, "price_inr": 700},
+                {"pack_size": "500g", "pieces": 18, "price_inr": 1300},
+                {"pack_size": "1kg", "pieces": 36, "price_inr": 2500}
+              ]
+            },
+            {
+              "flavour": "Mahua",
+              "prices": [
+                {"pack_size": "250g", "pieces": 9, "price_inr": 900},
+                {"pack_size": "500g", "pieces": 18, "price_inr": 1600},
+                {"pack_size": "1kg", "pieces": 36, "price_inr": 2900}
+              ]
+            }
+          ]
+        },
+        {
+          "item": "Kanchagolla",
+          "flavours": ["Classic", "Nolen Gur"],
+          "pricing_note": "Same prices & pack sizes as Sondesh (see above)"
+        },
+        {
+          "item": "Jolbhora",
+          "description": "Nolen Gur, with a liquid filling",
+          "prices": [
+            {"pack_size": "250g", "pieces": 6, "price_inr": 900},
+            {"pack_size": "500g", "pieces": 12, "price_inr": 1600},
+            {"pack_size": "1kg", "pieces": 24, "price_inr": 2900}
+          ]
+        }
+      ]
+    }
+  },
+  "weekly_menus": [
+    {
+      "week_of": "24th July - 30th July, 2026",
+      "service_window": "Friday Lunch - Thursday Dinner",
+      "vegetarian": [
+        {
+          "item": "Niramish Aloor Dom",
+          "description": "Pujo-style Bengali aloor dom",
+          "price_inr": 300,
+          "quantity": "150g"
+        },
+        {
+          "item": "Dhokar Dalna",
+          "description": "Freshly made lentil cakes, cooked into a flavourful curry",
+          "price_inr": 300,
+          "quantity": "150g, approx. 4 pcs"
+        },
+        {
+          "item": "Chhanar Kofta",
+          "description": "Koftas made from in-house fresh chhena, simmered in a traditional niramish gravy, prepared in the style of a bhog offering to the deities",
+          "price_inr": 300,
+          "quantity": "120g, approx. 6 pcs"
+        },
+        {
+          "item": "Shorshey Diye Dhyarosh",
+          "description": "Seasonal okra & potatoes, cooked with fresh mustard paste",
+          "price_inr": 300,
+          "quantity": "150g"
+        },
+        {
+          "item": "Potoler Dolma (V)",
+          "description": "An Armenian-influenced celebratory Bengali curry of stuffed potol, with a dal filling",
+          "price_inr": 300,
+          "quantity": "150g, approx. 4 pcs"
+        },
+        {
+          "item": "Basonti Polao",
+          "description": "A light yellow coloured fragrant pulao made with ghee that we make in-house",
+          "price_inr": 300,
+          "quantity": "250g"
+        },
+        {
+          "item": "Aromatic Rice",
+          "description": "Short grain aromatic rice from Bengal, steamed",
+          "price_inr": 150,
+          "quantity": "250g"
+        }
+      ],
+      "non_vegetarian": [
+        {
+          "item": "Potoler Dolma (NV)",
+          "description": "An Armenian-influenced celebratory Bengali curry of stuffed potol, with a minced mutton filling",
+          "price_inr": 400,
+          "quantity": "150g, approx. 4 pcs"
+        },
+        {
+          "item": "Contai Dhaba Chicken",
+          "description": "Organic chicken. A green dhaba-style chicken curry from a place on the way to Contai, whose taste lingers in memory",
+          "price_inr": 400,
+          "quantity": "150g, 1 pc"
+        },
+        {
+          "item": "Bhetki Paturi",
+          "description": "Kolkata bhetki fillet with mustard & coconut, steamed inside a banana leaf",
+          "price_inr": 700,
+          "quantity": "150g, 2 pcs"
+        },
+        {
+          "item": "Golda Chingri Malai Curry",
+          "description": "Jumbo prawn cooked in coconut milk, inspired by Malaysia",
+          "price_inr": 900,
+          "quantity": "180g raw weight, 1 pc"
+        },
+        {
+          "item": "Robibarer Mangsho",
+          "description": "Traditional Bengali Sunday mutton curry",
+          "price_inr": 600,
+          "quantity": "200g, approx. 4 pcs"
+        }
+      ],
+      "combos": [
+        {
+          "name": "Luchi + Niramish Aloor Dom Combo",
+          "price_inr": 400,
+          "includes": ["4 pcs Luchi", "150g Niramish Aloor Dom", "50g Aamra Chatni", "1 Classic Aamar Sondesh"]
+        },
+        {
+          "name": "Luchi + Robibarer Mangsho Combo",
+          "price_inr": 700,
+          "includes": ["4 pcs Luchi", "150g Robibarer Mangsho", "50g Aamra Chatni", "1 Classic Aamar Sondesh"]
+        }
+      ],
+      "norom_pak_sondesh": [
+        {"flavour": "Classic", "pack_size": "250g", "pieces": 9, "price_inr": 450},
+        {"flavour": "Rose", "pack_size": "250g", "pieces": 9, "price_inr": 450},
+        {"flavour": "Mango (Aam Ada)", "pack_size": "250g", "pieces": 9, "price_inr": 550},
+        {"flavour": "Nolen Gur", "pack_size": "250g", "pieces": 9, "price_inr": 600},
+        {"flavour": "Nolen Gur Jolbhora", "pack_size": "250g", "pieces": 6, "price_inr": 750}
+      ],
+      "logistics_note": "Courier charges at actuals from Sushant Arcade, Gurgaon. Porter charges at actuals."
+    },
+    {
+      "week_of": "31st July - 6th August, 2026",
+      "menu_image_till_thursday": "/images/Till%20Thursday.jpeg",
+      "menu_image_from_friday": "/images/From%20Friday.jpeg",
+      "signature_sondesh_image": "/images/Signature%20Sondesh.jpeg",
+      "aamar_mishti_image": "/images/AAMAR%20MISHTI.jpeg",
+      "menu_image_url": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1000&q=80",
+      "service_window": "Friday Lunch - Thursday Dinner",
+      "vegetarian": [
+        {
+          "item": "Chhoto Aloor Dom",
+          "description": "Baby potatoes slow cooked in a mildly spiced, aromatic gravy",
+          "price_inr": 300,
+          "quantity": "150g"
+        },
+        {
+          "item": "Chaal Potol",
+          "description": "A celebratory Bengali dish of seasonal potol, raisins, a little cashew and aromatic rice",
+          "price_inr": 300,
+          "quantity": "150g"
+        },
+        {
+          "item": "Chhanar Kofta Malay Curry",
+          "description": "Koftas made from fresh chhana, cooked in a coconut milk based gravy, inspired by Malay food",
+          "price_inr": 300,
+          "quantity": "120g, approx. 6 pcs"
+        },
+        {
+          "item": "Dhhokar Dalna",
+          "description": "Lentil cakes cooked in a spiced gravy with potatoes",
+          "price_inr": 300,
+          "quantity": "150g, approx. 4 pcs"
+        },
+        {
+          "item": "Aromatic Steamed Rice",
+          "description": "Short grain aromatic rice from Bengal, steamed",
+          "price_inr": 150,
+          "quantity": "250g"
+        },
+        {
+          "item": "Basonti Polao",
+          "description": "A light yellow coloured fragrant pulao made with ghee & whole spices",
+          "price_inr": 300,
+          "quantity": "250g"
+        },
+        {
+          "item": "Aamra Chatni",
+          "description": "Sweet-tangy mango chutney with a touch of Bengali spices",
+          "price_inr": 100,
+          "quantity": "100g"
+        }
+      ],
+      "non_vegetarian": [
+        {
+          "item": "Chicken Kosha",
+          "description": "Chicken slow-cooked to a rich, celebratory Bengali curry",
+          "price_inr": 400,
+          "quantity": "150g, 1 pc"
+        },
+        {
+          "item": "Bhetki Paturi",
+          "description": "Kolkata bhetki fillet with mustard & coconut, steamed inside a banana leaf",
+          "price_inr": 700,
+          "quantity": "150g, 2 pcs"
+        },
+        {
+          "item": "Golda Chingri Malay Curry",
+          "description": "Jumbo prawn cooked in coconut milk, inspired by Malaysia",
+          "price_inr": 900,
+          "quantity": "150g raw weight, 1 pc"
+        },
+        {
+          "item": "Mutton Kosha",
+          "description": "Mutton slow-cooked to a rich, celebratory Bengali curry",
+          "price_inr": 600,
+          "quantity": "200g, approx. 4 pcs"
+        }
+      ],
+      "bengali_bento": [
+        {
+          "name": "Veg Bento",
+          "price_inr": 400,
+          "includes": ["6 Luchi", "Chholar Daal", "Tomato Aamsottwo Chatni", "1 Classic Aamar Sondesh"]
+        },
+        {
+          "name": "Non-Veg Bento",
+          "price_inr": 700,
+          "includes": ["6 Luchi", "Mangsho (Mutton Kosha)", "Tomato Aamsottwo Chatni", "1 Classic Aamar Sondesh"]
+        }
+      ],
+      "norom_pak_sondesh": [
+        {"flavour": "Classic", "pack_size": "250g", "pieces": 9, "price_inr": 450},
+        {"flavour": "Rose", "pack_size": "250g", "pieces": 9, "price_inr": 450},
+        {"flavour": "Mango (Aam Ada)", "pack_size": "250g", "pieces": 9, "price_inr": 550},
+        {"flavour": "Nolen Gur", "pack_size": "250g", "pieces": 9, "price_inr": 600},
+        {"flavour": "Nolen Gur Jolbhora", "pack_size": "250g", "pieces": 6, "price_inr": 750}
+      ],
+      "logistics_note": "Courier charges at actuals from Sushant Arcade, Gurgaon. Delivery across Delhi NCR."
+    }
+  ],
+  "meta": {
+    "menu_rotation": "Weekly menu changes Friday Lunch to Thursday Dinner; sweets collections (Aamar Mishti, Signature) are standing/evergreen catalog, not weekly",
+    "known_gaps_to_confirm_with_client": [
+      "Exact meaning of '*' marker next to Mango/Kesar (premium ingredient? seasonal availability?)",
+      "Whether 'Mango / Kesar' in weekly Norom Pak Sondesh differs from 'Mango (Aam Ada)' pricing shown elsewhere",
+      "Order minimums, lead time for orders, and cutoff times not shown on menu images",
+      "Payment methods accepted",
+      "Whether weekly menu items are also available for pack/courier delivery like the sondesh collections"
+    ]
+  }
+}
