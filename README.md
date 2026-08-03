@@ -65,6 +65,7 @@ Camellia.artisal/
 ├── database.py              # SQLite storage (logs, ad sessions, escalations)
 ├── escalator.py             # Human escalation & alert notification pipeline
 ├── sheet_sync.py            # Self-service Google Sheet CSV live menu update module
+├── menu_vision_parser.py    # Vision AI weekly menu photo -> JSON parser (Gemini)
 ├── config.py                # Environment variable loader
 ├── simulate_bot.py          # Interactive CLI terminal simulator
 ├── test_bot.py              # Automated test suite (10 core test scenarios)
@@ -182,6 +183,39 @@ Then open the Web Chat Interface in your browser:
 
 3. **Live Image Preview Card Render**:
    - Automatically renders outbound menu JPEG cards (`Till Thursday.jpeg`, `From Friday.jpeg`, `Signature Sondesh.jpeg`, `AAMAR MISHTI.jpeg`) inline in the chat bubble.
+
+---
+
+## 📸 Weekly Menu Photo Parser (`menu_vision_parser.py`)
+
+Instead of editing a spreadsheet every week, the owner can simply **snap a photo of the new menu card** and let Vision AI read it. This standalone starter script extracts items, prices, and a chef's teaser from any menu image.
+
+### Usage
+
+```bash
+# Preview extracted data only (safe — does not touch menu.json)
+python menu_vision_parser.py "Till Thursday.jpeg"
+
+# Extract AND append the new week's menu into menu.json
+python menu_vision_parser.py "From Friday.jpeg" --update-json
+```
+
+### What it does
+
+1. Base64-encodes the image and sends it to **Gemini 1.5 Flash Vision**.
+2. Extracts a structured JSON payload: `week_of`, `service_window`, `vegetarian[]`, `non_vegetarian[]`, `bengali_bento[]`.
+3. Generates a **chatbot caption teaser** highlighting 1–2 star dishes (used as the photo card caption in DMs).
+4. With `--update-json`, appends the result to `menu.json` under `weekly_menus`.
+
+### API Key Setup
+
+Add a free [Google AI Studio](https://aistudio.google.com/app/apikey) key to `.env`:
+
+```env
+GEMINI_API_KEY=your_gemini_api_key_here
+```
+
+> **No key?** The script runs in **MOCK / DEMO MODE** using representative sample data, so you can see the full output shape and teaser generation before signing up for anything.
 
 ---
 
