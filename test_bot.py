@@ -335,6 +335,19 @@ class TestCamelliaBot(unittest.TestCase):
         self.assertIn("Jaggery / Nolen Gur Allergy", resp_text)
         self.assertIn("Dietary Note for Huzaifa", resp_text)
 
+    def test_vegan_declaration(self):
+        """Test declaring 'i am a vegan' matches allergy_declaration and extracts Strict Vegan preference."""
+        from session_memory import session_memory
+        user_id = "user_vegan_test"
+        channel = "instagram"
+        session_memory.clear_session(user_id, channel)
+
+        resp_text, was_matched, tmpl_id, img_url = responder.match_and_respond("i am a vegan", user_id=user_id, channel=channel)
+        
+        self.assertTrue(was_matched)
+        self.assertEqual(tmpl_id, "allergy_declaration")
+        self.assertIn("Strict Vegan", resp_text)
+
     def test_escalation_handoff_brief_generation(self):
         """Test escalation handoff brief includes customer name, allergies, and recent chat history."""
         from session_memory import session_memory

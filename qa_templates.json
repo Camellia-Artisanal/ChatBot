@@ -23,8 +23,8 @@
 
     {
       "id": "allergy_declaration",
-      "triggers": ["allergic", "allergy", "intolerant", "diabetic", "sugar free", "lactose"],
-      "response": "Thank you for letting us know! We have noted your dietary preference. Feel free to ask us about our Sondesh flavours, sugar-free options, or weekly menu — we'll ensure safe recommendations for you!",
+      "triggers": ["allergic", "allergy", "intolerant", "diabetic", "sugar free", "sugar-free", "lactose", "vegan", "vegetarian", "dairy free", "dairy-free", "gluten free", "gluten-free", "nut free", "jaggery", "nolen gur"],
+      "response": "Thank you for letting us know! We have noted your dietary preference. Feel free to ask us about our Sondesh flavours, vegan / sugar-free options, or weekly menu — we'll ensure safe recommendations for you!",
       "escalate": false
     },
 
