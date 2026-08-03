@@ -202,10 +202,11 @@ python menu_vision_parser.py "From Friday.jpeg" --update-json
 
 ### What it does
 
-1. Base64-encodes the image and sends it to **Gemini 1.5 Flash Vision**.
-2. Extracts a structured JSON payload: `week_of`, `service_window`, `vegetarian[]`, `non_vegetarian[]`, `bengali_bento[]`.
-3. Generates a **chatbot caption teaser** highlighting 1–2 star dishes (used as the photo card caption in DMs).
-4. With `--update-json`, appends the result to `menu.json` under `weekly_menus`.
+1. Base64-encodes the image and sends it to **Gemini Vision**.
+2. Extracts a structured JSON payload: `week_of`, `service_window`, `vegetarian[]`, `non_vegetarian[]`, `bengali_bento[]`, `footnotes[]`.
+3. Captures **every price tier** per item (250g / 500g / 1kg) via `price_tiers[]`, so multi-size cards are never quoted at only the cheapest price.
+4. Generates a **chatbot caption teaser** highlighting 1–2 star dishes (used as the photo card caption in DMs).
+5. With `--update-json`, appends the result to `menu.json` under `weekly_menus`.
 
 ### API Key Setup
 
@@ -213,6 +214,7 @@ Add a free [Google AI Studio](https://aistudio.google.com/app/apikey) key to `.e
 
 ```env
 GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_VISION_MODEL=gemini-flash-latest
 ```
 
 > **No key?** The script runs in **MOCK / DEMO MODE** using representative sample data, so you can see the full output shape and teaser generation before signing up for anything.

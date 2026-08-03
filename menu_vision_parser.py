@@ -23,26 +23,46 @@ from dotenv import load_dotenv
 load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+GEMINI_VISION_MODEL = os.getenv("GEMINI_VISION_MODEL", "gemini-flash-latest")
 
 SYSTEM_VISION_PROMPT = """
 You are an expert menu reader for Camellia Artisanal, a Bengal-rooted artisanal food kitchen in Delhi NCR.
 Analyze the provided menu card image and extract all menu items, prices, and descriptions.
 
+CRITICAL PRICING RULE:
+Menu cards often list one item at MULTIPLE sizes with MULTIPLE prices on the same line,
+e.g. "Classic / Rose — Rs450 / Rs800 / Rs1500" with "250g: 9 pcs | 500g: 18 pcs | 1kg: 36 pcs".
+You MUST capture EVERY price tier in the "price_tiers" array. Never report only the first/cheapest price.
+If a line names several flavours sharing one price row (e.g. "Classic / Rose"), emit a SEPARATE
+item entry for each flavour, each carrying the full set of price tiers.
+
 Output ONLY a valid JSON object matching this exact schema:
 {
-  "week_of": "e.g., 7th August - 13th August, 2026",
+  "week_of": "e.g., 7th August - 13th August, 2026, or the 'updated as of' date printed on the card",
   "service_window": "Friday Lunch - Thursday Dinner",
-  "highlight_teaser": "A warm, appetizing 1-sentence recommendation featuring 1-2 star dishes (e.g., 'Try our Kosha Mangsho & Basanti Pulao this week — customer favourite!')",
+  "highlight_teaser": "A warm, appetizing 1-sentence recommendation featuring 1-2 star dishes (e.g., 'Try our Kosha Mangsho & Basanti Pulao this week - customer favourite!')",
   "vegetarian": [
-    {"item": "Item Name", "description": "Short description", "price_inr": 300, "quantity": "150g"}
+    {
+      "item": "Item Name",
+      "description": "Short description",
+      "price_tiers": [
+        {"quantity": "250g", "pieces": "9 pcs", "price_inr": 450},
+        {"quantity": "500g", "pieces": "18 pcs", "price_inr": 800},
+        {"quantity": "1kg", "pieces": "36 pcs", "price_inr": 1500}
+      ]
+    }
   ],
   "non_vegetarian": [
-    {"item": "Item Name", "description": "Short description", "price_inr": 400, "quantity": "150g"}
+    {"item": "Item Name", "description": "Short description", "price_tiers": [{"quantity": "150g", "pieces": null, "price_inr": 400}]}
   ],
   "bengali_bento": [
     {"name": "Veg Bento", "price_inr": 400, "includes": ["Item 1", "Item 2"]}
-  ]
+  ],
+  "footnotes": ["Any asterisk/fine-print notes printed on the card, e.g. courier charges or seasonal availability"]
 }
+
+Set "pieces" to null when the card does not state a piece count.
+Leave an array empty ([]) if that category does not appear on the card. Do not invent items.
 Do not include markdown codeblocks (```json) in your response, return raw JSON text only.
 """
 
@@ -70,9 +90,9 @@ def parse_menu_image_with_gemini(image_path: str) -> dict:
         print("\n⚠️ [NOTE]: GEMINI_API_KEY is not set in .env. Running in MOCK / DEMO MODE.")
         return get_mock_extracted_data(image_path)
 
-    print(f"\n🔍 [AI VISION]: Parsing image '{image_path}' using Gemini 1.5 Flash Vision...")
+    print(f"\n🔍 [AI VISION]: Parsing image '{image_path}' using Gemini Vision ({GEMINI_VISION_MODEL})...")
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_VISION_MODEL}:generateContent?key={GEMINI_API_KEY}"
     
     payload = {
         "contents": [
@@ -123,17 +143,34 @@ def get_mock_extracted_data(image_path: str) -> dict:
         "menu_source_image": filename,
         "highlight_teaser": "🌟 Try our Kosha Mangsho & Basanti Pulao this week — customer favourite!",
         "vegetarian": [
-            {"item": "Chhoto Aloor Dom", "description": "Baby potatoes in spiced gravy", "price_inr": 300, "quantity": "150g"},
-            {"item": "Basonti Polao", "description": "Fragrant yellow ghee rice", "price_inr": 300, "quantity": "250g"}
+            {
+                "item": "Chhoto Aloor Dom",
+                "description": "Baby potatoes in spiced gravy",
+                "price_tiers": [{"quantity": "150g", "pieces": None, "price_inr": 300}]
+            },
+            {
+                "item": "Basonti Polao",
+                "description": "Fragrant yellow ghee rice",
+                "price_tiers": [{"quantity": "250g", "pieces": None, "price_inr": 300}]
+            }
         ],
         "non_vegetarian": [
-            {"item": "Mutton Kosha", "description": "Rich slow-cooked Bengali mutton", "price_inr": 600, "quantity": "200g"},
-            {"item": "Bhetki Paturi", "description": "Kolkata bhetki in banana leaf", "price_inr": 700, "quantity": "150g"}
+            {
+                "item": "Mutton Kosha",
+                "description": "Rich slow-cooked Bengali mutton",
+                "price_tiers": [{"quantity": "200g", "pieces": None, "price_inr": 600}]
+            },
+            {
+                "item": "Bhetki Paturi",
+                "description": "Kolkata bhetki in banana leaf",
+                "price_tiers": [{"quantity": "150g", "pieces": None, "price_inr": 700}]
+            }
         ],
         "bengali_bento": [
             {"name": "Veg Bento", "price_inr": 400, "includes": ["6 Luchi", "Chholar Daal", "Chatni", "1 Sondesh"]},
             {"name": "Non-Veg Bento", "price_inr": 700, "includes": ["6 Luchi", "Mutton Kosha", "Chatni", "1 Sondesh"]}
-        ]
+        ],
+        "footnotes": ["Food courier charges on actuals above the above rates."]
     }
 
 def update_menu_json(extracted_data: dict, menu_json_path: str = "menu.json") -> None:
