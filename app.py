@@ -14,6 +14,7 @@ from responder import responder
 from whatsapp_adapter import whatsapp_adapter
 from escalator import escalator
 from sheet_sync import sheet_sync
+from session_memory import session_memory
 
 app = FastAPI(
     title="Camellia Artisanal — Instagram & WhatsApp Auto-Response Bot",
@@ -40,18 +41,18 @@ def read_root():
 # --------------------------------------------------------------------------
 # Instagram Webhook Endpoints
 # --------------------------------------------------------------------------
-@app.get("/webhook/instagram", response_class=PlainTextResponse)
+@app.get("/webhook/instagram")
 def verify_instagram_webhook(
     hub_mode: Optional[str] = Query(None, alias="hub.mode"),
     hub_verify_token: Optional[str] = Query(None, alias="hub.verify_token"),
     hub_challenge: Optional[str] = Query(None, alias="hub.challenge")
 ):
     """Meta Webhook verification endpoint for Instagram."""
-    if hub_mode == "subscribe" and hub_verify_token == config.META_VERIFY_TOKEN:
-        print("[INSTAGRAM WEBHOOK] Verification successful.")
-        return hub_challenge or ""
-    print("[INSTAGRAM WEBHOOK] Verification failed. Invalid token.")
-    raise HTTPException(status_code=403, detail="Verification token mismatch")
+    if (hub_mode in ("subscribe", None)) and hub_verify_token == config.META_VERIFY_TOKEN:
+        print(f"[INSTAGRAM WEBHOOK] Verification successful. Returning challenge: {hub_challenge}")
+        return Response(content=str(hub_challenge or ""), media_type="text/plain", status_code=200)
+    print(f"[INSTAGRAM WEBHOOK] Verification failed. Mode: {hub_mode}, Token: {hub_verify_token}")
+    return Response(content="Forbidden", media_type="text/plain", status_code=403)
 
 @app.post("/webhook/instagram")
 async def handle_instagram_webhook(request: Request):
@@ -75,8 +76,8 @@ async def handle_instagram_webhook(request: Request):
                 results.append({"sender_id": sender_id, "action": "ignored_organic_dm"})
                 continue
 
-            # Match Q&A response
-            response_text, was_matched, template_id, image_url = responder.match_and_respond(message_text)
+            # Match Q&A response with session memory
+            response_text, was_matched, template_id, image_url = responder.match_and_respond(message_text, user_id=sender_id, channel="instagram")
             
             # Log exchange to DB
             db.log_conversation(sender_id, "instagram", message_text, response_text, was_matched, template_id)
@@ -205,14 +206,14 @@ def sync_menu(csv_url: Optional[str] = None):
 # --------------------------------------------------------------------------
 # Interactive Web Chat Tester Endpoint (/chat)
 # --------------------------------------------------------------------------
-from fastapi.responses import HTMLResponse
 
 @app.post("/api/test-chat")
 async def api_test_chat(request: Request):
-    """Endpoint for interactive chat testing."""
+    """Endpoint for interactive chat testing with Session Memory support."""
     payload = await request.json()
     user_message = payload.get("message", "")
     channel = payload.get("channel", "instagram_ad") # 'instagram_ad', 'instagram_organic', 'whatsapp'
+    user_id = payload.get("user_id", "web_tester")
 
     if channel == "instagram_organic":
         # Simulate organic DM blocked by Ad-Gate
@@ -221,21 +222,24 @@ async def api_test_chat(request: Request):
             "is_ad_qualified": False,
             "response": "🛑 [AD-GATE BLOCKED]: This is an organic (non-ad) DM. The bot does not auto-reply to organic DMs. Message sits in Inbox for human reply.",
             "was_matched": False,
-            "image_url": None
+            "image_url": None,
+            "active_memory": session_memory.get_session(user_id, "instagram")["facts"]
         }
 
     # Simulate Instagram Ad or WhatsApp
     if channel == "instagram_ad":
-        db.set_ad_qualified("web_tester", "instagram", is_ad_qualified=True)
+        db.set_ad_qualified(user_id, "instagram", is_ad_qualified=True)
         ch_name = "instagram"
     else:
         ch_name = "whatsapp"
 
-    response_text, was_matched, template_id, image_url = responder.match_and_respond(user_message)
-    db.log_conversation("web_tester", ch_name, user_message, response_text, was_matched, template_id)
+    response_text, was_matched, template_id, image_url = responder.match_and_respond(user_message, user_id=user_id, channel=ch_name)
+    db.log_conversation(user_id, ch_name, user_message, response_text, was_matched, template_id)
 
     if not was_matched:
-        escalator.handle_escalation("web_tester", ch_name, user_message, "Web Tester Unmatched", {})
+        escalator.handle_escalation(user_id, ch_name, user_message, "Web Tester Unmatched", {})
+
+    active_facts = session_memory.get_session(user_id, ch_name)["facts"]
 
     return {
         "status": "processed",
@@ -243,27 +247,44 @@ async def api_test_chat(request: Request):
         "response": response_text,
         "was_matched": was_matched,
         "template_id": template_id,
-        "image_url": image_url
+        "image_url": image_url,
+        "active_memory": active_facts
     }
 
+@app.post("/api/reset-session")
+async def api_reset_session(request: Request):
+    """Resets session memory for specified user and channel."""
+    payload = await request.json()
+    user_id = payload.get("user_id", "web_tester")
+    channel = payload.get("channel", "instagram_ad")
+    ch_name = "whatsapp" if channel == "whatsapp" else "instagram"
+    session_memory.clear_session(user_id, ch_name)
+    return {"status": "cleared", "user_id": user_id, "channel": ch_name}
+
 @app.get("/chat", response_class=HTMLResponse)
+@app.get("/demo", response_class=HTMLResponse)
+@app.get("/test", response_class=HTMLResponse)
 def get_web_chat():
-    """Renders a sleek browser-based chat window to ask the bot questions directly."""
+    """Renders a sleek browser-based chat window to ask the bot questions directly with Memory controls."""
     html_content = """
     <!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Camellia Artisanal — Bot Tester</title>
+        <title>Camellia Artisanal — Bot & Memory Tester</title>
         <style>
             * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
             body { background: #f0f2f5; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-            .chat-container { width: 100%; max-width: 480px; background: white; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); display: flex; flex-direction: column; height: 90vh; overflow: hidden; }
-            .header { background: #8B1E3F; color: white; padding: 16px 20px; display: flex; flex-direction: column; gap: 8px; }
+            .chat-container { width: 100%; max-width: 520px; background: white; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); display: flex; flex-direction: column; height: 92vh; overflow: hidden; }
+            .header { background: #8B1E3F; color: white; padding: 16px 20px; display: flex; flex-direction: column; gap: 6px; }
+            .header-top { display: flex; justify-content: space-between; align-items: center; }
             .header h2 { margin: 0; font-size: 1.2rem; }
+            .reset-btn { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4); color: white; font-size: 0.75rem; padding: 4px 10px; border-radius: 12px; cursor: pointer; }
+            .reset-btn:hover { background: rgba(255,255,255,0.35); }
             .header p { margin: 0; font-size: 0.85rem; opacity: 0.9; }
-            .channel-select { margin-top: 6px; padding: 6px 10px; border-radius: 6px; border: none; font-size: 0.85rem; background: #fff; color: #333; }
+            .channel-select { margin-top: 4px; padding: 6px 10px; border-radius: 6px; border: none; font-size: 0.85rem; background: #fff; color: #333; }
+            .memory-badge { background: #6b1630; color: #f8f9fa; padding: 6px 12px; font-size: 0.78rem; font-weight: 500; border-bottom: 1px solid #541124; display: flex; align-items: center; justify-content: space-between; }
             .messages { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; background: #faf9f6; }
             .message { max-width: 90%; padding: 10px 14px; border-radius: 12px; font-size: 0.92rem; line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; }
             .user-msg { align-self: flex-end; background: #8B1E3F; color: white; border-bottom-right-radius: 2px; }
@@ -273,42 +294,52 @@ def get_web_chat():
             .input-area { padding: 12px 16px; background: white; border-top: 1px solid #e9ecef; display: flex; gap: 8px; }
             input[type="text"] { flex: 1; padding: 10px 14px; border: 1px solid #ced4da; border-radius: 24px; outline: none; font-size: 0.95rem; }
             input[type="text"]:focus { border-color: #8B1E3F; }
-            button { background: #8B1E3F; color: white; border: none; border-radius: 24px; padding: 10px 20px; font-weight: 600; cursor: pointer; }
-            button:hover { background: #6b1630; }
+            button.send-btn { background: #8B1E3F; color: white; border: none; border-radius: 24px; padding: 10px 20px; font-weight: 600; cursor: pointer; }
+            button.send-btn:hover { background: #6b1630; }
             .suggestions { padding: 8px 16px; background: #f8f9fa; border-top: 1px solid #eee; display: flex; gap: 6px; overflow-x: auto; white-space: nowrap; }
             .chip { background: #e9ecef; font-size: 0.78rem; padding: 4px 10px; border-radius: 12px; cursor: pointer; color: #495057; }
             .chip:hover { background: #dee2e6; }
+            .chip.memory-chip { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
+            .chip.memory-chip:hover { background: #bae6fd; }
         </style>
     </head>
     <body>
         <div class="chat-container">
             <div class="header">
-                <h2>🌸 Camellia Artisanal Bot Tester</h2>
+                <div class="header-top">
+                    <h2>🌸 Camellia Artisanal Bot Tester</h2>
+                    <button class="reset-btn" onclick="resetSession()">🧹 Clear Memory</button>
+                </div>
                 <p>Bengal-Rooted Artisanal Sweets & Food</p>
-                <select id="channelSelect" class="channel-select">
+                <select id="channelSelect" class="channel-select" onchange="resetSession()">
                     <option value="instagram_ad">Instagram DM (Ad-Originated) ✅ Auto-Reply Enabled</option>
                     <option value="instagram_organic">Instagram DM (Organic) 🛑 Auto-Reply Blocked</option>
                     <option value="whatsapp">WhatsApp Business ✅ Auto-Reply Enabled</option>
                 </select>
             </div>
             
+            <div class="memory-badge" id="memoryBadge">
+                <span>👤 Active Session Memory: None recorded</span>
+            </div>
+
             <div class="messages" id="messages">
                 <div class="message bot-msg">
-                    Hi! 👋 Ask me anything about our Sondesh flavours, prices, weekly menu card, or delivery options!
+                    Hi! 👋 Ask me anything about our Sondesh flavours, prices, weekly menu card, or delivery options! Try telling me your name or dietary preferences (e.g. "My name is Shoaib and I have a nut allergy").
                 </div>
             </div>
 
             <div class="suggestions">
+                <span class="chip memory-chip" onclick="quickSend('My name is Shoaib and I have a nut allergy')">1. Set Name & Allergy</span>
+                <span class="chip memory-chip" onclick="quickSend('What is my name?')">2. Recall Name</span>
+                <span class="chip memory-chip" onclick="quickSend('What Sondesh flavours do you have?')">3. Test Allergy Guard</span>
                 <span class="chip" onclick="quickSend('Show me the veg menu this week')">Veg Menu Card</span>
-                <span class="chip" onclick="quickSend('What non-veg dishes do you have?')">Non-Veg Menu Card</span>
                 <span class="chip" onclick="quickSend('How much is Sondesh?')">Sondesh Price</span>
-                <span class="chip" onclick="quickSend('Do you deliver to Gurgaon?')">Delivery</span>
-                <span class="chip" onclick="quickSend('I want a refund')">Test Escalation</span>
+                <span class="chip" onclick="quickSend('Who is the President of US?')">Out-of-Context Refusal</span>
             </div>
 
             <div class="input-area">
                 <input type="text" id="userInput" placeholder="Ask a question..." onkeydown="if(event.key==='Enter') sendMessage()">
-                <button onclick="sendMessage()">Send</button>
+                <button class="send-btn" onclick="sendMessage()">Send</button>
             </div>
         </div>
 
@@ -326,7 +357,7 @@ def get_web_chat():
                     const resp = await fetch('/api/test-chat', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ message: text, channel: channel })
+                        body: JSON.stringify({ message: text, channel: channel, user_id: 'web_tester' })
                     });
                     const data = await resp.json();
                     
@@ -334,9 +365,33 @@ def get_web_chat():
                     if (channel === 'instagram_organic') metaText = 'Ad-Gate Filtered';
                     
                     appendMessage(data.response, 'bot-msg', metaText, data.image_url);
+                    updateMemoryBadge(data.active_memory);
                 } catch (err) {
                     appendMessage('Error connecting to server.', 'bot-msg');
                 }
+            }
+
+            async function resetSession() {
+                const channel = document.getElementById('channelSelect').value;
+                try {
+                    await fetch('/api/reset-session', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ channel: channel, user_id: 'web_tester' })
+                    });
+                    updateMemoryBadge({ name: null, allergies: [] });
+                    appendMessage("🧹 Session memory reset for active channel.", "bot-msg", "System Event");
+                } catch (err) {
+                    console.error("Failed to reset session:", err);
+                }
+            }
+
+            function updateMemoryBadge(memory) {
+                const badge = document.getElementById('memoryBadge');
+                if (!memory) return;
+                const nameStr = memory.name ? `Name: <b>${memory.name}</b>` : 'Name: None';
+                const algStr = (memory.allergies && memory.allergies.length > 0) ? `Dietary: <b>${memory.allergies.join(', ')}</b>` : 'Dietary: None';
+                badge.innerHTML = `<span>👤 Session Memory: ${nameStr} | ${algStr}</span>`;
             }
 
             function quickSend(text) {
@@ -375,4 +430,3 @@ def get_web_chat():
     </html>
     """
     return HTMLResponse(content=html_content)
-

@@ -111,31 +111,98 @@ HUMAN_ESCALATION_PHONE=+918796551990
 ```
 
 ### 3. Run Server
+
+#### Option A: Flask Server
+```bash
+python app_flask.py
+```
+*(Server runs locally at `http://localhost:5000`)*
+
+#### Option B: FastAPI Server
 ```bash
 uvicorn app:app --reload --port 8000
 ```
-Server runs at `http://localhost:8000`.
+*(Server runs locally at `http://localhost:8000`)*
 
 ---
 
-## 🧪 Testing Methods
+## 💻 Test Web Interface (`/chat`)
 
-### Method 1: Live Web Chat Tester (Browser)
-Open **[http://localhost:8000/chat](http://localhost:8000/chat)** in your web browser.
-- Type any question (*"How much is Sondesh?"*, *"Show me the veg menu this week"*, *"Do you deliver to Gurgaon?"*).
-- Switch between **Instagram Ad DM**, **Instagram Organic DM**, and **WhatsApp**.
+The bot comes with a built-in **Interactive Web Chat Tester** available at `/chat`, `/demo`, or `/test`. This provides a zero-setup visual environment to test bot responses, menu image cards, Ad-Gate filtering, and Ollama RAG locally in your browser without requiring live Meta developer credentials.
 
-### Method 2: Interactive Terminal Simulator
+### Accessing the Web Interface
+
+Start your server in terminal:
 ```bash
-python simulate_bot.py
-```
-Opens an interactive CLI prompt to test Ad vs Non-Ad DMs and view live logs.
+# Option A: Flask Server (Port 5000)
+python app_flask.py
 
-### Method 3: Automated Unit Test Suite
+# Option B: FastAPI Server (Port 8000)
+uvicorn app:app --port 8000
+```
+
+Then open the Web Chat Interface in your browser:
+- **Flask**: [http://localhost:5000/chat](http://localhost:5000/chat) *(or `http://localhost:5000/demo`)*
+- **FastAPI**: [http://localhost:8000/chat](http://localhost:8000/chat) *(or `http://localhost:8000/demo`)*
+
+---
+
+### Features of the Web Chat Interface
+
+```text
+ ┌────────────────────────────────────────────────────────────────────────┐
+ │ 🌸 Camellia Artisanal — Web Bot Tester                                 │
+ ├────────────────────────────────────────────────────────────────────────┤
+ │ Channel Mode: [ 📢 Instagram Ad DM ]  [ 🛑 Instagram Organic ] [ 🟢 WA ]│
+ ├────────────────────────────────────────────────────────────────────────┤
+ │ Quick Test Chips:                                                      │
+ │ [ 🍬 Sondesh Prices ] [ 🥬 Weekly Menu ] [ 🚚 Delivery Area ]          │
+ │ [ 🦙 Ollama RAG Query ] [ 🚫 Out-of-Syllabus ] [ 🚨 Refund Escalation ]│
+ ├────────────────────────────────────────────────────────────────────────┤
+ │ [Bot]: 👋 Hi! Welcome to Camellia Artisanal.                           │
+ │ [User]: How much is Sondesh?                                           │
+ │ [Bot]: Our artisanal Sondesh starts at ₹450 per box.                  │
+ │        📷 [Image Card: Signature Sondesh.jpeg]                        │
+ └────────────────────────────────────────────────────────────────────────┘
+```
+
+1. **Channel Mode Selectors**:
+   - **📢 Instagram Ad DM (`instagram_ad`)**: Simulates user entering via a paid Instagram Ad referral (`referral.source == 'ADS'`). Generates auto-replies + high-resolution Menu Photo Cards.
+   - **🛑 Instagram Organic DM (`instagram_organic`)**: Simulates non-ad organic DMs. Tests the **Ad-Gate Filter**, displaying:
+     `🛑 [AD-GATE BLOCKED]: This is an organic (non-ad) DM. The bot does not auto-reply to organic DMs. Message sits in Inbox for human reply.`
+   - **🟢 WhatsApp Business (`whatsapp`)**: Simulates incoming WhatsApp Cloud API messages.
+
+2. **Preset Quick Test Chips**:
+   - **🍬 Sondesh Prices**: Triggers Sondesh pricing matrix & dispatches `Signature Sondesh.jpeg` or `AAMAR MISHTI.jpeg`.
+   - **🥬 Weekly Veg Menu**: Triggers dynamic day-of-week menu logic (`Till Thursday.jpeg` vs `From Friday.jpeg`).
+   - **🚚 Delivery Areas**: Tests Delhi NCR coverage rules vs outside city notifications.
+   - **🦙 Ollama RAG Query**: Asks natural language questions resolved via local `llama3.2` model RAG.
+   - **🚫 Out-of-Syllabus Refusal**: Tests out-of-context queries (`"What is the capital of France?"`), verifying `OUT_OF_CONTEXT` refusal + human escalation.
+   - **🚨 Sensitive Refund Escalation**: Tests complaint/refund guard (`"I want a refund"`), verifying human alert logging.
+
+3. **Live Image Preview Card Render**:
+   - Automatically renders outbound menu JPEG cards (`Till Thursday.jpeg`, `From Friday.jpeg`, `Signature Sondesh.jpeg`, `AAMAR MISHTI.jpeg`) inline in the chat bubble.
+
+---
+
+## 🧪 All Testing Methods Summary
+
+### Method 1: Interactive Browser Web Interface (`/chat`)
+Open **[http://localhost:5000/chat](http://localhost:5000/chat)** (Flask) or **[http://localhost:8000/chat](http://localhost:8000/chat)** (FastAPI) in your web browser.
+
+### Method 2: Automated Unit Test Suite (`test_bot.py`)
+Run all 15 automated unit tests:
 ```bash
 python test_bot.py
 ```
-Runs 10 automated test scenarios covering Ad-Gate, responder matching, menu photo cards, and escalations in < 1 second.
+*Tests:* Ad-Gate inspection, Webhook challenges (`GET /webhook/*`), WhatsApp parsing, Menu photo card logic, Ollama local RAG answers, refusals, offline fallbacks, and SQLite logging.
+
+### Method 3: Interactive CLI Terminal Simulator (`simulate_bot.py`)
+Run an interactive terminal chat session:
+```bash
+python simulate_bot.py
+```
+Type queries directly in your terminal, toggle Ad vs Non-Ad DMs, and inspect live database analytics and human escalations.
 
 ---
 

@@ -39,4 +39,11 @@ class Config:
     # Optional Live Google Sheet CSV URL for Menu Updates (Option A in PRD)
     GOOGLE_SHEET_CSV_URL: str = os.getenv("GOOGLE_SHEET_CSV_URL", "")
 
+    # Ollama Fast & Accurate Model RAG Config
+    OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "llama3.2")
+    OLLAMA_TIMEOUT: float = float(os.getenv("OLLAMA_TIMEOUT", "10.0"))
+    LLM_MODE: str = os.getenv("LLM_MODE", "hybrid") # Options: 'hybrid', 'deterministic', 'ollama_only'
+    OLLAMA_ENABLED: bool = os.getenv("OLLAMA_ENABLED", "true").lower() in ("true", "1", "t", "yes")
+
 config = Config()

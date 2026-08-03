@@ -56,8 +56,8 @@ class WhatsAppAdapter:
 
     def process_incoming_message(self, sender_phone: str, message_text: str) -> Dict[str, Any]:
         """Processes an incoming WhatsApp message through responder & escalator."""
-        # Match response
-        response_text, was_matched, template_id, image_url = responder.match_and_respond(message_text)
+        # Match response with session memory
+        response_text, was_matched, template_id, image_url = responder.match_and_respond(message_text, user_id=sender_phone, channel="whatsapp")
         
         # Log to DB
         db.log_conversation(sender_phone, "whatsapp", message_text, response_text, was_matched, template_id)

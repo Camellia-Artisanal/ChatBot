@@ -98,8 +98,28 @@
 
     {
       "id": "delivery_area",
-      "triggers": ["delivery", "deliver to", "do you deliver", "ship to", "courier"],
-      "response": "We deliver across Delhi NCR. Courier charges are on actuals (added above listed prices) and shipped from Sushant Arcade, Gurgaon. Which area are you in? I can confirm if we cover it.",
+      "triggers": [
+        "delivery", "deliver to", "do you deliver", "ship to", "courier",
+        "delhi", "gurgaon", "gurugram", "noida", "ghaziabad", "faridabad",
+        "delhi ncr", "ncr", "delhi delivery", "deliver in delhi", "deliver to delhi"
+      ],
+      "response": "We deliver across Delhi NCR (Delhi, Gurgaon, Noida, Ghaziabad & Faridabad). Courier charges are on actuals (added above listed prices) and shipped from Sushant Arcade, Gurgaon. Which area are you in?",
+      "escalate": false,
+      "source_ref": "menu.json > delivery"
+    },
+
+    {
+      "id": "delivery_out_of_area",
+      "triggers": [
+        "bangalore", "bengaluru", "mumbai", "kolkata", "calcutta", "chennai", "hyderabad",
+        "pune", "ahmedabad", "jaipur", "chandigarh", "lucknow", "kanpur", "surat",
+        "indore", "bhopal", "patna", "ranchi", "bhubaneswar", "guwahati", "kochi",
+        "trivandrum", "coimbatore", "out of delhi", "outside delhi", "outside ncr",
+        "outside delhi ncr", "other city", "other cities", "different city", "out of state",
+        "interstate", "do you deliver to bangalore", "do you deliver in bangalore",
+        "bangalore delivery", "deliver to bangalore", "ship to bangalore"
+      ],
+      "response": "We currently deliver only within Delhi NCR (Delhi, Gurgaon, Noida, Ghaziabad & Faridabad). Unfortunately, we do not deliver to Bangalore or other locations outside Delhi NCR at this time. 📦",
       "escalate": false,
       "source_ref": "menu.json > delivery"
     },
@@ -130,6 +150,7 @@
 
   "escalation_triggers": {
     "description": "These are NOT answered by the bot — always forwarded to human team, per client requirement #4",
+    "keywords": ["refund", "complaint", "cancel order", "talk to human", "speak to human", "human agent", "manager", "custom order", "bulk order", "negotiation", "payment link"],
     "examples": [
       "custom/bulk order pricing negotiation",
       "complaints or refund requests",

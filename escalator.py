@@ -4,6 +4,8 @@ from typing import Dict, Any, Optional
 from config import config
 from database import db
 
+from session_memory import session_memory
+
 class Escalator:
     """
     Escalation & Human Handoff System.
@@ -11,7 +13,7 @@ class Escalator:
     Per PRD Requirement #4b & Phase 3:
     - Answer only 'in syllabus' questions; else forward to human.
     - Escalation path is mandatory, not optional.
-    - Logs escalation details in database for full client visibility.
+    - Logs escalation details in database with Customer Handoff Briefs for full client visibility.
     - Sends automated alert message to owner/human contact.
     """
 
@@ -28,10 +30,14 @@ class Escalator:
         context_data: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Records escalation in database and sends notification to human contact.
+        Records escalation in database and sends notification with Customer Handoff Brief.
         """
         context = context_data or {}
         context["ad_qualified"] = db.is_ad_qualified(user_id, channel)
+        
+        # Attach Session Memory Customer Handoff Brief
+        handoff_brief = session_memory.get_handoff_brief(user_id, channel, escalation_reason=reason)
+        context["handoff_brief"] = handoff_brief
         
         # 1. Record escalation record in database
         escalation_id = db.record_escalation(
@@ -48,6 +54,7 @@ class Escalator:
         return {
             "escalation_id": escalation_id,
             "status": "escalated",
+            "handoff_brief": handoff_brief,
             "alert_sent": alert_result.get("status") == "sent" or alert_result.get("mock") is True
         }
 
@@ -61,12 +68,20 @@ class Escalator:
         context: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Sends WhatsApp/API alert notification to human team contact."""
+        handoff = context.get("handoff_brief", {})
+        cust_name = handoff.get("customer_name", "Unknown")
+        allergies = ", ".join(handoff.get("allergies_and_dietary", []))
+        chat_history = "\n".join(handoff.get("recent_chat_history", []))
+
         alert_body = (
             f"🚨 *NEW CAMELLIA BOT ESCALATION #{escalation_id}*\n\n"
             f"• *Channel:* {channel.upper()}\n"
             f"• *Customer ID/Phone:* {user_id}\n"
+            f"• *Customer Name:* {cust_name}\n"
+            f"• *Allergies/Dietary:* {allergies}\n"
             f"• *Reason:* {reason}\n"
-            f"• *Customer Message:* \"{user_message}\"\n\n"
+            f"• *Last Message:* \"{user_message}\"\n\n"
+            f"📋 *Recent Conversation History:*\n{chat_history or 'None'}\n\n"
             f"Please respond directly to customer on {channel.capitalize()}."
         )
 
