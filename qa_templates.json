@@ -16,8 +16,15 @@
 
     {
       "id": "name_introduction",
-      "triggers": ["my name is", "call me", "i am", "i'm"],
+      "triggers": ["my name is", "call me", "my name's"],
       "response": "Nice to meet you! 👋 Welcome to Camellia Artisanal. Ask us about our Sondesh flavours & prices, weekly menu, or delivery — happy to help!",
+      "escalate": false
+    },
+
+    {
+      "id": "allergy_declaration",
+      "triggers": ["allergic", "allergy", "intolerant", "diabetic", "sugar free", "lactose"],
+      "response": "Thank you for letting us know! We have noted your dietary preference. Feel free to ask us about our Sondesh flavours, sugar-free options, or weekly menu — we'll ensure safe recommendations for you!",
       "escalate": false
     },
 

@@ -73,7 +73,7 @@ class DeterministicResponder:
         lowered_text = user_message.lower().strip()
         user_words = set(re.findall(r'\b\w+\b', lowered_text))
         
-        STOP_WORDS = {"do", "you", "is", "are", "a", "an", "the", "to", "for", "of", "in", "on", "have", "with", "and", "or", "we", "can", "your", "my", "this", "what", "me", "show", "tell", "it"}
+        STOP_WORDS = {"i", "am", "im", "my", "is", "are", "do", "you", "a", "an", "the", "to", "for", "of", "in", "on", "have", "has", "with", "and", "or", "we", "can", "your", "this", "what", "me", "show", "tell", "it"}
         
         templates = self.qa_data.get("templates", [])
         

@@ -58,6 +58,9 @@ class SessionMemoryManager:
             "peanuts": "Nut Allergy",
             "cashew": "Nut Allergy",
             "almond": "Nut Allergy",
+            "jaggery": "Jaggery / Nolen Gur Allergy",
+            "nolen gur": "Jaggery / Nolen Gur Allergy",
+            "gur": "Jaggery / Nolen Gur Allergy",
             "diabetic": "Diabetic / Sugar-Free Preference",
             "diabetes": "Diabetic / Sugar-Free Preference",
             "sugar free": "Diabetic / Sugar-Free Preference",
@@ -65,6 +68,7 @@ class SessionMemoryManager:
             "no sugar": "Diabetic / Sugar-Free Preference",
             "lactose": "Lactose Intolerant",
             "dairy": "Dairy Sensitive",
+            "gluten": "Gluten Sensitive",
             "vegan": "Strict Vegan"
         }
         text_lower = clean_text.lower()

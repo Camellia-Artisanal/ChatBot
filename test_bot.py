@@ -319,6 +319,22 @@ class TestCamelliaBot(unittest.TestCase):
         self.assertIn("Nut Allergy", resp_text)
         self.assertIn("Dietary Note for Shoaib", resp_text)
 
+    def test_jaggery_allergy_declaration(self):
+        """Test declaring a jaggery allergy triggers allergy_declaration template, extracts allergy, and appends warning."""
+        from session_memory import session_memory
+        user_id = "user_jaggery_test"
+        channel = "whatsapp"
+        session_memory.clear_session(user_id, channel)
+
+        # 1. User introduces name & declares jaggery allergy
+        responder.match_and_respond("My name is Huzaifa", user_id=user_id, channel=channel)
+        resp_text, was_matched, tmpl_id, img_url = responder.match_and_respond("I have a jaggery allergy", user_id=user_id, channel=channel)
+        
+        self.assertTrue(was_matched)
+        self.assertEqual(tmpl_id, "allergy_declaration")
+        self.assertIn("Jaggery / Nolen Gur Allergy", resp_text)
+        self.assertIn("Dietary Note for Huzaifa", resp_text)
+
     def test_escalation_handoff_brief_generation(self):
         """Test escalation handoff brief includes customer name, allergies, and recent chat history."""
         from session_memory import session_memory
