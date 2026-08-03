@@ -126,6 +126,18 @@ class DeterministicResponder:
             tmpl_id = best_template.get("id")
             response_text, image_url = self._format_dynamic_response(tmpl_id, best_template.get("response", ""))
             
+            # Dynamic Name Personalization
+            if tmpl_id == "name_introduction":
+                if facts.get("name"):
+                    response_text = f"Nice to meet you, {facts['name']}! 👋 Welcome to Camellia Artisanal. Ask us about our Sondesh flavours & prices, weekly menu, or delivery — happy to help!"
+                else:
+                    response_text = "Nice to meet you! 👋 Welcome to Camellia Artisanal. Ask us about our Sondesh flavours & prices, weekly menu, or delivery — happy to help!"
+            elif tmpl_id == "recall_name":
+                if facts.get("name"):
+                    response_text = f"Yes! Your name is {facts['name']}. 😊 How can I assist you today with our Sondesh or weekly menu?"
+                else:
+                    response_text = "You haven't told me your name yet! What should I call you?"
+
             # Apply Dietary & Allergy Warning Guard
             if facts["allergies"]:
                 allergy_str = ", ".join(facts["allergies"])

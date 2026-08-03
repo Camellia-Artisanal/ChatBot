@@ -15,6 +15,20 @@
     },
 
     {
+      "id": "name_introduction",
+      "triggers": ["my name is", "call me", "i am", "i'm"],
+      "response": "Nice to meet you! 👋 Welcome to Camellia Artisanal. Ask us about our Sondesh flavours & prices, weekly menu, or delivery — happy to help!",
+      "escalate": false
+    },
+
+    {
+      "id": "recall_name",
+      "triggers": ["what is my name", "what's my name", "do you know my name", "remember my name"],
+      "response": "Yes! You introduced yourself earlier. How can I assist you today with our Sondesh or weekly menu?",
+      "escalate": false
+    },
+
+    {
       "id": "sondesh_price_general",
       "triggers": ["sondesh price", "sondesh cost", "how much sondesh", "sondesh rate"],
       "response": "Our Sondesh comes in two collections:\n\n🔸 Aamar Mishti (everyday): Classic/Rose ₹450 (250g/9pcs), Mango/Kesar ₹550, Nolen Gur ₹600\n🔸 Signature: Classic/Rose ₹600, Mango/Vanilla/Cinnamon/Kesar ₹650, Nolen Gur/Thandai/Dates/Chocolate ₹700, Mahua ₹900 (all 250g/9pcs)\n\nWant details on 500g/1kg packs or a specific flavour?",
