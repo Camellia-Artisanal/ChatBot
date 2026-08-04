@@ -70,7 +70,6 @@ class Escalator:
         """Sends WhatsApp/API alert notification to human team contact."""
         handoff = context.get("handoff_brief", {})
         cust_name = handoff.get("customer_name", "Unknown")
-        allergies = ", ".join(handoff.get("allergies_and_dietary", []))
         chat_history = "\n".join(handoff.get("recent_chat_history", []))
 
         alert_body = (
@@ -78,7 +77,6 @@ class Escalator:
             f"• *Channel:* {channel.upper()}\n"
             f"• *Customer ID/Phone:* {user_id}\n"
             f"• *Customer Name:* {cust_name}\n"
-            f"• *Allergies/Dietary:* {allergies}\n"
             f"• *Reason:* {reason}\n"
             f"• *Last Message:* \"{user_message}\"\n\n"
             f"📋 *Recent Conversation History:*\n{chat_history or 'None'}\n\n"

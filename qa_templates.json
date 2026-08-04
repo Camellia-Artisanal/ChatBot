@@ -22,13 +22,6 @@
     },
 
     {
-      "id": "allergy_declaration",
-      "triggers": ["allergic", "allergy", "intolerant", "diabetic", "sugar free", "sugar-free", "lactose", "vegan", "vegetarian", "dairy free", "dairy-free", "gluten free", "gluten-free", "nut free", "jaggery", "nolen gur"],
-      "response": "Thank you for letting us know! We have noted your dietary preference. Feel free to ask us about our Sondesh flavours, vegan / sugar-free options, or weekly menu — we'll ensure safe recommendations for you!",
-      "escalate": false
-    },
-
-    {
       "id": "recall_name",
       "triggers": ["what is my name", "what's my name", "do you know my name", "remember my name"],
       "response": "Yes! You introduced yourself earlier. How can I assist you today with our Sondesh or weekly menu?",
@@ -177,7 +170,6 @@
       "complaints or refund requests",
       "payment method / payment link requests",
       "delivery date/time-slot commitments",
-      "questions about ingredients for allergies (health/safety sensitive — never guess)",
       "anything not matching any template above with sufficient confidence"
     ],
     "fallback_response": "Thanks for reaching out! Let me connect you with our team for this — they'll get back to you shortly. 🙏"

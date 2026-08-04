@@ -34,7 +34,7 @@ Built specifically to solve Meta Ad lead conversion bottlenecks, filter non-ad n
 
 ### 4. 🚨 Human Escalation Pipeline (PRD Requirement #4b)
 - **Out-of-Syllabus Protection**: Unmatched customer queries are never answered with guesses.
-- **Sensitive Trigger Guard**: Queries containing sensitive keywords (`refund`, `complaint`, `cancel`, `allergic`, `custom order`) immediately flag human escalation.
+- **Sensitive Trigger Guard**: Queries containing sensitive keywords (`refund`, `complaint`, `cancel order`, `custom order`, `bulk order`, `payment link`) immediately flag human escalation.
 - **Owner Notification**: Logged into `camellia.db` with customer ID, channel, and message snippet, then alerts human staff via SMS/Email.
 
 ### 5. 📊 Self-Service Menu Updates (PRD Requirement Option A)

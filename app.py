@@ -324,14 +324,13 @@ def get_web_chat():
 
             <div class="messages" id="messages">
                 <div class="message bot-msg">
-                    Hi! 👋 Ask me anything about our Sondesh flavours, prices, weekly menu card, or delivery options! Try telling me your name or dietary preferences (e.g. "My name is Shoaib and I have a nut allergy").
+                    Hi! 👋 Ask me anything about our Sondesh flavours, prices, weekly menu card, or delivery options! Try telling me your name (e.g. "My name is Shoaib").
                 </div>
             </div>
 
             <div class="suggestions">
-                <span class="chip memory-chip" onclick="quickSend('My name is Shoaib and I have a nut allergy')">1. Set Name & Allergy</span>
+                <span class="chip memory-chip" onclick="quickSend('My name is Shoaib')">1. Set Name</span>
                 <span class="chip memory-chip" onclick="quickSend('What is my name?')">2. Recall Name</span>
-                <span class="chip memory-chip" onclick="quickSend('What Sondesh flavours do you have?')">3. Test Allergy Guard</span>
                 <span class="chip" onclick="quickSend('Show me the veg menu this week')">Veg Menu Card</span>
                 <span class="chip" onclick="quickSend('How much is Sondesh?')">Sondesh Price</span>
                 <span class="chip" onclick="quickSend('Who is the President of US?')">Out-of-Context Refusal</span>
@@ -379,7 +378,7 @@ def get_web_chat():
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ channel: channel, user_id: 'web_tester' })
                     });
-                    updateMemoryBadge({ name: null, allergies: [] });
+                    updateMemoryBadge({ name: null });
                     appendMessage("🧹 Session memory reset for active channel.", "bot-msg", "System Event");
                 } catch (err) {
                     console.error("Failed to reset session:", err);
@@ -390,8 +389,7 @@ def get_web_chat():
                 const badge = document.getElementById('memoryBadge');
                 if (!memory) return;
                 const nameStr = memory.name ? `Name: <b>${memory.name}</b>` : 'Name: None';
-                const algStr = (memory.allergies && memory.allergies.length > 0) ? `Dietary: <b>${memory.allergies.join(', ')}</b>` : 'Dietary: None';
-                badge.innerHTML = `<span>👤 Session Memory: ${nameStr} | ${algStr}</span>`;
+                badge.innerHTML = `<span>👤 Session Memory: ${nameStr}</span>`;
             }
 
             function quickSend(text) {

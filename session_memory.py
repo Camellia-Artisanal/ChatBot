@@ -1,15 +1,15 @@
 import re
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 
 class SessionMemoryManager:
     """
     Manages in-memory active chat sessions keyed by (user_id, channel).
-    Extracts customer facts (Name, Dietary/Allergy preferences) and maintains 
-    conversation turn history for multi-turn context and human escalation handoffs.
+    Extracts customer facts (Name) and maintains conversation turn history
+    for multi-turn context and human escalation handoffs.
     """
     def __init__(self, max_history_turns: int = 5):
         self.max_history_turns = max_history_turns
-        # Structure: {(user_id, channel): {"facts": {"name": str, "allergies": List[str]}, "turns": [...]}}
+        # Structure: {(user_id, channel): {"facts": {"name": str}, "turns": [...]}}
         self._sessions: Dict[tuple, Dict[str, Any]] = {}
 
     def get_session(self, user_id: str, channel: str) -> Dict[str, Any]:
@@ -17,8 +17,7 @@ class SessionMemoryManager:
         if key not in self._sessions:
             self._sessions[key] = {
                 "facts": {
-                    "name": None,
-                    "allergies": []
+                    "name": None
                 },
                 "turns": [] # List of {"role": "user"|"assistant", "content": str}
             }
@@ -30,12 +29,12 @@ class SessionMemoryManager:
             del self._sessions[key]
 
     def extract_and_update_facts(self, user_id: str, channel: str, text: str) -> Dict[str, Any]:
-        """Extracts customer attributes like Name or Dietary/Allergy information from user message."""
+        """Extracts customer attributes like Name from user message."""
         session = self.get_session(user_id, channel)
         facts = session["facts"]
         clean_text = text.strip()
 
-        # 1. Extract Name
+        # Extract Name
         # Patterns: "my name is Shoaib", "i am Shoaib", "i'm Shoaib", "call me Shoaib", "name: Shoaib"
         name_patterns = [
             r"(?:my\s+name\s+is|i\s+am|i'm|call\s+me|name\s*[:=])\s+([A-Z][a-z]+|[a-z]+)",
@@ -45,37 +44,10 @@ class SessionMemoryManager:
             if match:
                 extracted_name = match.group(1).capitalize()
                 # Ignore common words misidentified as names
-                ignored_words = {"a", "an", "the", "asking", "looking", "ordering", "wanting", "having", "here", "there", "diabetic", "allergic", "vegan"}
+                ignored_words = {"a", "an", "the", "asking", "looking", "ordering", "wanting", "having", "here", "there"}
                 if extracted_name.lower() not in ignored_words and len(extracted_name) >= 2:
                     facts["name"] = extracted_name
                     break
-
-        # 2. Extract Dietary / Allergies
-        allergy_keywords = {
-            "nut": "Nut Allergy",
-            "nuts": "Nut Allergy",
-            "peanut": "Nut Allergy",
-            "peanuts": "Nut Allergy",
-            "cashew": "Nut Allergy",
-            "almond": "Nut Allergy",
-            "jaggery": "Jaggery / Nolen Gur Allergy",
-            "nolen gur": "Jaggery / Nolen Gur Allergy",
-            "gur": "Jaggery / Nolen Gur Allergy",
-            "diabetic": "Diabetic / Sugar-Free Preference",
-            "diabetes": "Diabetic / Sugar-Free Preference",
-            "sugar free": "Diabetic / Sugar-Free Preference",
-            "sugar-free": "Diabetic / Sugar-Free Preference",
-            "no sugar": "Diabetic / Sugar-Free Preference",
-            "lactose": "Lactose Intolerant",
-            "dairy": "Dairy Sensitive",
-            "gluten": "Gluten Sensitive",
-            "vegan": "Strict Vegan"
-        }
-        text_lower = clean_text.lower()
-        for kw, label in allergy_keywords.items():
-            if re.search(r"\b" + re.escape(kw) + r"\b", text_lower):
-                if label not in facts["allergies"]:
-                    facts["allergies"].append(label)
 
         return facts
 
@@ -99,9 +71,7 @@ class SessionMemoryManager:
         summary_lines = []
         if facts["name"]:
             summary_lines.append(f"Customer Name: {facts['name']}")
-        if facts["allergies"]:
-            summary_lines.append(f"Dietary/Allergies: {', '.join(facts['allergies'])}")
-            
+
         if not summary_lines:
             return "No prior customer details recorded."
         return "\n".join(summary_lines)
@@ -119,7 +89,6 @@ class SessionMemoryManager:
 
         return {
             "customer_name": facts["name"] or "Unknown",
-            "allergies_and_dietary": facts["allergies"] or ["None declared"],
             "recent_chat_history": turn_history,
             "escalation_reason": escalation_reason
         }

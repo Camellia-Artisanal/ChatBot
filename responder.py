@@ -10,7 +10,7 @@ class DeterministicResponder:
     """
     Hybrid Auto-Responder Engine for Camellia Artisanal.
     Combines 100% deterministic regex boundary matching, menu photo cards,
-    conversational session memory, allergy safety guards, and Ollama local RAG fallback.
+    conversational session memory and Ollama local RAG fallback.
     """
 
     def __init__(self, menu_path: str = None, qa_path: str = None):
@@ -45,7 +45,7 @@ class DeterministicResponder:
     def match_and_respond(self, user_message: str, user_id: str = None, channel: str = None) -> Tuple[str, bool, Optional[str], Optional[str]]:
         """
         Matches incoming message against qa_templates.json & menu.json.
-        Updates session memory, applies allergy guards, and falls back to Ollama RAG.
+        Updates session memory and falls back to Ollama RAG.
         
         Returns:
             (response_text: str, was_matched: bool, template_id: Optional[str], image_url: Optional[str])
@@ -56,7 +56,7 @@ class DeterministicResponder:
             )
             return fallback, False, None, None
 
-        # 1. Update & Extract Session Memory Facts (Name, Allergies/Dietary)
+        # 1. Update & Extract Session Memory Facts (Name)
         user_id = user_id or "default_user"
         channel = channel or "default_channel"
         facts = session_memory.extract_and_update_facts(user_id, channel, user_message)
@@ -137,11 +137,6 @@ class DeterministicResponder:
                     response_text = f"Yes! Your name is {facts['name']}. 😊 How can I assist you today with our Sondesh or weekly menu?"
                 else:
                     response_text = "You haven't told me your name yet! What should I call you?"
-
-            # Apply Dietary & Allergy Warning Guard
-            if facts["allergies"]:
-                allergy_str = ", ".join(facts["allergies"])
-                response_text += f"\n\n⚠️ *Dietary Note for {facts['name'] or 'you'}*: We noticed you mentioned ({allergy_str}). Our items contain milk & nuts unless specified sugar-free."
 
             session_memory.add_turn(user_id, channel, user_message, response_text)
             return response_text, True, tmpl_id, image_url

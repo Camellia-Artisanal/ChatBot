@@ -292,64 +292,17 @@ class TestCamelliaBot(unittest.TestCase):
         self.assertEqual(tmpl_id, "ollama_ollama_exception_Exception")
 
     def test_session_memory_fact_extraction(self):
-        """Test extraction of customer name and dietary/allergy preferences in Session Memory."""
+        """Test extraction of customer name in Session Memory."""
         from session_memory import session_memory
         session_memory.clear_session("test_mem_user", "whatsapp")
 
         facts = session_memory.extract_and_update_facts(
-            "test_mem_user", "whatsapp", "Hi, my name is Shoaib and I have a nut allergy and diabetes"
+            "test_mem_user", "whatsapp", "Hi, my name is Shoaib"
         )
         self.assertEqual(facts["name"], "Shoaib")
-        self.assertIn("Nut Allergy", facts["allergies"])
-        self.assertIn("Diabetic / Sugar-Free Preference", facts["allergies"])
-
-    def test_allergy_warning_guard_in_responder(self):
-        """Test that responder automatically appends allergy/dietary warnings when user declared allergies."""
-        from session_memory import session_memory
-        user_id = "user_allergy_test"
-        channel = "whatsapp"
-        session_memory.clear_session(user_id, channel)
-
-        # 1. User declares nut allergy
-        responder.match_and_respond("I'm Shoaib and I have a nut allergy", user_id=user_id, channel=channel)
-
-        # 2. User asks about Sondesh pricing
-        resp_text, was_matched, tmpl_id, img_url = responder.match_and_respond("How much is Sondesh?", user_id=user_id, channel=channel)
-        self.assertTrue(was_matched)
-        self.assertIn("Nut Allergy", resp_text)
-        self.assertIn("Dietary Note for Shoaib", resp_text)
-
-    def test_jaggery_allergy_declaration(self):
-        """Test declaring a jaggery allergy triggers allergy_declaration template, extracts allergy, and appends warning."""
-        from session_memory import session_memory
-        user_id = "user_jaggery_test"
-        channel = "whatsapp"
-        session_memory.clear_session(user_id, channel)
-
-        # 1. User introduces name & declares jaggery allergy
-        responder.match_and_respond("My name is Huzaifa", user_id=user_id, channel=channel)
-        resp_text, was_matched, tmpl_id, img_url = responder.match_and_respond("I have a jaggery allergy", user_id=user_id, channel=channel)
-        
-        self.assertTrue(was_matched)
-        self.assertEqual(tmpl_id, "allergy_declaration")
-        self.assertIn("Jaggery / Nolen Gur Allergy", resp_text)
-        self.assertIn("Dietary Note for Huzaifa", resp_text)
-
-    def test_vegan_declaration(self):
-        """Test declaring 'i am a vegan' matches allergy_declaration and extracts Strict Vegan preference."""
-        from session_memory import session_memory
-        user_id = "user_vegan_test"
-        channel = "instagram"
-        session_memory.clear_session(user_id, channel)
-
-        resp_text, was_matched, tmpl_id, img_url = responder.match_and_respond("i am a vegan", user_id=user_id, channel=channel)
-        
-        self.assertTrue(was_matched)
-        self.assertEqual(tmpl_id, "allergy_declaration")
-        self.assertIn("Strict Vegan", resp_text)
 
     def test_escalation_handoff_brief_generation(self):
-        """Test escalation handoff brief includes customer name, allergies, and recent chat history."""
+        """Test escalation handoff brief includes customer name and recent chat history."""
         from session_memory import session_memory
         user_id = "user_handoff_test"
         channel = "instagram"
@@ -357,19 +310,17 @@ class TestCamelliaBot(unittest.TestCase):
 
         # 1. Establish session memory turns
         responder.match_and_respond("Call me Shoaib", user_id=user_id, channel=channel)
-        responder.match_and_respond("I am diabetic", user_id=user_id, channel=channel)
 
         # 2. Trigger unmatched escalation
         resp_text, was_matched, tmpl_id, img_url = responder.match_and_respond("Can you send a violin player for a wedding?", user_id=user_id, channel=channel)
         escalator.handle_escalation(user_id, channel, "Can you send a violin player for a wedding?", "Unmatched Query", {})
 
         escalation_record = db.get_escalations(limit=1)[0]
-        
+
         context_data = json.loads(escalation_record["context_data"])
         self.assertIn("handoff_brief", context_data)
         brief = context_data["handoff_brief"]
         self.assertEqual(brief["customer_name"], "Shoaib")
-        self.assertIn("Diabetic / Sugar-Free Preference", brief["allergies_and_dietary"])
         self.assertTrue(len(brief["recent_chat_history"]) > 0)
 
     def test_reset_session_endpoint(self):
