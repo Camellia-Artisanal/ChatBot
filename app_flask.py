@@ -89,10 +89,12 @@ def handle_instagram_webhook():
 
     return jsonify({"status": "processed", "results": results})
 
-def send_instagram_reply(recipient_id: str, text: str, image_url: Optional[str] = None) -> Dict[str, Any]:
+def send_instagram_reply(recipient_id: str, text: str, image_url=None) -> Dict[str, Any]:
+    images = [image_url] if isinstance(image_url, str) else list(image_url or [])
+
     if not config.WHATSAPP_ACCESS_TOKEN or not config.INSTAGRAM_PAGE_ID:
         safe_text = text[:60].encode("ascii", "backslashreplace").decode("ascii")
-        msg_type = f"IMAGE ({image_url})" if image_url else "TEXT"
+        msg_type = f"IMAGE x{len(images)} ({', '.join(images)})" if images else "TEXT"
         print(f"[MOCK IG OUTBOUND - FLASK] [{msg_type}] To: {recipient_id} | Message: {safe_text}...")
         return {"mock": True, "status": "sent", "recipient": recipient_id, "type": msg_type}
 
@@ -102,15 +104,19 @@ def send_instagram_reply(recipient_id: str, text: str, image_url: Optional[str] 
         "Content-Type": "application/json"
     }
 
-    payload = {"recipient": {"id": recipient_id}, "message": {"attachment": {"type": "image", "payload": {"url": image_url, "is_reusable": True}}}} if image_url else {"recipient": {"id": recipient_id}, "message": {"text": text}}
-
     try:
         with httpx.Client(timeout=10.0) as client:
-            resp = client.post(url, headers=headers, json=payload)
-            resp.raise_for_status()
-            if image_url and text:
-                client.post(url, headers=headers, json={"recipient": {"id": recipient_id}, "message": {"text": text}})
-            return resp.json()
+            resp = None
+            if text:
+                resp = client.post(url, headers=headers, json={"recipient": {"id": recipient_id}, "message": {"text": text}})
+                resp.raise_for_status()
+            for img in images:
+                resp = client.post(url, headers=headers, json={
+                    "recipient": {"id": recipient_id},
+                    "message": {"attachment": {"type": "image", "payload": {"url": img, "is_reusable": True}}}
+                })
+                resp.raise_for_status()
+            return resp.json() if resp is not None else {"status": "no_content"}
     except Exception as e:
         print(f"Failed to send IG message: {e}")
         return {"error": str(e), "status": "failed"}

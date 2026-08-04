@@ -106,11 +106,13 @@ async def handle_instagram_webhook(request: Request):
 
     return {"status": "processed", "results": results}
 
-def send_instagram_reply(recipient_id: str, text: str, image_url: Optional[str] = None) -> Dict[str, Any]:
-    """Sends text or image message via Meta Graph API to Instagram user."""
+def send_instagram_reply(recipient_id: str, text: str, image_url=None) -> Dict[str, Any]:
+    """Sends text plus zero or more image cards via Meta Graph API to Instagram user."""
+    images = [image_url] if isinstance(image_url, str) else list(image_url or [])
+
     if not config.WHATSAPP_ACCESS_TOKEN or not config.INSTAGRAM_PAGE_ID:
         safe_text = text[:60].encode("ascii", "backslashreplace").decode("ascii")
-        msg_type = f"IMAGE ({image_url})" if image_url else "TEXT"
+        msg_type = f"IMAGE x{len(images)} ({', '.join(images)})" if images else "TEXT"
         print(f"[MOCK IG OUTBOUND] [{msg_type}] To: {recipient_id} | Message: {safe_text}...")
         return {"mock": True, "status": "sent", "recipient": recipient_id, "type": msg_type}
 
@@ -120,32 +122,21 @@ def send_instagram_reply(recipient_id: str, text: str, image_url: Optional[str] 
         "Content-Type": "application/json"
     }
 
-    if image_url:
-        payload = {
-            "recipient": {"id": recipient_id},
-            "message": {
-                "attachment": {
-                    "type": "image",
-                    "payload": {"url": image_url, "is_reusable": True}
-                }
-            }
-        }
-    else:
-        payload = {
-            "recipient": {"id": recipient_id},
-            "message": {"text": text}
-        }
-
     try:
         with httpx.Client(timeout=10.0) as client:
-            resp = client.post(url, headers=headers, json=payload)
-            resp.raise_for_status()
-            
-            # If sending an image with caption, send text message follow-up on Instagram
-            if image_url and text:
-                client.post(url, headers=headers, json={"recipient": {"id": recipient_id}, "message": {"text": text}})
-                
-            return resp.json()
+            last = None
+            if text:
+                last = client.post(url, headers=headers, json={"recipient": {"id": recipient_id}, "message": {"text": text}})
+                last.raise_for_status()
+
+            for img in images:
+                last = client.post(url, headers=headers, json={
+                    "recipient": {"id": recipient_id},
+                    "message": {"attachment": {"type": "image", "payload": {"url": img, "is_reusable": True}}}
+                })
+                last.raise_for_status()
+
+            return last.json() if last is not None else {"status": "no_content"}
     except Exception as e:
         print(f"Failed to send IG message: {e}")
         return {"error": str(e), "status": "failed"}
@@ -403,11 +394,14 @@ def get_web_chat():
                 div.className = 'message ' + className;
                 
                 if (imageUrl) {
-                    const img = document.createElement('img');
-                    img.src = imageUrl;
-                    img.className = 'menu-card-img';
-                    img.alt = 'Weekly Menu Card';
-                    div.appendChild(img);
+                    const urls = Array.isArray(imageUrl) ? imageUrl : [imageUrl];
+                    urls.forEach(u => {
+                        const img = document.createElement('img');
+                        img.src = u;
+                        img.className = 'menu-card-img';
+                        img.alt = 'Menu Card';
+                        div.appendChild(img);
+                    });
                 }
 
                 const textNode = document.createTextNode(text);

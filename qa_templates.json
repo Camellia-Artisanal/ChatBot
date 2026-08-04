@@ -29,11 +29,44 @@
     },
 
     {
-      "id": "sondesh_price_general",
-      "triggers": ["sondesh price", "sondesh cost", "how much sondesh", "sondesh rate"],
-      "response": "Our Sondesh comes in two collections:\n\n🔸 Aamar Mishti (everyday): Classic/Rose ₹450 (250g/9pcs), Mango/Kesar ₹550, Nolen Gur ₹600\n🔸 Signature: Classic/Rose ₹600, Mango/Vanilla/Cinnamon/Kesar ₹650, Nolen Gur/Thandai/Dates/Chocolate ₹700, Mahua ₹900 (all 250g/9pcs)\n\nWant details on 500g/1kg packs or a specific flavour?",
+      "id": "know_more",
+      "triggers": ["want to know more", "know more", "tell me more", "more details", "more info", "more information", "about your brand", "about camellia", "what do you offer", "send the menu", "share the menu", "menu card", "full menu", "your collections", "collections"],
+      "response": "Hi! Thanks for getting in touch. 🌸\n\nAt Camellia.artisanal, every Sondesh is made from scratch using time-tested traditional recipes. We work with small-batch artisanal farmers, trusted dairies, and carefully selected partners — never general retail sourcing. An all-women team makes the sondesh for you.\n\nWe currently offer two collections:\n\n*Collection 1 — Aamar Mishti আমার মিষ্টি*\nIndulgence for your tiny sweet cravings at home or work. Good dairy milk, partially mechanised, made in-house at our kitchen.\n\n*Collection 2 — Signature Collection*\nMishti for special occasions, gifting & when you are in the mood to give yourself a treat. Made using desi A2 cow milk that has not been industrially processed. Completely hand crafted end to end.\n\nPorter charges are on actuals.\n\n*Also —* we prepare and deliver freshly cooked Bengali meals across Delhi NCR. Sharing this week's menu too. Everything is cooked fresh in small batches, and some dishes are available only in limited quantities.\n\nIf you'd like a recommendation based on whether you prefer vegetarian, fish or meat, just let me know — happy to help. Please feel free to ask anything before confirming! 🙏",
       "escalate": false,
-      "source_ref": "menu.json > collections.aamar_mishti/signature_collection > Sondesh"
+      "note": "Sends 3 cards in sequence: Aamar Mishti, Signature Sondesh, and the current weekly menu.",
+      "source_ref": "client Q&A script > GENERAL + ADDITIONAL"
+    },
+
+    {
+      "id": "order_next_steps",
+      "triggers": ["final selection", "this is my final", "my address is", "address and phone", "what are the next steps", "next steps", "confirm my order", "confirm order", "place the order", "here is my address"],
+      "response": "Wonderful — thank you! 🌸\n\nOur Manager of Kitchens, Mr. Guru Dayal Singh (+91 87965 51990), will connect with you shortly and share your invoice. He will be your single point of contact for this order and will be happy to assist you with any queries.",
+      "escalate": false,
+      "source_ref": "client Q&A script > QUESTION"
+    },
+
+    {
+      "id": "delivery_time",
+      "triggers": ["how much time", "how long does it take", "delivery time", "how soon", "when will it arrive", "dispatch time", "kitchen timings", "kitchen hours", "what time do you open", "same day delivery"],
+      "response": "Hi! Thank you for getting in touch.\n\nOnce your sondesh order is confirmed, we usually dispatch it from our kitchen in Sushant Lok, Gurgaon within 15 minutes. Kanchagolla takes about 30 minutes. Jolbhora takes about an hour.\n\nDelivery time after that depends on the Porter rider's travel time, which varies based on traffic and the time of day.\n\nOur kitchen is open 10:00 AM – 7:30 PM every day. We always request a pre-order so we can make and send exactly what you want — we make in small batches, so we sometimes run out of stock. 🌸",
+      "escalate": false,
+      "source_ref": "client Q&A script > TIME"
+    },
+
+    {
+      "id": "nolen_gur_aamar",
+      "triggers": ["nolen gur aamar", "last batch", "nolen gur aamar sondesh", "aamar nolen gur"],
+      "response": "Hi! Thanks for getting in touch. 🌸\n\nAt Camellia.artisanal, every Sondesh is made from scratch using time-tested traditional recipes. We work with small-batch artisanal farmers, trusted dairies, and carefully selected partners — never general retail sourcing. An all-women team makes the sondesh for you.\n\nOur Nolen Gur Sondesh from the Aamar Mishti collection is ₹600 for a box of 9 pieces (250g), ₹1100 for a box of 18 pieces (500g) & ₹2000 for 36 pieces (1kg).\n\nWe also have other flavours — sharing the full menu below.",
+      "escalate": false,
+      "source_ref": "client Q&A script > NOLEN GUR AAMAR"
+    },
+
+    {
+      "id": "sondesh_price_general",
+      "triggers": ["sondesh price", "sondesh cost", "how much sondesh", "sondesh rate", "what's the price", "whats the price", "what is the price", "price list", "how much does it cost"],
+      "response": "Hi, thanks for connecting! 🌸\n\nThe price per piece of Sondesh depends on the number of pieces. Our Sondesh starts from ₹450 for a box of 250g = 9 pieces and goes up to ₹900 depending on the flavour. Porter delivery charges on actuals.\n\nSharing the details below.",
+      "escalate": false,
+      "source_ref": "client Q&A script > PRICE"
     },
 
     {
@@ -131,11 +164,13 @@
         "trivandrum", "coimbatore", "out of delhi", "outside delhi", "outside ncr",
         "outside delhi ncr", "other city", "other cities", "different city", "out of state",
         "interstate", "do you deliver to bangalore", "do you deliver in bangalore",
-        "bangalore delivery", "deliver to bangalore", "ship to bangalore"
+        "bangalore delivery", "deliver to bangalore", "ship to bangalore",
+        "do you deliver to other cities", "deliver to other cities", "ship to other cities",
+        "other cities delivery"
       ],
-      "response": "We currently deliver only within Delhi NCR (Delhi, Gurgaon, Noida, Ghaziabad & Faridabad). Unfortunately, we do not deliver to Bangalore or other locations outside Delhi NCR at this time. 📦",
+      "response": "Hi, thank you for getting in touch.\n\nI would have loved to. However, the Norom Pak Sondesh that we make can be transported from one city to another only through a reliable cold-chain courier service. Unfortunately, we haven't yet found a partner who can offer this at a reasonable cost.\n\nSo for now, we're unable to ship our sondesh outside Delhi NCR — we do not deliver to Bangalore or other cities at this time. We'd love to, though, and will certainly start as soon as we find a dependable cold-chain delivery option.\n\nThat said, many of our regular customers who live in different parts of India and the world do buy our sondesh by asking friends or family travelling from Delhi NCR to carry a few boxes for them. We're happy to deliver the order to their home, office, hotel, or any other convenient location before they travel.\n\nThank you for thinking of camellia.artisanal! 🌸",
       "escalate": false,
-      "source_ref": "menu.json > delivery"
+      "source_ref": "client Q&A script > OTHER CITIES"
     },
 
     {

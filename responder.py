@@ -42,13 +42,13 @@ class DeterministicResponder:
                 return f"Trigger keyword matched: '{kw}'"
         return None
 
-    def match_and_respond(self, user_message: str, user_id: str = None, channel: str = None) -> Tuple[str, bool, Optional[str], Optional[str]]:
+    def match_and_respond(self, user_message: str, user_id: str = None, channel: str = None) -> Tuple[str, bool, Optional[str], Optional[Any]]:
         """
         Matches incoming message against qa_templates.json & menu.json.
         Updates session memory and falls back to Ollama RAG.
-        
+
         Returns:
-            (response_text: str, was_matched: bool, template_id: Optional[str], image_url: Optional[str])
+            (response_text: str, was_matched: bool, template_id: Optional[str], image_url: str | List[str] | None)
         """
         if not user_message or not user_message.strip():
             fallback = self.qa_data.get("escalation_triggers", {}).get(
@@ -73,7 +73,7 @@ class DeterministicResponder:
         lowered_text = user_message.lower().strip()
         user_words = set(re.findall(r'\b\w+\b', lowered_text))
         
-        STOP_WORDS = {"i", "am", "im", "my", "is", "are", "do", "you", "a", "an", "the", "to", "for", "of", "in", "on", "have", "has", "with", "and", "or", "we", "can", "your", "this", "what", "me", "show", "tell", "it"}
+        STOP_WORDS = {"i", "am", "im", "my", "is", "are", "do", "you", "a", "an", "the", "to", "for", "of", "in", "on", "have", "has", "with", "and", "or", "we", "can", "your", "this", "what", "me", "show", "tell", "it", "more", "want", "send", "share"}
         
         templates = self.qa_data.get("templates", [])
         
@@ -165,41 +165,35 @@ class DeterministicResponder:
         session_memory.add_turn(user_id, channel, user_message, fallback)
         return fallback, False, None, None
 
-    def _format_dynamic_response(self, template_id: str, default_response: str) -> Tuple[str, Optional[str]]:
-        """Dynamically populates responses for weekly menus and attaches exact photo cards."""
-        weekly_menus = self.menu_data.get("weekly_menus", [])
-        if not weekly_menus:
-            return default_response, None
-
-        current_week = weekly_menus[-1]
-        week_of = current_week.get("week_of", "")
-        
+    def _format_dynamic_response(self, template_id: str, default_response: str) -> Tuple[str, Optional[Any]]:
+        """Attaches the exact photo card(s) a template should send alongside its text."""
         # Exact image cards from project directory
         img_till_thursday = "/images/Till%20Thursday.jpeg"
         img_from_friday = "/images/From%20Friday.jpeg"
         img_signature_sondesh = "/images/Signature%20Sondesh.jpeg"
         img_aamar_mishti = "/images/AAMAR%20MISHTI.jpeg"
 
+        import datetime
+        today_weekday = datetime.datetime.now().weekday()  # 0=Mon, 4=Fri, 5=Sat, 6=Sun
+        current_weekly_img = img_from_friday if today_weekday in [4, 5, 6] else img_till_thursday
+
+        # "I want to know more" -> both collection cards + this week's meal menu
+        if template_id == "know_more":
+            return default_response, [img_aamar_mishti, img_signature_sondesh, current_weekly_img]
+
         # Sondesh photo card queries
-        if template_id == "sondesh_price_general":
-            caption = "🌸 *Camellia Artisanal Sondesh Collection*\n\nHere is our Sondesh menu card! Delivery across Delhi NCR. Reply to place an order or customize! 📦"
-            return caption, img_signature_sondesh
+        if template_id in ["sondesh_price_general", "nolen_gur_aamar"]:
+            return default_response, [img_aamar_mishti, img_signature_sondesh]
 
         # Weekly menu & bento photo card queries
         if template_id in ["weekly_menu_veg", "weekly_menu_nonveg", "combo_bento"]:
-            import datetime
-            today_weekday = datetime.datetime.now().weekday() # 0=Mon, 4=Fri, 5=Sat, 6=Sun
-            
-            # Select menu photo card: From Friday vs Till Thursday
             if today_weekday in [4, 5, 6]:
-                selected_img = img_from_friday
                 menu_title = "From Friday (Weekend) Menu Card"
             else:
-                selected_img = img_till_thursday
                 menu_title = "Till Thursday (Weekday) Menu Card"
 
             caption = f"🌸 *Camellia Artisanal — {menu_title}*\n\nHere is our fresh menu card! Delivery across Delhi NCR. Reply to place an order! 📦"
-            return caption, selected_img
+            return caption, current_weekly_img
 
         return default_response, None
 

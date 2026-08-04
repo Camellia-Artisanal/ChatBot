@@ -100,7 +100,7 @@ class TestCamelliaBot(unittest.TestCase):
         response, was_matched, tmpl_id, img_url = responder.match_and_respond("How much is Sondesh?")
         self.assertTrue(was_matched)
         self.assertEqual(tmpl_id, "sondesh_price_general")
-        self.assertIn("Camellia Artisanal", response)
+        self.assertIn("₹450", response)
         self.assertIsNotNone(img_url)
 
     def test_responder_dynamic_weekly_menu(self):
