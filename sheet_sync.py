@@ -4,7 +4,10 @@ import json
 import httpx
 from typing import Dict, Any
 from config import config
+from monitoring import get_logger
 from responder import responder
+
+log = get_logger("camellia.sheet_sync")
 
 class SheetSync:
     """
@@ -77,7 +80,7 @@ class SheetSync:
             return {"status": "failed", "reason": "No weekly_menus block in menu.json"}
 
         except Exception as e:
-            print(f"[SHEET SYNC ERROR] Failed: {e}")
+            log.error("Sheet sync failed: %s", e)
             return {"status": "error", "error": str(e)}
 
     def sync_local_reload(self) -> Dict[str, Any]:

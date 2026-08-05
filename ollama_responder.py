@@ -2,6 +2,9 @@ import json
 import httpx
 from typing import Tuple, Dict, Any
 from config import config
+from monitoring import get_logger
+
+log = get_logger("camellia.ollama")
 
 class OllamaResponder:
     """
@@ -23,7 +26,7 @@ class OllamaResponder:
             with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
-            print(f"[OllamaResponder] Error loading {path}: {e}")
+            log.error("Error loading %s: %s", path, e)
             return {}
 
     def reload_data(self):
@@ -119,7 +122,7 @@ class OllamaResponder:
             with httpx.Client(timeout=config.OLLAMA_TIMEOUT) as client:
                 resp = client.post(url, json=payload)
                 if resp.status_code != 200:
-                    print(f"[OllamaResponder] HTTP Error {resp.status_code}: {resp.text}")
+                    log.error("Ollama HTTP %s: %s", resp.status_code, resp.text[:300])
                     return "", False, f"ollama_http_{resp.status_code}"
 
                 data = resp.json()
@@ -136,7 +139,7 @@ class OllamaResponder:
                 return assistant_text, True, "ollama_rag"
 
         except Exception as e:
-            print(f"[OllamaResponder] Exception querying Ollama ({config.OLLAMA_MODEL} at {url}): {e}")
+            log.warning("Ollama unreachable (%s at %s): %s", config.OLLAMA_MODEL, url, e)
             fallback = self.qa_data.get("escalation_triggers", {}).get(
                 "fallback_response",
                 "Thanks for reaching out! Let me connect you with our team — they'll get back to you shortly. 🙏"

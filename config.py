@@ -21,6 +21,17 @@ class Config:
 
     # Protects /admin/* endpoints (customer logs & menu overwrite). Unset = open.
     ADMIN_API_KEY: str = os.getenv("ADMIN_API_KEY", "")
+
+    # The browser chat tester writes real rows and fires real escalation alerts,
+    # so it is disabled unless explicitly switched on.
+    ENABLE_WEB_TESTER: bool = os.getenv("ENABLE_WEB_TESTER", "false").lower() in ("true", "1", "t", "yes")
+
+    # Conversations older than this are purged; stated in the privacy policy.
+    DATA_RETENTION_DAYS: int = int(os.getenv("DATA_RETENTION_DAYS", "90"))
+
+    # Shown on /privacy and /terms.
+    BUSINESS_LEGAL_NAME: str = os.getenv("BUSINESS_LEGAL_NAME", "Camellia Artisanal")
+    PRIVACY_CONTACT_EMAIL: str = os.getenv("PRIVACY_CONTACT_EMAIL", "owner@camelliaartisanal.com")
     
     # WhatsApp Cloud API Config
     WHATSAPP_ACCESS_TOKEN: str = os.getenv("WHATSAPP_ACCESS_TOKEN", "")

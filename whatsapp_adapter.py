@@ -4,6 +4,9 @@ from config import config
 from responder import responder
 from database import db
 from escalator import escalator
+from monitoring import get_logger, delivery_monitor
+
+log = get_logger("camellia.whatsapp")
 
 class WhatsAppAdapter:
     """
@@ -51,7 +54,7 @@ class WhatsAppAdapter:
                 
             return sender_phone, msg_id, msg_text
         except Exception as e:
-            print(f"Error parsing WhatsApp webhook: {e}")
+            log.error("Error parsing WhatsApp webhook: %s", e)
             return None
 
     def process_incoming_message(self, sender_phone: str, message_text: str) -> Dict[str, Any]:
@@ -93,7 +96,7 @@ class WhatsAppAdapter:
             # Development / Mock Mode
             safe_body = text_body[:60].encode("ascii", "backslashreplace").decode("ascii")
             msg_type = f"IMAGE x{len(images)} ({', '.join(images)})" if images else "TEXT"
-            print(f"[MOCK WHATSAPP OUTBOUND] [{msg_type}] To: {recipient_phone} | Body: {safe_body}...")
+            log.info("[MOCK WHATSAPP OUTBOUND] [%s] To: %s | Body: %s...", msg_type, recipient_phone, safe_body)
             return {"mock": True, "status": "sent", "recipient": recipient_phone, "type": msg_type}
 
         headers = {
@@ -125,9 +128,10 @@ class WhatsAppAdapter:
                 for payload in payloads:
                     resp = client.post(self.api_url, headers=headers, json=payload)
                     resp.raise_for_status()
+                delivery_monitor.record_success("whatsapp")
                 return resp.json() if resp is not None else {"status": "no_content"}
         except Exception as e:
-            print(f"Failed to send WhatsApp message to {recipient_phone}: {e}")
+            delivery_monitor.record_failure("whatsapp", f"to {recipient_phone}: {e}")
             return {"error": str(e), "status": "failed"}
 
 whatsapp_adapter = WhatsAppAdapter()

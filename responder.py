@@ -3,8 +3,11 @@ import json
 import re
 from typing import Dict, Any, Tuple, Optional
 from config import config
+from monitoring import get_logger
 from ollama_responder import ollama_responder
 from session_memory import session_memory
+
+log = get_logger("camellia.responder")
 
 class DeterministicResponder:
     """
@@ -22,7 +25,7 @@ class DeterministicResponder:
             with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
-            print(f"[Responder] Error loading {path}: {e}")
+            log.error("Error loading %s: %s", path, e)
             return {}
 
     def reload_data(self):

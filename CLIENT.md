@@ -26,6 +26,7 @@ not certain**. It never invents prices.
 | Product data | `menu.json` — collections, flavours, prices, weekly menus |
 | Menu photo cards | The `.jpeg` files in the project root, served at `/images/...` |
 | Conversation log | `camellia.db` — a single SQLite file |
+| Legal pages | `/privacy` and `/terms`, served by the bot itself — Meta requires the first one |
 | Optional local AI | Ollama (`llama3.2`) for paraphrased questions — **off by default** |
 
 The bot is **hard-gated to ad traffic on Instagram**: an organic DM from someone who did not
@@ -91,7 +92,7 @@ cp .env.example .env
 nano .env
 ```
 
-Fill in the real values (see §3 for where each one comes from), save, then lock the file
+Fill in the real values (see 3 for where each one comes from), save, then lock the file
 so only the bot's user can read it:
 
 ```bash
@@ -192,6 +193,11 @@ know which keys are expected.
 | `HUMAN_ESCALATION_EMAIL` | Your own email | Recorded on escalations. |
 | `GEMINI_API_KEY` | https://aistudio.google.com/app/apikey | **Optional.** Only for `menu_vision_parser.py`, the tool that reads a weekly menu photo. Free tier is enough. |
 | `GOOGLE_SHEET_CSV_URL` | Google Sheets → File → Share → Publish to web → CSV | **Optional.** Lets you update prices from a spreadsheet instead of editing code. |
+| `ENABLE_WEB_TESTER` | **You choose.** Leave it `false`. | Controls the browser chat tester at `/chat`. It writes real conversation rows and pages your phone, so on a public domain anyone who finds the URL can abuse it. When `false` the page returns 404. |
+| `DATA_RETENTION_DAYS` | **You choose.** Default `90`. | Conversations, escalations and sessions older than this are deleted every time the bot starts. This number is the promise printed on your `/privacy` page — change one, change the other. `0` disables deletion entirely (not recommended). |
+| `BUSINESS_LEGAL_NAME` | Your registered business name | Printed on `/privacy` and `/terms`. |
+| `PRIVACY_CONTACT_EMAIL` | Your own email | The address customers write to for a data copy or deletion. Must be one you actually monitor — it is a legal obligation under the DPDP Act. |
+| `LOG_LEVEL` | `INFO` is right for production | Set `DEBUG` only while diagnosing a problem; it is noisy. |
 
 ### 3.2 Rules for keeping the keys safe
 
@@ -265,6 +271,18 @@ you are happy, switch the app to **Live** in the top bar of the dashboard. Meta 
 Privacy Policy URL and a completed Business Verification before it will allow this — start
 Business Verification early, as it can take a few days.
 
+The bot serves both required pages itself, so there is nothing to write or host separately.
+In **Settings → Basic** on the Meta dashboard, paste:
+
+| Field | Value |
+| --- | --- |
+| Privacy Policy URL | `https://bot.camelliaartisanal.com/privacy` |
+| Terms of Service URL | `https://bot.camelliaartisanal.com/terms` |
+
+Open both in a browser first and check the business name, contact email and retention period
+read correctly — they are generated from `BUSINESS_LEGAL_NAME`, `PRIVACY_CONTACT_EMAIL` and
+`DATA_RETENTION_DAYS` in your `.env`. Meta reviewers do open these links.
+
 ### 4.8 Checking it works
 
 ```bash
@@ -302,7 +320,7 @@ Then send a real WhatsApp message to your business number and watch the log.
 ├── Signature Sondesh.jpeg
 ├── Till Thursday.jpeg
 ├── From Friday.jpeg
-├── test_bot.py                       ← 19 automated tests
+├── test_bot.py                       ← 25 automated tests
 ├── simulate_bot.py                   ← chat with the bot in the terminal, no Meta needed
 ├── docker-compose.yml                ← how the container is run
 └── Dockerfile                        ← how the container is built
@@ -321,6 +339,33 @@ Four tables: `sessions` (who came from an ad), `conversations` (every message in
 
 **This file never leaves your server.** No customer message is sent to any third party
 unless you switch Ollama on — and even then, Ollama runs on your own machine.
+
+### 5.2a How long customer data is kept
+
+Every time the bot starts, it deletes conversations, escalations and sessions older than
+`DATA_RETENTION_DAYS` (default **90 days**). This is not optional housekeeping — it is the
+promise printed on your `/privacy` page, and India's DPDP Act 2023 expects you to keep
+personal data only as long as you need it.
+
+Because the purge runs at startup, a container that stays up for months will not purge in
+between. Restarting weekly is enough to stay within the window:
+
+```bash
+# Sunday 4:07 AM — restart, which also runs the retention purge
+crontab -e
+7 4 * * 0 cd /home/camellia/camellia-bot && docker compose restart
+```
+
+**If a customer asks you to delete their data** (they have the right to, and you must
+comply), run this with the WhatsApp number or Instagram sender ID:
+
+```bash
+curl -X DELETE https://bot.camelliaartisanal.com/admin/user-data/919876543210 \
+  -H "X-Admin-Key: YOUR_ADMIN_API_KEY"
+```
+
+It removes every row for that person across all three tables and clears their in-memory
+session. The reply tells you how many rows went. Keep a note of the date you actioned it.
 
 ### 5.3 Backing it up
 
@@ -425,14 +470,38 @@ anyway when someone asks about a custom order.
 | Task | Command / URL |
 | --- | --- |
 | Is it running? | `curl https://bot.camelliaartisanal.com/` |
+| Is it *healthy*? | `curl https://bot.camelliaartisanal.com/health` |
 | Live logs | `docker compose logs -f` |
+| Only the problems | `docker compose logs \| grep -E "ERROR\|CRITICAL"` |
 | Customers waiting for a human | `curl -H "X-Admin-Key: YOUR_KEY" https://bot.camelliaartisanal.com/admin/escalations` |
 | How many messages, how many matched | `curl -H "X-Admin-Key: YOUR_KEY" https://bot.camelliaartisanal.com/admin/analytics` |
-| Try the bot in a browser | `https://bot.camelliaartisanal.com/chat` |
+| Try the bot in a browser | Set `ENABLE_WEB_TESTER=true`, restart, visit `/chat` — then turn it **back off** |
 | Restart after editing JSON | `docker compose restart` |
 
 **Someone should check `/admin/escalations` at least twice a day.** That list is customers
 the bot could not answer — a real person is waiting on the other end.
+
+### 7.1a Getting told when it breaks
+
+The worst failure is a silent one: the WhatsApp token expires, the bot keeps accepting
+messages and looks perfectly fine, but every reply is dropped and you only find out when a
+customer complains. Two things guard against that.
+
+**The bot pages you.** After 3 consecutive send failures on a channel it sends a WhatsApp
+alert to `HUMAN_ESCALATION_PHONE` and writes a `CRITICAL` line to the log. It alerts once,
+not repeatedly, and resets as soon as sending recovers. If the broken credential is the
+reason sending fails, the WhatsApp alert cannot get through either — which is why the log
+line and `/health` both exist.
+
+**An uptime service watches `/health`.** Point a free monitor at it:
+
+- Sign up at **UptimeRobot** (uptimerobot.com) — free, no card
+- Add an HTTP monitor for `https://bot.camelliaartisanal.com/health`, every 5 minutes
+- Add your phone/email as the alert contact
+
+`/health` returns **200** when replies are going out and **503** when a channel has been
+failing. A 503 means customers are being ignored right now — treat it as urgent. Because
+UptimeRobot also alerts when the URL is unreachable, this covers the server going down too.
 
 ### 7.2 If something breaks
 
@@ -440,16 +509,19 @@ the bot could not answer — a real person is waiting on the other end.
 | --- | --- | --- |
 | Bot silent on WhatsApp | Access token expired | Generate a permanent System User token (§4.4) |
 | Bot silent on Instagram | Message was an organic DM | Working as designed — reply by hand |
+| `/health` returns 503 | Meta is rejecting outbound sends | Check the logs for the exact error; usually an expired token |
 | Meta webhook won't verify | `META_VERIFY_TOKEN` mismatch, or URL is not HTTPS | Check `.env` matches the dashboard exactly |
 | `403` on a webhook | `META_APP_SECRET` is wrong | Re-copy it from Settings → Basic |
 | `403` on `/admin/...` | Missing or wrong `X-Admin-Key` header | Use the value from `.env` |
+| `404` on `/chat` | `ENABLE_WEB_TESTER=false` | Intended in production. Flip it on temporarily if you need to test |
 | Conversations disappeared after a rebuild | `DB_PATH` was moved outside `/app/data` | It must stay `/app/data/camellia.db` |
+| Older chats vanished | The 90-day retention purge ran | Working as designed — see §5.2a |
 | Wrong price quoted | `menu.json` / `qa_templates.json` out of date | Edit, then `docker compose restart` |
 
 ### 7.3 Before every handover or upgrade
 
 ```bash
-python test_bot.py     # all 19 tests must pass
+python test_bot.py     # all 25 tests must pass
 ```
 
 ---
@@ -458,18 +530,55 @@ python test_bot.py     # all 19 tests must pass
 
 - [ ] `META_APP_SECRET` is set (otherwise anyone can POST fake customer messages)
 - [ ] `ADMIN_API_KEY` is set to a long random value (otherwise customer chats are public)
+- [ ] `ENABLE_WEB_TESTER=false` (otherwise strangers can drive the bot and page your phone)
+- [ ] `/privacy` and `/terms` open correctly and show the right business name and email
+- [ ] Both URLs are pasted into Meta → Settings → Basic
+- [ ] `PRIVACY_CONTACT_EMAIL` is an address someone actually reads
 - [ ] `.env` is `chmod 600` and is **not** in git
 - [ ] The permanent WhatsApp System User token is in place, not the 24-hour test token
 - [ ] HTTPS is live and certbot auto-renewal is active
 - [ ] `ufw` allows only SSH, 80 and 443 — port 8000 is **not** exposed to the internet
 - [ ] Nightly database backup cron is installed and you have verified a backup file exists
+- [ ] The weekly restart cron is installed so the retention purge actually runs
+- [ ] An uptime monitor is watching `/health`
 - [ ] An offline copy of `.env` is stored in a password manager
 - [ ] SSH uses a key, not a password
 - [ ] `OLLAMA_ENABLED=false` unless you have deliberately chosen otherwise
 
 ---
 
-## 9. Who to Contact
+## 9. Your Legal Obligations
+
+Not legal advice — have a lawyer read this if you are unsure. But you are collecting phone
+numbers, Instagram IDs and message content from customers in India, which makes you a **data
+fiduciary** under the **Digital Personal Data Protection Act 2023**, and Meta will not let
+the app go Live without a privacy policy. The bot handles most of the mechanics; these are
+the parts only you can do.
+
+| Duty | What the bot does | What you must do |
+| --- | --- | --- |
+| Tell people what you collect | Serves `/privacy` | Paste the URL into Meta; keep the business name and email accurate |
+| Collect only what you need | Stores messages, sender ID and match results — nothing else | Do not add fields "just in case" |
+| Do not keep it forever | Deletes everything older than 90 days at startup | Keep the weekly restart cron running (§5.2a) |
+| Let people see or delete their data | `DELETE /admin/user-data/{id}` | Monitor `PRIVACY_CONTACT_EMAIL` and action requests promptly |
+| Keep it secure | HTTPS, signed webhooks, admin key, tester off | Work through the §8 checklist and keep `.env` at `chmod 600` |
+| Give people somewhere to complain | Prints your contact and the Data Protection Board path on `/privacy` | Actually respond |
+
+Two things worth being clear about:
+
+- **No analytics or tracking pixel is installed, deliberately.** Adding one (PostHog, GA,
+  Meta Pixel) would send customer behaviour to a third party and widen your obligations
+  under the Act. `/admin/analytics` gives you the message and match counts without any of
+  that.
+- **Meta is your only data processor.** Messages pass through WhatsApp and Instagram because
+  that is where the customer wrote to you. Everything else stays on your server.
+
+If you change `DATA_RETENTION_DAYS`, the `/privacy` page updates with it — the page reads the
+same setting, so the promise and the behaviour cannot drift apart.
+
+---
+
+## 10. Who to Contact
 
 - **Orders and customer escalations:** Mr. Guru Dayal Singh — +91 87965 51990
 - **Kitchen hours:** 10:00 AM – 7:30 PM, daily

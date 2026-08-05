@@ -124,11 +124,13 @@ uvicorn app:app --reload --port 8000
 
 The bot comes with a built-in **Interactive Web Chat Tester** available at `/chat`, `/demo`, or `/test`. This provides a zero-setup visual environment to test bot responses, menu image cards, Ad-Gate filtering, and Ollama RAG locally in your browser without requiring live Meta developer credentials.
 
+> **Off by default.** The tester writes real conversation rows and fires real escalation alerts to the owner's phone, so it returns `404` unless `ENABLE_WEB_TESTER=true` is set. Enable it in local development only — never on a public domain.
+
 ### Accessing the Web Interface
 
 Start your server in terminal:
 ```bash
-uvicorn app:app --port 8000
+ENABLE_WEB_TESTER=true uvicorn app:app --port 8000
 ```
 
 Then open the Web Chat Interface in your browser:
@@ -212,14 +214,14 @@ GEMINI_VISION_MODEL=gemini-flash-latest
 ## 🧪 All Testing Methods Summary
 
 ### Method 1: Interactive Browser Web Interface (`/chat`)
-Open **[http://localhost:8000/chat](http://localhost:8000/chat)** in your web browser.
+Set `ENABLE_WEB_TESTER=true`, then open **[http://localhost:8000/chat](http://localhost:8000/chat)** in your web browser.
 
 ### Method 2: Automated Unit Test Suite (`test_bot.py`)
-Run all 18 automated unit tests:
+Run all 25 automated unit tests:
 ```bash
 python test_bot.py
 ```
-*Tests:* Ad-Gate inspection, Webhook challenges (`GET /webhook/*`), WhatsApp parsing, Menu photo card logic, Ollama local RAG answers, refusals, offline fallbacks, and SQLite logging.
+*Tests:* Ad-Gate inspection, webhook challenges (`GET /webhook/*`), webhook signature rejection, WhatsApp parsing, menu photo card logic, Ollama local RAG answers, refusals, offline fallbacks, SQLite logging, retention purge, per-user data deletion, legal pages, tester lockdown, and delivery-failure alerting.
 
 ### Method 3: Interactive CLI Terminal Simulator (`simulate_bot.py`)
 Run an interactive terminal chat session:

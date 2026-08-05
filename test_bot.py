@@ -354,12 +354,109 @@ class TestCamelliaBot(unittest.TestCase):
         self.assertEqual(session_memory.get_session(user_id, channel)["facts"]["name"], "Shoaib")
 
         # 2. Call reset API endpoint
-        res = self.client.post("/api/reset-session", json={"user_id": user_id, "channel": channel})
+        with patch.object(config, "ENABLE_WEB_TESTER", True):
+            res = self.client.post("/api/reset-session", json={"user_id": user_id, "channel": channel})
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json()["status"], "cleared")
 
         # 3. Verify memory is empty
         self.assertIsNone(session_memory.get_session(user_id, channel)["facts"]["name"])
+
+    def test_web_tester_hidden_when_disabled(self):
+        """The browser tester writes real rows and pages the owner, so it must be
+        invisible unless ENABLE_WEB_TESTER is explicitly switched on."""
+        with patch.object(config, "ENABLE_WEB_TESTER", False):
+            self.assertEqual(self.client.get("/chat").status_code, 404)
+            self.assertEqual(self.client.post("/api/test-chat", json={"message": "hi"}).status_code, 404)
+            self.assertEqual(self.client.post("/api/reset-session", json={"user_id": "x"}).status_code, 404)
+
+        with patch.object(config, "ENABLE_WEB_TESTER", True):
+            self.assertEqual(self.client.get("/chat").status_code, 200)
+
+    def test_legal_pages_are_public(self):
+        """Meta requires a reachable Privacy Policy URL before an app can go Live,
+        and both pages must stay open — no admin key, no tester flag."""
+        for path in ("/privacy", "/terms"):
+            res = self.client.get(path)
+            self.assertEqual(res.status_code, 200, path)
+            self.assertIn("text/html", res.headers["content-type"])
+        self.assertIn(str(config.DATA_RETENTION_DAYS), self.client.get("/privacy").text)
+
+    def test_retention_purge_removes_only_expired_rows(self):
+        """Rows past DATA_RETENTION_DAYS go; anything inside the window stays."""
+        from datetime import datetime, timedelta
+
+        db.log_conversation("purge_recent", "whatsapp", "hi", "hello", True, "greeting")
+        db.log_conversation("purge_old", "whatsapp", "hi", "hello", True, "greeting")
+
+        stale = (datetime.utcnow() - timedelta(days=400)).strftime("%Y-%m-%d %H:%M:%S")
+        with db.get_connection() as conn:
+            conn.execute(
+                "UPDATE conversations SET timestamp = ? WHERE user_id = 'purge_old'", (stale,)
+            )
+            conn.commit()
+
+        removed = db.purge_expired_data(retention_days=90)
+        self.assertEqual(removed["conversations"], 1)
+
+        with db.get_connection() as conn:
+            rows = conn.execute("SELECT user_id FROM conversations").fetchall()
+        remaining = {r["user_id"] for r in rows}
+        self.assertIn("purge_recent", remaining)
+        self.assertNotIn("purge_old", remaining)
+
+    def test_retention_purge_disabled_when_zero(self):
+        """DATA_RETENTION_DAYS=0 means keep forever, not delete everything."""
+        db.log_conversation("purge_keep", "whatsapp", "hi", "hello", True, "greeting")
+        removed = db.purge_expired_data(retention_days=0)
+        self.assertEqual(removed["conversations"], 0)
+        with db.get_connection() as conn:
+            count = conn.execute("SELECT COUNT(*) AS c FROM conversations").fetchone()["c"]
+        self.assertEqual(count, 1)
+
+    def test_delete_user_data_removes_every_trace(self):
+        """Backs the DPDP deletion right promised on /privacy."""
+        db.log_conversation("dpdp_user", "whatsapp", "hi", "hello", True, "greeting")
+        db.log_conversation("other_user", "whatsapp", "hi", "hello", True, "greeting")
+        db.record_escalation("dpdp_user", "whatsapp", "refund please", "Refund request", {})
+
+        removed = db.delete_user_data("dpdp_user")
+        self.assertEqual(removed["conversations"], 1)
+        self.assertEqual(removed["escalations"], 1)
+
+        with db.get_connection() as conn:
+            rows = conn.execute(
+                "SELECT user_id FROM conversations WHERE user_id = 'dpdp_user'"
+            ).fetchall()
+        self.assertEqual(rows, [])
+
+        with db.get_connection() as conn:
+            survivors = conn.execute(
+                "SELECT COUNT(*) AS c FROM conversations WHERE user_id = 'other_user'"
+            ).fetchone()["c"]
+        self.assertEqual(survivors, 1)
+
+    def test_delivery_monitor_alerts_only_after_repeated_failures(self):
+        """One network blip must not page the owner; a dead token must."""
+        from monitoring import DeliveryHealthMonitor
+
+        monitor = DeliveryHealthMonitor(failure_threshold=3)
+        with patch.object(monitor, "_send_owner_alert") as alert:
+            monitor.record_failure("whatsapp", "timeout")
+            monitor.record_failure("whatsapp", "timeout")
+            self.assertFalse(alert.called)
+            self.assertTrue(monitor.snapshot()["healthy"])
+
+            monitor.record_failure("whatsapp", "401 invalid token")
+            self.assertEqual(alert.call_count, 1)
+            self.assertFalse(monitor.snapshot()["healthy"])
+
+            # Still failing: alert once, do not spam.
+            monitor.record_failure("whatsapp", "401 invalid token")
+            self.assertEqual(alert.call_count, 1)
+
+            monitor.record_success("whatsapp")
+            self.assertTrue(monitor.snapshot()["healthy"])
 
 if __name__ == "__main__":
     unittest.main()

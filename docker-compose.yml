@@ -20,6 +20,12 @@ services:
       - HUMAN_ESCALATION_EMAIL=${HUMAN_ESCALATION_EMAIL:-owner@camelliaartisanal.com}
       # Must live under the mounted volume or all history is lost on rebuild
       - DB_PATH=/app/data/camellia.db
+      # The /chat tester writes real rows and pages the owner; keep it off here
+      - ENABLE_WEB_TESTER=${ENABLE_WEB_TESTER:-false}
+      - DATA_RETENTION_DAYS=${DATA_RETENTION_DAYS:-90}
+      - BUSINESS_LEGAL_NAME=${BUSINESS_LEGAL_NAME:-Camellia Artisanal}
+      - PRIVACY_CONTACT_EMAIL=${PRIVACY_CONTACT_EMAIL:-owner@camelliaartisanal.com}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       # localhost inside a container is the container itself, not the host
       - OLLAMA_ENABLED=${OLLAMA_ENABLED:-false}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}

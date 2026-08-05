@@ -1,7 +1,7 @@
 import os
 import sqlite3
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 from config import config
 
@@ -163,5 +163,59 @@ class Database:
                 "escalations_count": escalations,
                 "match_rate_percent": round(match_rate, 2)
             }
+
+    def purge_expired_data(self, retention_days: int = None) -> Dict[str, int]:
+        """
+        Deletes conversations, escalations and sessions older than the retention
+        window promised in the privacy policy. Safe to call on every startup.
+        """
+        days = retention_days if retention_days is not None else config.DATA_RETENTION_DAYS
+        if days <= 0:
+            return {"conversations": 0, "escalations": 0, "sessions": 0}
+
+        cutoff = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+
+        # Columns hold a mix of SQLite CURRENT_TIMESTAMP ("... 10:00:00") and
+        # Python isoformat ("...T10:00:00.123"), so normalise before comparing —
+        # a raw string compare would treat every space-form row as older.
+        def older_than(column: str) -> str:
+            return f"substr(replace({column}, 'T', ' '), 1, 19) < ?"
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"DELETE FROM conversations WHERE {older_than('timestamp')}", (cutoff,))
+            removed_conversations = cursor.rowcount
+            cursor.execute(f"DELETE FROM escalations WHERE {older_than('created_at')}", (cutoff,))
+            removed_escalations = cursor.rowcount
+            cursor.execute(f"DELETE FROM sessions WHERE {older_than('updated_at')}", (cutoff,))
+            removed_sessions = cursor.rowcount
+            conn.commit()
+
+        return {
+            "conversations": max(removed_conversations, 0),
+            "escalations": max(removed_escalations, 0),
+            "sessions": max(removed_sessions, 0),
+        }
+
+    def delete_user_data(self, user_id: str) -> Dict[str, int]:
+        """
+        Erases everything stored about one customer, across both channels.
+        Backs the deletion right stated in the privacy policy.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM conversations WHERE user_id = ?", (user_id,))
+            removed_conversations = cursor.rowcount
+            cursor.execute("DELETE FROM escalations WHERE user_id = ?", (user_id,))
+            removed_escalations = cursor.rowcount
+            cursor.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+            removed_sessions = cursor.rowcount
+            conn.commit()
+
+        return {
+            "conversations": max(removed_conversations, 0),
+            "escalations": max(removed_escalations, 0),
+            "sessions": max(removed_sessions, 0),
+        }
 
 db = Database()

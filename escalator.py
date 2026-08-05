@@ -2,8 +2,11 @@ import httpx
 from typing import Dict, Any, Optional
 from config import config
 from database import db
+from monitoring import get_logger
 
 from session_memory import session_memory
+
+log = get_logger("camellia.escalator")
 
 class Escalator:
     """
@@ -101,12 +104,12 @@ class Escalator:
                     resp.raise_for_status()
                     return {"status": "sent", "api_response": resp.json()}
             except Exception as e:
-                print(f"[ESCALATOR ALERT ERROR] Failed to send alert: {e}")
+                log.error("Failed to send escalation alert to owner: %s", e)
                 return {"status": "failed", "error": str(e)}
         else:
             # Development / Mock notification
             safe_alert = alert_body.encode("ascii", "backslashreplace").decode("ascii")
-            print(f"\n[HUMAN ESCALATION ALERT LOG]\n{safe_alert}\n")
+            log.warning("HUMAN ESCALATION ALERT (WhatsApp credentials not configured)\n%s", safe_alert)
             return {"mock": True, "status": "sent", "recipient": self.human_phone}
 
 escalator = Escalator()
