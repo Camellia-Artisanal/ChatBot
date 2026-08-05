@@ -1,4 +1,5 @@
 import re
+from collections import OrderedDict
 from typing import Dict, Any
 
 class SessionMemoryManager:
@@ -7,10 +8,12 @@ class SessionMemoryManager:
     Extracts customer facts (Name) and maintains conversation turn history
     for multi-turn context and human escalation handoffs.
     """
-    def __init__(self, max_history_turns: int = 5):
+    def __init__(self, max_history_turns: int = 5, max_sessions: int = 5000):
         self.max_history_turns = max_history_turns
+        self.max_sessions = max_sessions
         # Structure: {(user_id, channel): {"facts": {"name": str}, "turns": [...]}}
-        self._sessions: Dict[tuple, Dict[str, Any]] = {}
+        # Ordered so the least-recently-touched session can be evicted at capacity.
+        self._sessions: "OrderedDict[tuple, Dict[str, Any]]" = OrderedDict()
 
     def get_session(self, user_id: str, channel: str) -> Dict[str, Any]:
         key = (str(user_id), str(channel))
@@ -21,6 +24,10 @@ class SessionMemoryManager:
                 },
                 "turns": [] # List of {"role": "user"|"assistant", "content": str}
             }
+            while len(self._sessions) > self.max_sessions:
+                self._sessions.popitem(last=False)
+        else:
+            self._sessions.move_to_end(key)
         return self._sessions[key]
 
     def clear_session(self, user_id: str, channel: str) -> None:

@@ -1,6 +1,6 @@
 import json
 import httpx
-from typing import Tuple, Dict, Any, Optional
+from typing import Tuple, Dict, Any
 from config import config
 
 class OllamaResponder:
@@ -53,17 +53,17 @@ class OllamaResponder:
         # Menu Details
         if self.menu_data:
             context_parts.append("\n--- MENU & PRODUCTS ---")
-            sondesh = self.menu_data.get("sondesh_flavours", [])
-            if sondesh:
-                context_parts.append(f"Sondesh Flavours & Pricing: {json.dumps(sondesh, ensure_ascii=False)}")
-            
+            collections = self.menu_data.get("collections", {})
+            if collections:
+                context_parts.append(f"Sondesh Collections, Flavours & Pricing: {json.dumps(collections, ensure_ascii=False)}")
+
             weekly = self.menu_data.get("weekly_menus", [])
             if weekly:
                 context_parts.append(f"Weekly Menus & Bento Combos: {json.dumps(weekly, ensure_ascii=False)}")
-            
-            pricing = self.menu_data.get("general_pricing", {})
-            if pricing:
-                context_parts.append(f"General Pricing: {json.dumps(pricing, ensure_ascii=False)}")
+
+            delivery = self.menu_data.get("delivery", {})
+            if delivery:
+                context_parts.append(f"Delivery & Packaging: {json.dumps(delivery, ensure_ascii=False)}")
 
         return "\n".join(context_parts)
 

@@ -2,7 +2,7 @@ import csv
 import io
 import json
 import httpx
-from typing import Dict, Any, List
+from typing import Dict, Any
 from config import config
 from responder import responder
 

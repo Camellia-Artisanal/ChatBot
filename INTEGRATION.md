@@ -101,24 +101,6 @@ QA_TEMPLATES_PATH=qa_templates.json
 
 The Meta Webhook requires a public HTTPS URL. Open two terminal windows:
 
-### Option A: Flask Server + ngrok (Recommended for Flask)
-
-#### Terminal 1: Start Flask Server
-```bash
-python app_flask.py
-```
-*(Runs locally at `http://127.0.0.1:5000`)*
-
-#### Terminal 2: Start Public HTTPS Tunnel via ngrok
-```bash
-ngrok http 5000
-```
-*(Outputs your active public HTTPS URL, e.g., `https://a1b2-34-56-78-90.ngrok-free.app`)*
-
----
-
-### Option B: FastAPI Server + ngrok
-
 #### Terminal 1: Start FastAPI Server
 ```bash
 uvicorn app:app --reload --port 8000
@@ -129,6 +111,7 @@ uvicorn app:app --reload --port 8000
 ```bash
 ngrok http 8000
 ```
+*(Outputs your active public HTTPS URL, e.g., `https://a1b2-34-56-78-90.ngrok-free.app`)*
 
 ---
 
@@ -144,7 +127,7 @@ ngrok http 8000
    - **Verify Token**: `camellia_verify_secret_2026`  
      *(Must match `META_VERIFY_TOKEN` in `.env`)*
 4. Click **Verify and Save**.  
-   *(The Flask/FastAPI server validates the secret token and returns the `hub.challenge` string with `200 OK`)*.
+   *(The FastAPI server validates the secret token and returns the `hub.challenge` string with `200 OK`)*.
 5. Under Webhook Fields:
    - Check **`messages`**
    - Check **`messaging_postbacks`**

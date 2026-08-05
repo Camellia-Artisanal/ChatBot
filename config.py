@@ -18,6 +18,9 @@ class Config:
     # Meta & Webhook Config
     META_VERIFY_TOKEN: str = os.getenv("META_VERIFY_TOKEN", "camellia_verify_secret_2026")
     META_APP_SECRET: str = os.getenv("META_APP_SECRET", "")
+
+    # Protects /admin/* endpoints (customer logs & menu overwrite). Unset = open.
+    ADMIN_API_KEY: str = os.getenv("ADMIN_API_KEY", "")
     
     # WhatsApp Cloud API Config
     WHATSAPP_ACCESS_TOKEN: str = os.getenv("WHATSAPP_ACCESS_TOKEN", "")

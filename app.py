@@ -1,9 +1,10 @@
 import hmac
 import hashlib
+import json
 import os
 import httpx
-from fastapi import FastAPI, Request, Response, Query, HTTPException, status
-from fastapi.responses import PlainTextResponse, JSONResponse, HTMLResponse
+from fastapi import FastAPI, Request, Response, Query, Header, HTTPException
+from fastapi.responses import PlainTextResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from typing import Dict, Any, Optional
 
@@ -25,6 +26,34 @@ app = FastAPI(
 # Mount local project directory to serve menu photo JPEGs at /images
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 app.mount("/images", StaticFiles(directory=BASE_DIR), name="images")
+
+def verify_meta_signature(raw_body: bytes, signature_header: Optional[str]) -> None:
+    """
+    Rejects webhook POSTs that Meta did not sign with our app secret.
+
+    Skipped entirely when META_APP_SECRET is unset so local development and the
+    test suite can post unsigned payloads. Always set it in production.
+    """
+    if not config.META_APP_SECRET:
+        return
+
+    expected = "sha256=" + hmac.new(
+        config.META_APP_SECRET.encode("utf-8"), raw_body, hashlib.sha256
+    ).hexdigest()
+
+    if not signature_header or not hmac.compare_digest(expected, signature_header):
+        print("[WEBHOOK SECURITY] Rejected payload with missing/invalid X-Hub-Signature-256.")
+        raise HTTPException(status_code=403, detail="Invalid payload signature")
+
+def require_admin(provided_key: Optional[str]) -> None:
+    """
+    Guards /admin/* routes, which expose customer conversations and can
+    overwrite the live menu. Skipped when ADMIN_API_KEY is unset.
+    """
+    if not config.ADMIN_API_KEY:
+        return
+    if not provided_key or not hmac.compare_digest(config.ADMIN_API_KEY, provided_key):
+        raise HTTPException(status_code=403, detail="Invalid or missing X-Admin-Key header")
 
 # --------------------------------------------------------------------------
 # Root / Health Check
@@ -60,7 +89,9 @@ async def handle_instagram_webhook(request: Request):
     Handles Instagram DM Webhooks.
     Applies Ad-Gate: Responds ONLY to Ad-originated messages (referral.source == 'ADS').
     """
-    payload = await request.json()
+    raw_body = await request.body()
+    verify_meta_signature(raw_body, request.headers.get("X-Hub-Signature-256"))
+    payload = json.loads(raw_body or b"{}")
     
     if payload.get("object") != "instagram":
         return {"status": "ignored", "reason": "Not an instagram object"}
@@ -160,7 +191,9 @@ def verify_whatsapp_webhook(
 @app.post("/webhook/whatsapp")
 async def handle_whatsapp_webhook(request: Request):
     """Handles WhatsApp Business Webhook events."""
-    payload = await request.json()
+    raw_body = await request.body()
+    verify_meta_signature(raw_body, request.headers.get("X-Hub-Signature-256"))
+    payload = json.loads(raw_body or b"{}")
     parsed = whatsapp_adapter.parse_webhook_message(payload)
     if not parsed:
         return {"status": "no_message_event"}
@@ -173,21 +206,22 @@ async def handle_whatsapp_webhook(request: Request):
 # Admin & Self-Service Endpoints
 # --------------------------------------------------------------------------
 @app.get("/admin/escalations")
-def get_escalations_list(limit: int = 50, status: Optional[str] = None):
+def get_escalations_list(limit: int = 50, status: Optional[str] = None, x_admin_key: Optional[str] = Header(None)):
     """Returns recorded human escalations for client dashboard/records."""
-    return {
-        "count": len(db.get_escalations(limit, status)),
-        "escalations": db.get_escalations(limit, status)
-    }
+    require_admin(x_admin_key)
+    escalations = db.get_escalations(limit, status)
+    return {"count": len(escalations), "escalations": escalations}
 
 @app.get("/admin/analytics")
-def get_analytics():
+def get_analytics(x_admin_key: Optional[str] = Header(None)):
     """Returns match rate vs escalation analytics summary."""
+    require_admin(x_admin_key)
     return db.get_analytics()
 
 @app.post("/admin/sync-menu")
-def sync_menu(csv_url: Optional[str] = None):
+def sync_menu(csv_url: Optional[str] = None, x_admin_key: Optional[str] = Header(None)):
     """Triggers live menu reload from Google Sheet CSV or local files."""
+    require_admin(x_admin_key)
     if csv_url:
         result = sheet_sync.sync_from_csv_url(csv_url)
     else:

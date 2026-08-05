@@ -1,5 +1,7 @@
 import os
 import json
+import hmac
+import hashlib
 import sqlite3
 import unittest
 from unittest.mock import patch, MagicMock
@@ -43,6 +45,16 @@ class TestCamelliaBot(unittest.TestCase):
             cursor.execute("DELETE FROM escalations;")
             cursor.execute("UPDATE analytics SET value = 0;")
             conn.commit()
+
+    def _post_signed(self, path: str, payload: dict):
+        """POSTs a webhook payload carrying a valid X-Hub-Signature-256, as Meta does."""
+        raw = json.dumps(payload).encode("utf-8")
+        headers = {"Content-Type": "application/json"}
+        if config.META_APP_SECRET:
+            headers["X-Hub-Signature-256"] = "sha256=" + hmac.new(
+                config.META_APP_SECRET.encode("utf-8"), raw, hashlib.sha256
+            ).hexdigest()
+        return self.client.post(path, content=raw, headers=headers)
 
     def test_ad_gate_organic_dm_ignored(self):
         """PRD Requirement #4: Non-ad organic DMs must be IGNORED by the bot."""
@@ -224,7 +236,7 @@ class TestCamelliaBot(unittest.TestCase):
                 }]
             }]
         }
-        res_post = self.client.post("/webhook/instagram", json=payload_organic)
+        res_post = self._post_signed("/webhook/instagram", payload_organic)
         self.assertEqual(res_post.status_code, 200)
         data = res_post.json()
         self.assertEqual(data["results"][0]["action"], "ignored_organic_dm")
@@ -242,10 +254,18 @@ class TestCamelliaBot(unittest.TestCase):
                 }]
             }]
         }
-        res_post_ad = self.client.post("/webhook/instagram", json=payload_ad)
+        res_post_ad = self._post_signed("/webhook/instagram", payload_ad)
         self.assertEqual(res_post_ad.status_code, 200)
         data_ad = res_post_ad.json()
         self.assertEqual(data_ad["results"][0]["action"], "auto_replied")
+
+    def test_webhook_rejects_unsigned_payload(self):
+        """An unsigned POST must be refused whenever META_APP_SECRET is configured."""
+        if not config.META_APP_SECRET:
+            self.skipTest("META_APP_SECRET not configured; signature guard is intentionally off")
+
+        res = self.client.post("/webhook/instagram", json={"object": "instagram", "entry": []})
+        self.assertEqual(res.status_code, 403)
 
     @patch("httpx.Client.post")
     def test_ollama_in_context_query(self, mock_post):

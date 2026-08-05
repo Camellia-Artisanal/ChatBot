@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import json
 from datetime import datetime
@@ -7,10 +8,12 @@ from config import config
 class Database:
     def __init__(self, db_path: str = None):
         self.db_path = db_path or config.DB_PATH
+        parent = os.path.dirname(os.path.abspath(self.db_path))
+        os.makedirs(parent, exist_ok=True)
         self.init_db()
 
     def get_connection(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=10.0)
         conn.row_factory = sqlite3.Row
         return conn
 

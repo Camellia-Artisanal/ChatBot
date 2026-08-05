@@ -10,14 +10,19 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - META_VERIFY_TOKEN=camellia_verify_secret_2026
+      - META_VERIFY_TOKEN=${META_VERIFY_TOKEN:-camellia_verify_secret_2026}
       - META_APP_SECRET=${META_APP_SECRET}
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
       - WHATSAPP_ACCESS_TOKEN=${WHATSAPP_ACCESS_TOKEN}
       - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID}
       - INSTAGRAM_PAGE_ID=${INSTAGRAM_PAGE_ID}
       - HUMAN_ESCALATION_PHONE=${HUMAN_ESCALATION_PHONE:-+918796551990}
       - HUMAN_ESCALATION_EMAIL=${HUMAN_ESCALATION_EMAIL:-owner@camelliaartisanal.com}
-      - DB_PATH=camellia.db
+      # Must live under the mounted volume or all history is lost on rebuild
+      - DB_PATH=/app/data/camellia.db
+      # localhost inside a container is the container itself, not the host
+      - OLLAMA_ENABLED=${OLLAMA_ENABLED:-false}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
     volumes:
       - camellia_db_data:/app/data
 

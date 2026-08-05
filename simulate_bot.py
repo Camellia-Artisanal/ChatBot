@@ -86,7 +86,7 @@ def main():
             is_ad, sender, _, ad_id = ad_gate.inspect_and_gate_message(event)
             print(f"🔎 [AD-GATE]: Qualified={is_ad} (Source=ADS, Ad_ID={ad_id})")
 
-            resp_text, was_matched, tmpl_id, img_url = responder.match_and_respond(user_message)
+            resp_text, was_matched, tmpl_id, img_url = responder.match_and_respond(user_message, sender, "instagram")
             db.log_conversation(sender, "instagram", user_message, resp_text, was_matched, tmpl_id)
 
             if not was_matched:

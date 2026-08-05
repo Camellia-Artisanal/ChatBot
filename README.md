@@ -113,13 +113,6 @@ HUMAN_ESCALATION_PHONE=+918796551990
 
 ### 3. Run Server
 
-#### Option A: Flask Server
-```bash
-python app_flask.py
-```
-*(Server runs locally at `http://localhost:5000`)*
-
-#### Option B: FastAPI Server
 ```bash
 uvicorn app:app --reload --port 8000
 ```
@@ -135,16 +128,11 @@ The bot comes with a built-in **Interactive Web Chat Tester** available at `/cha
 
 Start your server in terminal:
 ```bash
-# Option A: Flask Server (Port 5000)
-python app_flask.py
-
-# Option B: FastAPI Server (Port 8000)
 uvicorn app:app --port 8000
 ```
 
 Then open the Web Chat Interface in your browser:
-- **Flask**: [http://localhost:5000/chat](http://localhost:5000/chat) *(or `http://localhost:5000/demo`)*
-- **FastAPI**: [http://localhost:8000/chat](http://localhost:8000/chat) *(or `http://localhost:8000/demo`)*
+- [http://localhost:8000/chat](http://localhost:8000/chat) *(or `http://localhost:8000/demo`)*
 
 ---
 
@@ -224,10 +212,10 @@ GEMINI_VISION_MODEL=gemini-flash-latest
 ## 🧪 All Testing Methods Summary
 
 ### Method 1: Interactive Browser Web Interface (`/chat`)
-Open **[http://localhost:5000/chat](http://localhost:5000/chat)** (Flask) or **[http://localhost:8000/chat](http://localhost:8000/chat)** (FastAPI) in your web browser.
+Open **[http://localhost:8000/chat](http://localhost:8000/chat)** in your web browser.
 
 ### Method 2: Automated Unit Test Suite (`test_bot.py`)
-Run all 15 automated unit tests:
+Run all 18 automated unit tests:
 ```bash
 python test_bot.py
 ```

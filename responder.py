@@ -13,10 +13,8 @@ class DeterministicResponder:
     conversational session memory and Ollama local RAG fallback.
     """
 
-    def __init__(self, menu_path: str = None, qa_path: str = None):
-        self.menu_path = menu_path or config.MENU_JSON_PATH
+    def __init__(self, qa_path: str = None):
         self.qa_path = qa_path or config.QA_TEMPLATES_PATH
-        self.menu_data = self._load_json(self.menu_path)
         self.qa_data = self._load_json(self.qa_path)
 
     def _load_json(self, path: str) -> Dict[str, Any]:
@@ -29,7 +27,6 @@ class DeterministicResponder:
 
     def reload_data(self):
         """Reload JSON files to support live menu updates."""
-        self.menu_data = self._load_json(self.menu_path)
         self.qa_data = self._load_json(self.qa_path)
         ollama_responder.reload_data()
 
