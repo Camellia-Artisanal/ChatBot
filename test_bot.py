@@ -279,8 +279,8 @@ class TestCamelliaBot(unittest.TestCase):
         }
         mock_post.return_value = mock_response
 
-        # Ask a query that doesn't trigger explicit keywords or deterministic templates directly
-        resp_text, was_matched, tmpl_id, img_url = responder.match_and_respond("Do you use organic sweeteners or natural preservatives in your sweets?")
+        with patch.object(config, "OLLAMA_ENABLED", True), patch.object(config, "LLM_MODE", "hybrid"):
+            resp_text, was_matched, tmpl_id, img_url = responder.match_and_respond("Do you use organic sweeteners or natural preservatives in your sweets?")
         self.assertTrue(was_matched)
         self.assertEqual(tmpl_id, "ollama_rag")
         self.assertIn("Nolen Gur Sondesh", resp_text)
@@ -297,7 +297,8 @@ class TestCamelliaBot(unittest.TestCase):
         }
         mock_post.return_value = mock_response
 
-        resp_text, was_matched, tmpl_id, img_url = responder.match_and_respond("What is the capital of France?")
+        with patch.object(config, "OLLAMA_ENABLED", True), patch.object(config, "LLM_MODE", "hybrid"):
+            resp_text, was_matched, tmpl_id, img_url = responder.match_and_respond("What is the capital of France?")
         self.assertFalse(was_matched)
         self.assertEqual(tmpl_id, "ollama_out_of_context")
         self.assertIn("connect you with our team", resp_text)
@@ -307,7 +308,8 @@ class TestCamelliaBot(unittest.TestCase):
         """Test graceful fallback to human escalation if Ollama server is unreachable/offline."""
         mock_post.side_effect = Exception("Connection refused to localhost:11434")
 
-        resp_text, was_matched, tmpl_id, img_url = responder.match_and_respond("Can you send a violin player for a wedding?")
+        with patch.object(config, "OLLAMA_ENABLED", True), patch.object(config, "LLM_MODE", "hybrid"):
+            resp_text, was_matched, tmpl_id, img_url = responder.match_and_respond("Can you send a violin player for a wedding?")
         self.assertFalse(was_matched)
         self.assertEqual(tmpl_id, "ollama_ollama_exception_Exception")
 

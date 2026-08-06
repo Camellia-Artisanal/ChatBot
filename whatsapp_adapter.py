@@ -17,11 +17,21 @@ class WhatsAppAdapter:
     - Deterministic responses and escalation on WhatsApp.
     """
 
-    def __init__(self):
-        self.access_token = config.WHATSAPP_ACCESS_TOKEN
-        self.phone_number_id = config.WHATSAPP_PHONE_NUMBER_ID
-        self.api_version = config.WHATSAPP_API_VERSION
-        self.api_url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
+    @property
+    def access_token(self) -> str:
+        return config.WHATSAPP_ACCESS_TOKEN
+
+    @property
+    def phone_number_id(self) -> str:
+        return config.WHATSAPP_PHONE_NUMBER_ID
+
+    @property
+    def api_version(self) -> str:
+        return config.WHATSAPP_API_VERSION
+
+    @property
+    def api_url(self) -> str:
+        return f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
 
     def parse_webhook_message(self, payload: Dict[str, Any]) -> Optional[Tuple[str, str, str]]:
         """
@@ -88,9 +98,19 @@ class WhatsAppAdapter:
             "send_result": send_result
         }
 
+    def _public_url(self, path: str) -> str:
+        """Converts a relative image path to a full public URL Meta can fetch.
+        Paths like /images/foo.jpeg become https://your-domain.com/images/foo.jpeg.
+        Already-absolute URLs are returned unchanged."""
+        if path.startswith("http://") or path.startswith("https://"):
+            return path
+        base = config.PUBLIC_BASE_URL.rstrip("/")
+        return base + path if base else path
+
     def send_message(self, recipient_phone: str, text_body: str, image_url=None) -> Dict[str, Any]:
         """Sends a text message followed by zero or more image cards via Meta WhatsApp Cloud API."""
-        images = [image_url] if isinstance(image_url, str) else list(image_url or [])
+        raw_images = [image_url] if isinstance(image_url, str) else list(image_url or [])
+        images = [self._public_url(img) for img in raw_images]
 
         if not self.access_token or not self.phone_number_id:
             # Development / Mock Mode
@@ -114,12 +134,20 @@ class WhatsAppAdapter:
                 "text": {"preview_url": False, "body": text_body}
             })
         for img in images:
+            img_url = img
+            if img.startswith("/"):
+                base_url = getattr(config, "PUBLIC_BASE_URL", "").rstrip("/")
+                if base_url:
+                    img_url = f"{base_url}{img}"
+                else:
+                    log.warning("Image URL '%s' is relative but PUBLIC_BASE_URL is not set. Meta API requires an absolute http(s) URL.", img)
+                    continue
             payloads.append({
                 "messaging_product": "whatsapp",
                 "recipient_type": "individual",
                 "to": recipient_phone,
                 "type": "image",
-                "image": {"link": img}
+                "image": {"link": img_url}
             })
 
         try:
