@@ -94,7 +94,7 @@ class Escalator:
             }
             payload = {
                 "messaging_product": "whatsapp",
-                "to": self.human_phone,
+                "to": self.human_phone.lstrip("+"),
                 "type": "text",
                 "text": {"body": alert_body}
             }

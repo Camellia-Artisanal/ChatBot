@@ -22,13 +22,16 @@ log = get_logger("camellia.app")
 
 app = FastAPI(
     title="Camellia Artisanal — Instagram & WhatsApp Auto-Response Bot",
-    description="Ad-Gated Instagram DM Bot + WhatsApp Business API with Deterministic Q&A Matching & Human Escalation",
+# Ad-Gated Instagram DM Bot + WhatsApp Business API with Deterministic Q&A Matching & Human Escalation
+# Reload trigger - Ollama disabled
+
     version="1.0.0"
 )
 
-# Mount local project directory to serve menu photo JPEGs at /images
+# Serve menu photo JPEGs from the dedicated images/ subdirectory.
+# Mounting BASE_DIR directly would expose .env, source files and the database.
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-app.mount("/images", StaticFiles(directory=BASE_DIR), name="images")
+app.mount("/images", StaticFiles(directory=os.path.join(BASE_DIR, "images")), name="images")
 
 def verify_meta_signature(raw_body: bytes, signature_header: Optional[str]) -> None:
     """
@@ -76,6 +79,16 @@ def require_web_tester() -> None:
 @app.on_event("startup")
 def purge_expired_on_startup():
     """Enforces the retention window promised on /privacy."""
+    if not config.META_APP_SECRET:
+        log.warning(
+            "META_APP_SECRET is not set. Webhook signature verification is DISABLED — "
+            "anyone can POST fake messages. Set it in .env before going live."
+        )
+    if not config.ADMIN_API_KEY:
+        log.warning(
+            "ADMIN_API_KEY is not set. /admin/* endpoints are open to the internet — "
+            "customer conversations and the live menu are publicly readable. Set it in .env."
+        )
     try:
         removed = db.purge_expired_data()
         if any(removed.values()):
@@ -94,7 +107,6 @@ def read_root():
         "client": "camellia.artisanal",
         "service": "Ad-Gated Auto-Response Bot",
         "status": "running",
-        "analytics": db.get_analytics()
     }
 
 # --------------------------------------------------------------------------
@@ -121,7 +133,11 @@ async def handle_instagram_webhook(request: Request):
     """
     raw_body = await request.body()
     verify_meta_signature(raw_body, request.headers.get("X-Hub-Signature-256"))
-    payload = json.loads(raw_body or b"{}")
+    try:
+        payload = json.loads(raw_body or b"{}")
+    except json.JSONDecodeError:
+        log.warning("Received malformed JSON on Instagram webhook — ignoring.")
+        return {"status": "ignored", "reason": "malformed_json"}
     
     if payload.get("object") != "instagram":
         return {"status": "ignored", "reason": "Not an instagram object"}
@@ -171,7 +187,7 @@ def send_instagram_reply(recipient_id: str, text: str, image_url=None) -> Dict[s
     """Sends text plus zero or more image cards via Meta Graph API to Instagram user."""
     images = [image_url] if isinstance(image_url, str) else list(image_url or [])
 
-    if not config.WHATSAPP_ACCESS_TOKEN or not config.INSTAGRAM_PAGE_ID:
+    if not config.INSTAGRAM_ACCESS_TOKEN or not config.INSTAGRAM_PAGE_ID:
         safe_text = text[:60].encode("ascii", "backslashreplace").decode("ascii")
         msg_type = f"IMAGE x{len(images)} ({', '.join(images)})" if images else "TEXT"
         log.info("[MOCK IG OUTBOUND] [%s] To: %s | Message: %s...", msg_type, recipient_id, safe_text)
@@ -179,7 +195,7 @@ def send_instagram_reply(recipient_id: str, text: str, image_url=None) -> Dict[s
 
     url = f"https://graph.facebook.com/{config.WHATSAPP_API_VERSION}/me/messages"
     headers = {
-        "Authorization": f"Bearer {config.WHATSAPP_ACCESS_TOKEN}",
+        "Authorization": f"Bearer {config.INSTAGRAM_ACCESS_TOKEN}",
         "Content-Type": "application/json"
     }
 
@@ -224,7 +240,11 @@ async def handle_whatsapp_webhook(request: Request):
     """Handles WhatsApp Business Webhook events."""
     raw_body = await request.body()
     verify_meta_signature(raw_body, request.headers.get("X-Hub-Signature-256"))
-    payload = json.loads(raw_body or b"{}")
+    try:
+        payload = json.loads(raw_body or b"{}")
+    except json.JSONDecodeError:
+        log.warning("Received malformed JSON on WhatsApp webhook — ignoring.")
+        return {"status": "ignored", "reason": "malformed_json"}
     parsed = whatsapp_adapter.parse_webhook_message(payload)
     if not parsed:
         return {"status": "no_message_event"}
@@ -461,8 +481,10 @@ async def api_test_chat(request: Request):
     require_web_tester()
     payload = await request.json()
     user_message = payload.get("message", "")
-    channel = payload.get("channel", "instagram_ad") # 'instagram_ad', 'instagram_organic', 'whatsapp'
-    user_id = payload.get("user_id", "web_tester")
+    channel = payload.get("channel", "instagram_ad")
+    # Always use a fixed tester ID — caller must not be able to supply a real
+    # customer's ID and read or poison their session memory.
+    user_id = "web_tester"
 
     if channel == "instagram_organic":
         # Simulate organic DM blocked by Ad-Gate

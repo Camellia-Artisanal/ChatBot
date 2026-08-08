@@ -12,12 +12,15 @@ if hasattr(sys.stdout, "reconfigure"):
 
 # Load .env if present
 BASE_DIR = Path(__file__).resolve().parent
-load_dotenv(BASE_DIR / ".env")
+load_dotenv(BASE_DIR / ".env", override=True)
 
 class Config:
     # Meta & Webhook Config
     META_VERIFY_TOKEN: str = os.getenv("META_VERIFY_TOKEN", "camellia_verify_secret_2026")
     META_APP_SECRET: str = os.getenv("META_APP_SECRET", "")
+
+    # Public Domain / ngrok URL for serving images & webhooks
+    PUBLIC_BASE_URL: str = os.getenv("PUBLIC_BASE_URL", "")
 
     # Protects /admin/* endpoints (customer logs & menu overwrite). Unset = open.
     ADMIN_API_KEY: str = os.getenv("ADMIN_API_KEY", "")
@@ -37,9 +40,10 @@ class Config:
     WHATSAPP_ACCESS_TOKEN: str = os.getenv("WHATSAPP_ACCESS_TOKEN", "")
     WHATSAPP_PHONE_NUMBER_ID: str = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "")
     WHATSAPP_API_VERSION: str = os.getenv("WHATSAPP_API_VERSION", "v19.0")
-    
-    # Instagram Config
+
+    # Instagram Config — uses its own Page token (may differ from WhatsApp token)
     INSTAGRAM_PAGE_ID: str = os.getenv("INSTAGRAM_PAGE_ID", "")
+    INSTAGRAM_ACCESS_TOKEN: str = os.getenv("INSTAGRAM_ACCESS_TOKEN", "") or os.getenv("WHATSAPP_ACCESS_TOKEN", "")
     
     # Human Escalation Contact
     HUMAN_ESCALATION_PHONE: str = os.getenv("HUMAN_ESCALATION_PHONE", "+918796551990")

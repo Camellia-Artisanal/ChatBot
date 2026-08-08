@@ -53,10 +53,15 @@ class SheetSync:
                 nonveg_list = []
                 for row in updated_items:
                     cat = str(row.get("Category", "")).lower()
+                    try:
+                        price = int(row.get("Price_INR", 300))
+                    except (ValueError, TypeError):
+                        log.warning("Skipping row with non-numeric Price_INR: %s", row)
+                        continue
                     item_dict = {
                         "item": row.get("Item", "Custom Dish"),
                         "description": row.get("Description", ""),
-                        "price_inr": int(row.get("Price_INR", 300)),
+                        "price_inr": price,
                         "quantity": row.get("Quantity", "150g")
                     }
                     if "non" in cat:

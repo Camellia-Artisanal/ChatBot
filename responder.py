@@ -167,14 +167,18 @@ class DeterministicResponder:
 
     def _format_dynamic_response(self, template_id: str, default_response: str) -> Tuple[str, Optional[Any]]:
         """Attaches the exact photo card(s) a template should send alongside its text."""
-        # Exact image cards from project directory
         img_till_thursday = "/images/Till%20Thursday.jpeg"
         img_from_friday = "/images/From%20Friday.jpeg"
         img_signature_sondesh = "/images/Signature%20Sondesh.jpeg"
         img_aamar_mishti = "/images/AAMAR%20MISHTI.jpeg"
 
-        import datetime
-        today_weekday = datetime.datetime.now().weekday()  # 0=Mon, 4=Fri, 5=Sat, 6=Sun
+        import datetime, zoneinfo
+        try:
+            ist = zoneinfo.ZoneInfo("Asia/Kolkata")
+        except Exception:
+            # zoneinfo available Python 3.9+; fallback to fixed +5:30 offset
+            ist = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+        today_weekday = datetime.datetime.now(tz=ist).weekday()  # 0=Mon … 6=Sun
         current_weekly_img = img_from_friday if today_weekday in [4, 5, 6] else img_till_thursday
 
         # "I want to know more" -> both collection cards + this week's meal menu

@@ -159,7 +159,10 @@ class WhatsAppAdapter:
                 delivery_monitor.record_success("whatsapp")
                 return resp.json() if resp is not None else {"status": "no_content"}
         except Exception as e:
+            body = getattr(getattr(e, "response", None), "text", "")
             delivery_monitor.record_failure("whatsapp", f"to {recipient_phone}: {e}")
+            if body:
+                log.error("Meta API error body: %s", body)
             return {"error": str(e), "status": "failed"}
 
 whatsapp_adapter = WhatsAppAdapter()
