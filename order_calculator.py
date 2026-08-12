@@ -26,6 +26,11 @@ PRICING_TABLE = {
 class OrderCalculator:
     """Parses order intent from chat text and generates itemized price breakdowns."""
 
+    @staticmethod
+    def format_currency(amount: int) -> str:
+        """Formats INR integer amounts to formatted string (e.g. ₹1,200)."""
+        return f"₹{amount:,}"
+
     def parse_and_calculate(self, text: str) -> Optional[Dict[str, Any]]:
         text_lower = text.lower()
 
