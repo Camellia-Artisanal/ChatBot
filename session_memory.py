@@ -20,7 +20,8 @@ class SessionMemoryManager:
         if key not in self._sessions:
             self._sessions[key] = {
                 "facts": {
-                    "name": None
+                    "name": None,
+                    "image_card_sent": False
                 },
                 "turns": [] # List of {"role": "user"|"assistant", "content": str}
             }
@@ -71,7 +72,7 @@ class SessionMemoryManager:
             session["turns"] = turns[-(self.max_history_turns * 2):]
 
     def get_context_summary(self, user_id: str, channel: str) -> str:
-        """Generates a text summary of active customer facts for Ollama system prompt."""
+        """Generates a text summary of active customer facts for Gemini AI system prompt."""
         session = self.get_session(user_id, channel)
         facts = session["facts"]
         

@@ -23,26 +23,62 @@
             {
               "flavour": "Classic / Rose",
               "prices": [
-                {"pack_size": "250g", "pieces": 9, "price_inr": 450},
-                {"pack_size": "500g", "pieces": 18, "price_inr": 800},
-                {"pack_size": "1kg", "pieces": 36, "price_inr": 1500}
+                {
+                  "pack_size": "250g",
+                  "pieces": 9,
+                  "price_inr": 450
+                },
+                {
+                  "pack_size": "500g",
+                  "pieces": 18,
+                  "price_inr": 800
+                },
+                {
+                  "pack_size": "1kg",
+                  "pieces": 36,
+                  "price_inr": 1500
+                }
               ]
             },
             {
               "flavour": "Mango / Kesar",
               "note": "marked with * on menu (may indicate seasonal/premium ingredient)",
               "prices": [
-                {"pack_size": "250g", "pieces": 9, "price_inr": 550},
-                {"pack_size": "500g", "pieces": 18, "price_inr": 1000},
-                {"pack_size": "1kg", "pieces": 36, "price_inr": 1800}
+                {
+                  "pack_size": "250g",
+                  "pieces": 9,
+                  "price_inr": 550
+                },
+                {
+                  "pack_size": "500g",
+                  "pieces": 18,
+                  "price_inr": 1000
+                },
+                {
+                  "pack_size": "1kg",
+                  "pieces": 36,
+                  "price_inr": 1800
+                }
               ]
             },
             {
               "flavour": "Nolen Gur",
               "prices": [
-                {"pack_size": "250g", "pieces": 9, "price_inr": 600},
-                {"pack_size": "500g", "pieces": 18, "price_inr": 1100},
-                {"pack_size": "1kg", "pieces": 36, "price_inr": 2000}
+                {
+                  "pack_size": "250g",
+                  "pieces": 9,
+                  "price_inr": 600
+                },
+                {
+                  "pack_size": "500g",
+                  "pieces": 18,
+                  "price_inr": 1100
+                },
+                {
+                  "pack_size": "1kg",
+                  "pieces": 36,
+                  "price_inr": 2000
+                }
               ]
             }
           ]
@@ -51,9 +87,21 @@
           "item": "Jolbhora",
           "description": "Nolen Gur sondesh with a liquid filling",
           "prices": [
-            {"pack_size": "250g", "pieces": 6, "price_inr": 750},
-            {"pack_size": "500g", "pieces": 12, "price_inr": 1400},
-            {"pack_size": "1kg", "pieces": 24, "price_inr": 2500}
+            {
+              "pack_size": "250g",
+              "pieces": 6,
+              "price_inr": 750
+            },
+            {
+              "pack_size": "500g",
+              "pieces": 12,
+              "price_inr": 1400
+            },
+            {
+              "pack_size": "1kg",
+              "pieces": 24,
+              "price_inr": 2500
+            }
           ]
         },
         {
@@ -73,50 +121,113 @@
             {
               "flavour": "Classic / Rose",
               "prices": [
-                {"pack_size": "250g", "pieces": 9, "price_inr": 600},
-                {"pack_size": "500g", "pieces": 18, "price_inr": 1100},
-                {"pack_size": "1kg", "pieces": 36, "price_inr": 2000}
+                {
+                  "pack_size": "250g",
+                  "pieces": 9,
+                  "price_inr": 600
+                },
+                {
+                  "pack_size": "500g",
+                  "pieces": 18,
+                  "price_inr": 1100
+                },
+                {
+                  "pack_size": "1kg",
+                  "pieces": 36,
+                  "price_inr": 2000
+                }
               ]
             },
             {
               "flavour": "Mango / Real Vanilla / Cinnamon / Dalchini / Kesar",
               "note": "Mango marked with * on menu",
               "prices": [
-                {"pack_size": "250g", "pieces": 9, "price_inr": 650},
-                {"pack_size": "500g", "pieces": 18, "price_inr": 1200},
-                {"pack_size": "1kg", "pieces": 36, "price_inr": 2200}
+                {
+                  "pack_size": "250g",
+                  "pieces": 9,
+                  "price_inr": 650
+                },
+                {
+                  "pack_size": "500g",
+                  "pieces": 18,
+                  "price_inr": 1200
+                },
+                {
+                  "pack_size": "1kg",
+                  "pieces": 36,
+                  "price_inr": 2200
+                }
               ]
             },
             {
               "flavour": "Nolen Gur / Thandai / Medjool Dates / Chocolate",
               "prices": [
-                {"pack_size": "250g", "pieces": 9, "price_inr": 700},
-                {"pack_size": "500g", "pieces": 18, "price_inr": 1300},
-                {"pack_size": "1kg", "pieces": 36, "price_inr": 2500}
+                {
+                  "pack_size": "250g",
+                  "pieces": 9,
+                  "price_inr": 700
+                },
+                {
+                  "pack_size": "500g",
+                  "pieces": 18,
+                  "price_inr": 1300
+                },
+                {
+                  "pack_size": "1kg",
+                  "pieces": 36,
+                  "price_inr": 2500
+                }
               ]
             },
             {
               "flavour": "Mahua",
               "prices": [
-                {"pack_size": "250g", "pieces": 9, "price_inr": 900},
-                {"pack_size": "500g", "pieces": 18, "price_inr": 1600},
-                {"pack_size": "1kg", "pieces": 36, "price_inr": 2900}
+                {
+                  "pack_size": "250g",
+                  "pieces": 9,
+                  "price_inr": 900
+                },
+                {
+                  "pack_size": "500g",
+                  "pieces": 18,
+                  "price_inr": 1600
+                },
+                {
+                  "pack_size": "1kg",
+                  "pieces": 36,
+                  "price_inr": 2900
+                }
               ]
             }
           ]
         },
         {
           "item": "Kanchagolla",
-          "flavours": ["Classic", "Nolen Gur"],
+          "flavours": [
+            "Classic",
+            "Nolen Gur"
+          ],
           "pricing_note": "Same prices & pack sizes as Sondesh (see above)"
         },
         {
           "item": "Jolbhora",
           "description": "Nolen Gur, with a liquid filling",
           "prices": [
-            {"pack_size": "250g", "pieces": 6, "price_inr": 900},
-            {"pack_size": "500g", "pieces": 12, "price_inr": 1600},
-            {"pack_size": "1kg", "pieces": 24, "price_inr": 2900}
+            {
+              "pack_size": "250g",
+              "pieces": 6,
+              "price_inr": 900
+            },
+            {
+              "pack_size": "500g",
+              "pieces": 12,
+              "price_inr": 1600
+            },
+            {
+              "pack_size": "1kg",
+              "pieces": 24,
+              "price_inr": 2900
+            }
           ]
         }
       ]
@@ -206,20 +317,55 @@
         {
           "name": "Luchi + Niramish Aloor Dom Combo",
           "price_inr": 400,
-          "includes": ["4 pcs Luchi", "150g Niramish Aloor Dom", "50g Aamra Chatni", "1 Classic Aamar Sondesh"]
+          "includes": [
+            "4 pcs Luchi",
+            "150g Niramish Aloor Dom",
+            "50g Aamra Chatni",
+            "1 Classic Aamar Sondesh"
+          ]
         },
         {
           "name": "Luchi + Robibarer Mangsho Combo",
           "price_inr": 700,
-          "includes": ["4 pcs Luchi", "150g Robibarer Mangsho", "50g Aamra Chatni", "1 Classic Aamar Sondesh"]
+          "includes": [
+            "4 pcs Luchi",
+            "150g Robibarer Mangsho",
+            "50g Aamra Chatni",
+            "1 Classic Aamar Sondesh"
+          ]
         }
       ],
       "norom_pak_sondesh": [
-        {"flavour": "Classic", "pack_size": "250g", "pieces": 9, "price_inr": 450},
-        {"flavour": "Rose", "pack_size": "250g", "pieces": 9, "price_inr": 450},
-        {"flavour": "Mango (Aam Ada)", "pack_size": "250g", "pieces": 9, "price_inr": 550},
-        {"flavour": "Nolen Gur", "pack_size": "250g", "pieces": 9, "price_inr": 600},
-        {"flavour": "Nolen Gur Jolbhora", "pack_size": "250g", "pieces": 6, "price_inr": 750}
+        {
+          "flavour": "Classic",
+          "pack_size": "250g",
+          "pieces": 9,
+          "price_inr": 450
+        },
+        {
+          "flavour": "Rose",
+          "pack_size": "250g",
+          "pieces": 9,
+          "price_inr": 450
+        },
+        {
+          "flavour": "Mango (Aam Ada)",
+          "pack_size": "250g",
+          "pieces": 9,
+          "price_inr": 550
+        },
+        {
+          "flavour": "Nolen Gur",
+          "pack_size": "250g",
+          "pieces": 9,
+          "price_inr": 600
+        },
+        {
+          "flavour": "Nolen Gur Jolbhora",
+          "pack_size": "250g",
+          "pieces": 6,
+          "price_inr": 750
+        }
       ],
       "logistics_note": "Courier charges at actuals from Sushant Arcade, Gurgaon. Porter charges at actuals."
     },
@@ -233,46 +379,8 @@
       "service_window": "Friday Lunch - Thursday Dinner",
       "vegetarian": [
         {
-          "item": "Chhoto Aloor Dom",
-          "description": "Baby potatoes slow cooked in a mildly spiced, aromatic gravy",
-          "price_inr": 300,
-          "quantity": "150g"
-        },
-        {
-          "item": "Chaal Potol",
-          "description": "A celebratory Bengali dish of seasonal potol, raisins, a little cashew and aromatic rice",
-          "price_inr": 300,
-          "quantity": "150g"
-        },
-        {
-          "item": "Chhanar Kofta Malay Curry",
-          "description": "Koftas made from fresh chhana, cooked in a coconut milk based gravy, inspired by Malay food",
-          "price_inr": 300,
-          "quantity": "120g, approx. 6 pcs"
-        },
-        {
-          "item": "Dhhokar Dalna",
-          "description": "Lentil cakes cooked in a spiced gravy with potatoes",
-          "price_inr": 300,
-          "quantity": "150g, approx. 4 pcs"
-        },
-        {
-          "item": "Aromatic Steamed Rice",
-          "description": "Short grain aromatic rice from Bengal, steamed",
-          "price_inr": 150,
-          "quantity": "250g"
-        },
-        {
-          "item": "Basonti Polao",
-          "description": "A light yellow coloured fragrant pulao made with ghee & whole spices",
-          "price_inr": 300,
-          "quantity": "250g"
-        },
-        {
-          "item": "Aamra Chatni",
-          "description": "Sweet-tangy mango chutney with a touch of Bengali spices",
-          "price_inr": 100,
-          "quantity": "100g"
+          "item": "Test Sondesh Special",
+          "price_inr": 499
         }
       ],
       "non_vegetarian": [
@@ -305,22 +413,58 @@
         {
           "name": "Veg Bento",
           "price_inr": 400,
-          "includes": ["6 Luchi", "Chholar Daal", "Tomato Aamsottwo Chatni", "1 Classic Aamar Sondesh"]
+          "includes": [
+            "6 Luchi",
+            "Chholar Daal",
+            "Tomato Aamsottwo Chatni",
+            "1 Classic Aamar Sondesh"
+          ]
         },
         {
           "name": "Non-Veg Bento",
           "price_inr": 700,
-          "includes": ["6 Luchi", "Mangsho (Mutton Kosha)", "Tomato Aamsottwo Chatni", "1 Classic Aamar Sondesh"]
+          "includes": [
+            "6 Luchi",
+            "Mangsho (Mutton Kosha)",
+            "Tomato Aamsottwo Chatni",
+            "1 Classic Aamar Sondesh"
+          ]
         }
       ],
       "norom_pak_sondesh": [
-        {"flavour": "Classic", "pack_size": "250g", "pieces": 9, "price_inr": 450},
-        {"flavour": "Rose", "pack_size": "250g", "pieces": 9, "price_inr": 450},
-        {"flavour": "Mango (Aam Ada)", "pack_size": "250g", "pieces": 9, "price_inr": 550},
-        {"flavour": "Nolen Gur", "pack_size": "250g", "pieces": 9, "price_inr": 600},
-        {"flavour": "Nolen Gur Jolbhora", "pack_size": "250g", "pieces": 6, "price_inr": 750}
+        {
+          "flavour": "Classic",
+          "pack_size": "250g",
+          "pieces": 9,
+          "price_inr": 450
+        },
+        {
+          "flavour": "Rose",
+          "pack_size": "250g",
+          "pieces": 9,
+          "price_inr": 450
+        },
+        {
+          "flavour": "Mango (Aam Ada)",
+          "pack_size": "250g",
+          "pieces": 9,
+          "price_inr": 550
+        },
+        {
+          "flavour": "Nolen Gur",
+          "pack_size": "250g",
+          "pieces": 9,
+          "price_inr": 600
+        },
+        {
+          "flavour": "Nolen Gur Jolbhora",
+          "pack_size": "250g",
+          "pieces": 6,
+          "price_inr": 750
+        }
       ],
-      "logistics_note": "Courier charges at actuals from Sushant Arcade, Gurgaon. Delivery across Delhi NCR."
+      "logistics_note": "Courier charges at actuals from Sushant Arcade, Gurgaon. Delivery across Delhi NCR.",
+      "week": "Test Rotation Week"
     }
   ],
   "meta": {

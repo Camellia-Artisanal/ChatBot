@@ -4,14 +4,15 @@ from typing import Tuple, Dict, Any
 from config import config
 from monitoring import get_logger
 
-log = get_logger("camellia.ollama")
+log = get_logger("camellia.gemini")
 
-class OllamaResponder:
+class GeminiResponder:
     """
-    Ollama Local LLM Fast & Accurate RAG Engine.
+    Google Gemini 1.5 Flash Cloud RAG Engine.
     
-    Provides context-grounded answers based strictly on menu.json + qa_templates.json.
-    Enforces strict refusal ('OUT_OF_CONTEXT') for out-of-syllabus or unrelated queries,
+    Provides fast, context-grounded customer support answers based strictly on
+    menu.json + qa_templates.json.
+    Enforces strict refusal ('OUT_OF_CONTEXT') for out-of-syllabus or unlisted queries,
     triggering human escalation.
     """
 
@@ -72,13 +73,13 @@ class OllamaResponder:
 
     def generate_response(self, user_message: str, user_context: str = None, history_turns: list = None) -> Tuple[str, bool, str]:
         """
-        Queries Ollama with strict RAG context grounding and active session memory context.
+        Queries Google Gemini API with strict RAG context grounding and active session memory.
         
         Returns:
             (response_text: str, is_context_grounded: bool, reason: str)
         """
-        if not config.OLLAMA_ENABLED:
-            return "", False, "ollama_disabled"
+        if not config.GEMINI_ENABLED or not config.GEMINI_API_KEY:
+            return "", False, "gemini_disabled_or_no_key"
 
         context_str = self._build_context_string()
         user_ctx_block = f"\nACTIVE CUSTOMER PROFILE:\n{user_context}\n" if user_context else ""
@@ -86,7 +87,7 @@ class OllamaResponder:
         system_prompt = (
             "You are the customer support AI for Camellia Artisanal, a boutique bakery & kitchen in Delhi NCR.\n\n"
             "STRICT GROUNDING RULES:\n"
-            "1. Answer using the facts present in the CONTEXT and ACTIVE CUSTOMER PROFILE provided below.\n"
+            "1. Answer using ONLY the facts present in the CONTEXT and ACTIVE CUSTOMER PROFILE provided below.\n"
             "2. If the customer asks about their own name or saved preferences present in ACTIVE CUSTOMER PROFILE, answer accurately.\n"
             "3. Be concise, polite, helpful, and clear. Maintain a friendly brand tone.\n"
             "4. CRITICAL OUT-OF-CONTEXT RULE: If the user's message cannot be answered using the provided CONTEXT or ACTIVE CUSTOMER PROFILE "
@@ -97,38 +98,40 @@ class OllamaResponder:
             f"{user_ctx_block}"
         )
 
-        messages = [{"role": "system", "content": system_prompt}]
-
-        # Append recent history turns if provided
+        prompt_text = f"{system_prompt}\n\nCustomer Message: {user_message}"
         if history_turns:
-            for turn in history_turns[-4:]: # include up to last 4 messages (2 pairs)
-                messages.append({"role": turn["role"], "content": turn["content"]})
+            history_str = "\n".join([f"{t['role'].capitalize()}: {t['content']}" for t in history_turns[-4:]])
+            prompt_text = f"{system_prompt}\n\nRecent Chat History:\n{history_str}\n\nCustomer Message: {user_message}"
 
-        messages.append({"role": "user", "content": user_message})
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{config.GEMINI_MODEL}:generateContent?key={config.GEMINI_API_KEY}"
 
         payload = {
-            "model": config.OLLAMA_MODEL,
-            "messages": messages,
-            "stream": False,
-            "options": {
-                "temperature": 0.1,  # Low temp for deterministic adherence to context
-                "num_predict": 256
+            "contents": [
+                {
+                    "parts": [{"text": prompt_text}]
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.1,
+                "maxOutputTokens": 300
             }
         }
 
-        url = f"{config.OLLAMA_BASE_URL.rstrip('/')}/api/chat"
-
         try:
-            with httpx.Client(timeout=config.OLLAMA_TIMEOUT) as client:
+            with httpx.Client(timeout=config.GEMINI_TIMEOUT) as client:
                 resp = client.post(url, json=payload)
                 if resp.status_code != 200:
-                    log.error("Ollama HTTP %s: %s", resp.status_code, resp.text[:300])
-                    return "", False, f"ollama_http_{resp.status_code}"
+                    log.warning("Gemini HTTP %s: %s", resp.status_code, resp.text[:200])
+                    return "", False, f"gemini_http_{resp.status_code}"
 
                 data = resp.json()
-                assistant_text = data.get("message", {}).get("content", "").strip()
+                candidates = data.get("candidates", [])
+                if not candidates:
+                    return "", False, "gemini_no_candidates"
 
-                # Check if Ollama flagged the query as OUT_OF_CONTEXT
+                assistant_text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "").strip()
+
+                # Check if Gemini flagged the query as OUT_OF_CONTEXT
                 if "OUT_OF_CONTEXT" in assistant_text.upper() or not assistant_text:
                     fallback = self.qa_data.get("escalation_triggers", {}).get(
                         "fallback_response",
@@ -136,14 +139,14 @@ class OllamaResponder:
                     )
                     return fallback, False, "out_of_context"
 
-                return assistant_text, True, "ollama_rag"
+                return assistant_text, True, "gemini_rag"
 
         except Exception as e:
-            log.warning("Ollama unreachable (%s at %s): %s", config.OLLAMA_MODEL, url, e)
+            log.warning("Gemini API call failed (%s): %s", config.GEMINI_MODEL, e)
             fallback = self.qa_data.get("escalation_triggers", {}).get(
                 "fallback_response",
                 "Thanks for reaching out! Let me connect you with our team — they'll get back to you shortly. 🙏"
             )
-            return fallback, False, f"ollama_exception_{type(e).__name__}"
+            return fallback, False, f"gemini_exception_{type(e).__name__}"
 
-ollama_responder = OllamaResponder()
+gemini_responder = GeminiResponder()

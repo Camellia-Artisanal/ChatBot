@@ -75,18 +75,22 @@ class WhatsAppAdapter:
         # Log to DB
         db.log_conversation(sender_phone, "whatsapp", message_text, response_text, was_matched, template_id)
         
-        # Handle escalation if unmatched
-        if not was_matched:
+        # Handle escalation if unmatched OR order confirmation
+        if not was_matched or template_id == "order_next_steps":
             escalator.handle_escalation(
                 user_id=sender_phone,
                 channel="whatsapp",
                 user_message=message_text,
-                reason="Unmatched WhatsApp Query / Sensitive Request",
-                context_data={"phone": sender_phone}
+                reason="Order Confirmation & Intake Request" if was_matched else "Unmatched WhatsApp Query / Sensitive Request",
+                context_data={"phone": sender_phone, "template_id": template_id}
             )
 
+        # Quick reply buttons logic for WhatsApp
+        default_buttons = ["🌸 See Menu", "🍫 Sondesh Prices", "🛍️ Place Order"]
+        buttons = default_buttons if template_id in ["greeting", "menu_general", "order_next_steps", "how_to_order"] or not was_matched else None
+
         # Send response via WhatsApp API (or mock if no token configured)
-        send_result = self.send_message(sender_phone, response_text, image_url=image_url)
+        send_result = self.send_message(sender_phone, response_text, image_url=image_url, buttons=buttons)
         
         return {
             "status": "processed",
@@ -107,17 +111,18 @@ class WhatsAppAdapter:
         base = config.PUBLIC_BASE_URL.rstrip("/")
         return base + path if base else path
 
-    def send_message(self, recipient_phone: str, text_body: str, image_url=None) -> Dict[str, Any]:
-        """Sends a text message followed by zero or more image cards via Meta WhatsApp Cloud API."""
+    def send_message(self, recipient_phone: str, text_body: str, image_url=None, buttons=None) -> Dict[str, Any]:
+        """Sends a text or interactive button message followed by zero or more image cards via Meta WhatsApp Cloud API."""
         raw_images = [image_url] if isinstance(image_url, str) else list(image_url or [])
         images = [self._public_url(img) for img in raw_images]
 
         if not self.access_token or not self.phone_number_id:
             # Development / Mock Mode
             safe_body = text_body[:60].encode("ascii", "backslashreplace").decode("ascii")
-            msg_type = f"IMAGE x{len(images)} ({', '.join(images)})" if images else "TEXT"
+            btn_info = f" [Buttons: {', '.join(buttons)}]" if buttons else ""
+            msg_type = f"IMAGE x{len(images)} ({', '.join(images)}){btn_info}" if images else f"TEXT{btn_info}"
             log.info("[MOCK WHATSAPP OUTBOUND] [%s] To: %s | Body: %s...", msg_type, recipient_phone, safe_body)
-            return {"mock": True, "status": "sent", "recipient": recipient_phone, "type": msg_type}
+            return {"mock": True, "status": "sent", "recipient": recipient_phone, "type": msg_type, "buttons": buttons}
 
         headers = {
             "Authorization": f"Bearer {self.access_token}",
@@ -126,13 +131,38 @@ class WhatsAppAdapter:
 
         payloads = []
         if text_body:
-            payloads.append({
-                "messaging_product": "whatsapp",
-                "recipient_type": "individual",
-                "to": recipient_phone,
-                "type": "text",
-                "text": {"preview_url": False, "body": text_body}
-            })
+            if buttons and len(buttons) > 0:
+                # Meta Interactive Button Message (Max 3 buttons)
+                formatted_buttons = [
+                    {
+                        "type": "reply",
+                        "reply": {
+                            "id": f"quick_btn_{i+1}",
+                            "title": title[:20]  # Meta button titles max 20 chars
+                        }
+                    }
+                    for i, title in enumerate(buttons[:3])
+                ]
+                payloads.append({
+                    "messaging_product": "whatsapp",
+                    "recipient_type": "individual",
+                    "to": recipient_phone,
+                    "type": "interactive",
+                    "interactive": {
+                        "type": "button",
+                        "body": {"text": text_body},
+                        "action": {"buttons": formatted_buttons}
+                    }
+                })
+            else:
+                payloads.append({
+                    "messaging_product": "whatsapp",
+                    "recipient_type": "individual",
+                    "to": recipient_phone,
+                    "type": "text",
+                    "text": {"preview_url": False, "body": text_body}
+                })
+
         for img in images:
             img_url = img
             if img.startswith("/"):

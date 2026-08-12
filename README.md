@@ -65,7 +65,6 @@ Camellia.artisal/
 ├── database.py              # SQLite storage (logs, ad sessions, escalations)
 ├── escalator.py             # Human escalation & alert notification pipeline
 ├── sheet_sync.py            # Self-service Google Sheet CSV live menu update module
-├── menu_vision_parser.py    # Vision AI weekly menu photo -> JSON parser (Gemini)
 ├── config.py                # Environment variable loader
 ├── simulate_bot.py          # Interactive CLI terminal simulator
 ├── test_bot.py              # Automated test suite (10 core test scenarios)
@@ -176,38 +175,21 @@ Then open the Web Chat Interface in your browser:
 
 ---
 
-## 📸 Weekly Menu Photo Parser (`menu_vision_parser.py`)
+## 📊 Google Spreadsheet Live Menu Sync (`sheet_sync.py`)
 
-Instead of editing a spreadsheet every week, the owner can simply **snap a photo of the new menu card** and let Vision AI read it. This standalone starter script extracts items, prices, and a chef's teaser from any menu image.
+Menu items and pricing can be updated seamlessly via a published Google Sheet CSV without modifying any code or JSON files.
 
-### Usage
+### How it works
+
+1. **Maintain Menu in Google Sheets**: Store weekly menu items, categories, descriptions, quantities, and prices in a standard Google Sheet.
+2. **Publish as CSV**: In Google Sheets, select `File -> Share -> Publish to Web -> CSV`.
+3. **Configure URL**: Add your CSV link to `GOOGLE_SHEET_CSV_URL` in `.env`.
+4. **Trigger Live Sync**: Call the `/admin/sync-menu` endpoint via `POST /admin/sync-menu` to hot-reload `menu.json` and memory instantly.
 
 ```bash
-# Preview extracted data only (safe — does not touch menu.json)
-python menu_vision_parser.py "Till Thursday.jpeg"
-
-# Extract AND append the new week's menu into menu.json
-python menu_vision_parser.py "From Friday.jpeg" --update-json
+# Example manual sync request
+curl -X POST "http://localhost:8000/admin/sync-menu?csv_url=https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" -H "X-Admin-Key: camellia_admin_secret_key_2026"
 ```
-
-### What it does
-
-1. Base64-encodes the image and sends it to **Gemini Vision**.
-2. Extracts a structured JSON payload: `week_of`, `service_window`, `vegetarian[]`, `non_vegetarian[]`, `bengali_bento[]`, `footnotes[]`.
-3. Captures **every price tier** per item (250g / 500g / 1kg) via `price_tiers[]`, so multi-size cards are never quoted at only the cheapest price.
-4. Generates a **chatbot caption teaser** highlighting 1–2 star dishes (used as the photo card caption in DMs).
-5. With `--update-json`, appends the result to `menu.json` under `weekly_menus`.
-
-### API Key Setup
-
-Add a free [Google AI Studio](https://aistudio.google.com/app/apikey) key to `.env`:
-
-```env
-GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_VISION_MODEL=gemini-flash-latest
-```
-
-> **No key?** The script runs in **MOCK / DEMO MODE** using representative sample data, so you can see the full output shape and teaser generation before signing up for anything.
 
 ---
 

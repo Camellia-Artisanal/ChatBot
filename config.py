@@ -29,6 +29,9 @@ class Config:
     # so it is disabled unless explicitly switched on.
     ENABLE_WEB_TESTER: bool = os.getenv("ENABLE_WEB_TESTER", "false").lower() in ("true", "1", "t", "yes")
 
+    # When true, auto-replies to all DMs regardless of ad referral (bypasses PRD #4 Ad-Gate)
+    BYPASS_AD_GATE: bool = os.getenv("BYPASS_AD_GATE", "false").lower() in ("true", "1", "t", "yes")
+
     # Conversations older than this are purged; stated in the privacy policy.
     DATA_RETENTION_DAYS: int = int(os.getenv("DATA_RETENTION_DAYS", "90"))
 
@@ -57,11 +60,10 @@ class Config:
     # Optional Live Google Sheet CSV URL for Menu Updates (Option A in PRD)
     GOOGLE_SHEET_CSV_URL: str = os.getenv("GOOGLE_SHEET_CSV_URL", "")
 
-    # Ollama Fast & Accurate Model RAG Config
-    OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "llama3.2")
-    OLLAMA_TIMEOUT: float = float(os.getenv("OLLAMA_TIMEOUT", "10.0"))
-    LLM_MODE: str = os.getenv("LLM_MODE", "hybrid") # Options: 'hybrid', 'deterministic', 'ollama_only'
-    OLLAMA_ENABLED: bool = os.getenv("OLLAMA_ENABLED", "true").lower() in ("true", "1", "t", "yes")
+    # Gemini Cloud API Config
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
+    GEMINI_TIMEOUT: float = float(os.getenv("GEMINI_TIMEOUT", "10.0"))
+    GEMINI_ENABLED: bool = os.getenv("GEMINI_ENABLED", "true").lower() in ("true", "1", "t", "yes")
 
 config = Config()

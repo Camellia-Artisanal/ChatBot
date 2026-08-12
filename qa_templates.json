@@ -40,8 +40,8 @@
     {
       "id": "order_next_steps",
       "triggers": ["final selection", "this is my final", "my address is", "address and phone", "what are the next steps", "next steps", "confirm my order", "confirm order", "place the order", "here is my address"],
-      "response": "Wonderful — thank you! 🌸\n\nOur Manager of Kitchens, Mr. Guru Dayal Singh (+91 87965 51990), will connect with you shortly and share your invoice. He will be your single point of contact for this order and will be happy to assist you with any queries.",
-      "escalate": false,
+      "response": "Wonderful — thank you! 🌸\n\nOur Manager of Kitchens, Mr. Guru Dayal Singh (+91 87965 51990), has been notified of your order request and recent chat history. He will connect with you shortly on WhatsApp/Call to verify your address, share your official invoice, and confirm delivery timing!\n\nFeel free to ask any questions in the meantime. 🙏",
+      "escalate": true,
       "source_ref": "client Q&A script > QUESTION"
     },
 
@@ -115,6 +115,46 @@
       "response": "Mahua Sondesh (Signature Collection only): 250g (9pcs) ₹900 | 500g (18pcs) ₹1600 | 1kg (36pcs) ₹2900",
       "escalate": false,
       "source_ref": "menu.json > signature_collection > Mahua"
+    },
+
+    {
+      "id": "aamar_mishti_collection",
+      "triggers": ["aamar mishti", "aamar mishti collection", "aamar mishti 250g", "aamar mishti 500g", "aamar mishti 1kg", "aamar mishti price", "aamar mishti rate", "aamar mishti options", "aamar mishti sondesh"],
+      "response": "Collection 1 — Aamar Mishti (আমার মিষ্টি) 🌸\nIndulgence for your daily sweet cravings at home or work. Made using good dairy milk in our kitchen.\n\nPrice Breakdown:\n• Classic / Rose Sondesh: 250g (9pcs) ₹450 | 500g (18pcs) ₹800 | 1kg (36pcs) ₹1500\n• Mango / Kesar / Aam Ada: 250g (9pcs) ₹550 | 500g (18pcs) ₹1000 | 1kg (36pcs) ₹1800\n• Nolen Gur Sondesh: 250g (9pcs) ₹600 | 500g (18pcs) ₹1100 | 1kg (36pcs) ₹2000\n• Jolbhora (Nolen Gur liquid fill): 250g (6pcs) ₹750 | 500g (12pcs) ₹1400 | 1kg (24pcs) ₹2500\n\nWhich item and pack size would you like to order?",
+      "escalate": false,
+      "source_ref": "menu.json > Aamar Mishti Collection"
+    },
+
+    {
+      "id": "signature_collection",
+      "triggers": ["signature collection", "signature sondesh", "signature 250g", "signature 500g", "signature 1kg", "signature price", "signature rate", "signature options", "desi a2"],
+      "response": "Collection 2 — Signature Collection 🌸\nSpecial occasion & gifting mishti made using pure desi A2 cow milk, 100% hand crafted.\n\nPrice Breakdown:\n• Classic / Rose: 250g (9pcs) ₹600 | 500g (18pcs) ₹1100 | 1kg (36pcs) ₹2000\n• Mango / Kesar / Vanilla / Cinnamon: 250g (9pcs) ₹650 | 500g (18pcs) ₹1200 | 1kg (36pcs) ₹2200\n• Nolen Gur Sondesh: 250g (9pcs) ₹700 | 500g (18pcs) ₹1300 | 1kg (36pcs) ₹2500\n• Jolbhora (Liquid fill): 250g (6pcs) ₹900 | 500g (12pcs) ₹1600 | 1kg (24pcs) ₹2900\n• Mahua Sondesh: 250g (9pcs) ₹900 | 500g (18pcs) ₹1600 | 1kg (36pcs) ₹2900\n\nWhich item and pack size would you like to order?",
+      "escalate": false,
+      "source_ref": "menu.json > Signature Collection"
+    },
+
+    {
+      "id": "pack_size_250g",
+      "triggers": ["250g", "250 g", "250g box", "250g pack", "9 pcs", "9 pieces", "box of 9"],
+      "response": "Here are all our 250g Box Options (9 pcs / 6 pcs for Jolbhora): 🌸\n\n*Aamar Mishti Collection (250g)*:\n• Classic / Rose: ₹450 (9 pcs)\n• Mango / Kesar: ₹550 (9 pcs)\n• Nolen Gur: ₹600 (9 pcs)\n• Jolbhora: ₹750 (6 pcs)\n\n*Signature A2 Collection (250g)*:\n• Classic / Rose: ₹600 (9 pcs)\n• Mango / Kesar / Vanilla / Cinnamon: ₹650 (9 pcs)\n• Nolen Gur: ₹700 (9 pcs)\n• Jolbhora / Mahua: ₹900 (6 pcs / 9 pcs)\n\nWhich one would you like to order?",
+      "escalate": false,
+      "source_ref": "menu.json > 250g pack options"
+    },
+
+    {
+      "id": "pack_size_500g",
+      "triggers": ["500g", "500 g", "500g box", "500g pack", "18 pcs", "18 pieces", "box of 18"],
+      "response": "Here are all our 500g Box Options (18 pcs / 12 pcs for Jolbhora): 🌸\n\n*Aamar Mishti Collection (500g)*:\n• Classic / Rose: ₹800 (18 pcs)\n• Mango / Kesar: ₹1000 (18 pcs)\n• Nolen Gur: ₹1100 (18 pcs)\n• Jolbhora: ₹1400 (12 pcs)\n\n*Signature A2 Collection (500g)*:\n• Classic / Rose: ₹1100 (18 pcs)\n• Mango / Kesar / Vanilla / Cinnamon: ₹1200 (18 pcs)\n• Nolen Gur: ₹1300 (18 pcs)\n• Jolbhora / Mahua: ₹1600 (12 pcs / 18 pcs)\n\nWhich one would you like to order?",
+      "escalate": false,
+      "source_ref": "menu.json > 500g pack options"
+    },
+
+    {
+      "id": "pack_size_1kg",
+      "triggers": ["1kg", "1 kg", "1000g", "1kg box", "36 pcs", "36 pieces", "box of 36"],
+      "response": "Here are all our 1kg Box Options (36 pcs / 24 pcs for Jolbhora): 🌸\n\n*Aamar Mishti Collection (1kg)*:\n• Classic / Rose: ₹1500 (36 pcs)\n• Mango / Kesar: ₹1800 (36 pcs)\n• Nolen Gur: ₹2000 (36 pcs)\n• Jolbhora: ₹2500 (24 pcs)\n\n*Signature A2 Collection (1kg)*:\n• Classic / Rose: ₹2000 (36 pcs)\n• Mango / Kesar / Vanilla / Cinnamon: ₹2200 (36 pcs)\n• Nolen Gur: ₹2500 (36 pcs)\n• Jolbhora / Mahua: ₹2900 (24 pcs / 36 pcs)\n\nWhich one would you like to order?",
+      "escalate": false,
+      "source_ref": "menu.json > 1kg pack options"
     },
 
     {
@@ -192,8 +232,21 @@
     {
       "id": "how_to_order",
       "triggers": ["how to order", "how do i order", "place an order", "want to order"],
-      "response": "Great! Just tell me what you'd like (item, flavour, pack size, and quantity) along with your delivery area, and I'll get it confirmed for you. What would you like to order?",
+      "response": "Great! To place an order, please share:\n1. Item & Flavour (e.g. Nolen Gur Sondesh)\n2. Collection (Aamar Mishti / Signature)\n3. Pack Size (250g, 500g, or 1kg)\n4. Delivery Address & Phone Number\n\nOnce shared, our Manager of Kitchens, Mr. Guru Dayal Singh (+91 87965 51990), will verify your details with you on WhatsApp/Call and share your invoice for payment before dispatch! 🌸",
       "escalate": false
+    },
+
+    {
+      "id": "freshness_ingredients",
+      "triggers": [
+        "fresh", "freshness", "how fresh", "fresh ingredients", "quality of ingredients",
+        "are ingredients fresh", "preservatives", "sourcing", "made fresh", "freshly made",
+        "raw materials", "made from scratch", "fresh milk", "a2 milk", "sweetener", "sweeteners",
+        "jaggery", "date palm"
+      ],
+      "response": "At Camellia.artisanal, freshness and quality are at the heart of everything we make! 🌸\n\n• Authentic Sweeteners & Milk: We use 100% authentic Nolen Gur (date palm jaggery) and pure un-processed desi A2 cow milk for our Signature collection.\n• Made Fresh Daily: Every Sondesh and meal is prepared from scratch in small batches using traditional recipes — zero artificial preservatives.\n• Artisanal Sourcing: Sourced directly from small-batch artisanal farmers, trusted dairies, and carefully selected partners.\n\nLet us know if you'd like to try our Sondesh or this week's fresh menu!",
+      "escalate": false,
+      "source_ref": "client brand standards > freshness & sourcing"
     }
   ],
 
@@ -207,7 +260,7 @@
       "delivery date/time-slot commitments",
       "anything not matching any template above with sufficient confidence"
     ],
-    "fallback_response": "Thanks for reaching out! Let me connect you with our team for this — they'll get back to you shortly. 🙏"
+    "fallback_response": "Thank you for getting in touch! 🌸 I've notified our team about your specific query and someone will assist you shortly.\n\nIn the meantime, feel free to ask me about:\n• 🌸 Our fresh Sondesh, Kanchagolla & Jolbhora (Aamar Mishti & Signature Collections)\n• 🍱 This week's fresh Bengali Lunch & Dinner Bento menu\n• 🚚 Delivery details across Delhi NCR\n\nOr reply 'menu' to see our complete price list!"
   },
 
   "open_questions_for_client": [

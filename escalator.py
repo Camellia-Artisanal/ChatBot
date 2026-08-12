@@ -60,6 +60,23 @@ class Escalator:
             "alert_sent": alert_result.get("status") == "sent" or alert_result.get("mock") is True
         }
 
+    def _evaluate_order_verification(self, user_message: str, chat_history: str) -> str:
+        """Inspects message & history for phone number & address to flag potential fake/unverified orders."""
+        import re
+        full_text = f"{user_message}\n{chat_history}".lower()
+        has_phone = bool(re.search(r'\b[6-9]\d{9}\b|\+?91\s*[6-9]\d{9}\b', full_text))
+        addr_keywords = ["delhi", "gurgaon", "gurugram", "noida", "ghaziabad", "faridabad", "sector", "block", "flat", "house", "road", "pincode", "pin", "address", "phase", "street"]
+        has_address = any(kw in full_text for kw in addr_keywords)
+
+        if has_phone and has_address:
+            return "✅ READY FOR VERIFICATION & INVOICING (Phone & Address Present)"
+        elif has_phone:
+            return "⚠️ PENDING VERIFICATION (Phone Present, Address Missing — Confirm address first)"
+        elif has_address:
+            return "⚠️ PENDING VERIFICATION (Address Present, Phone Missing — Confirm contact number first)"
+        else:
+            return "⚠️ PENDING VERIFICATION (Missing Address & Phone — Staff MUST verify customer before prepping)"
+
     def send_human_alert(
         self,
         escalation_id: int,
@@ -74,15 +91,18 @@ class Escalator:
         cust_name = handoff.get("customer_name", "Unknown")
         chat_history = "\n".join(handoff.get("recent_chat_history", []))
 
+        verif_status = self._evaluate_order_verification(user_message, chat_history)
+
         alert_body = (
-            f"🚨 *NEW CAMELLIA BOT ESCALATION #{escalation_id}*\n\n"
+            f"🚨 *NEW CAMELLIA BOT ORDER / ESCALATION #{escalation_id}*\n\n"
+            f"• *Verification Status:* {verif_status}\n"
             f"• *Channel:* {channel.upper()}\n"
             f"• *Customer ID/Phone:* {user_id}\n"
             f"• *Customer Name:* {cust_name}\n"
             f"• *Reason:* {reason}\n"
             f"• *Last Message:* \"{user_message}\"\n\n"
             f"📋 *Recent Conversation History:*\n{chat_history or 'None'}\n\n"
-            f"Please respond directly to customer on {channel.capitalize()}."
+            f"Please verify order details & send invoice via WhatsApp/Call to customer before cooking/dispatching."
         )
 
         # In production, uses Meta WhatsApp API to alert the human phone number

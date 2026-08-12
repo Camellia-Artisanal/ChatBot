@@ -27,7 +27,7 @@ not certain**. It never invents prices.
 | Menu photo cards | The `.jpeg` files in the project root, served at `/images/...` |
 | Conversation log | `camellia.db` — a single SQLite file |
 | Legal pages | `/privacy` and `/terms`, served by the bot itself — Meta requires the first one |
-| Optional local AI | Ollama (`llama3.2`) for paraphrased questions — **off by default** |
+| Cloud AI Fallback | Google Gemini 1.5 Flash API for paraphrased/unmatched questions |
 
 The bot is **hard-gated to ad traffic on Instagram**: an organic DM from someone who did not
 click an ad is deliberately left untouched in the Instagram inbox for a human to reply to.
@@ -51,9 +51,7 @@ This is a very light workload — a few hundred messages a day is nothing for it
 Any of these work: DigitalOcean, Hetzner, Vultr, Linode, AWS Lightsail, or an Indian
 provider like E2E Networks. Pick the one whose billing you are comfortable with.
 
-> **If you enable the local Ollama AI**, the requirement jumps to **8 GB RAM minimum**
-> because the language model is loaded into memory. See §6 for the cost difference. Most
-> clients should leave Ollama off — the deterministic script already covers the real questions.
+> **Google Gemini 1.5 Flash** handles cloud AI RAG queries with zero server RAM footprint. Get a 100% free key (1,500 free requests/day) at [aistudio.google.com](https://aistudio.google.com/app/apikey).
 
 ### 2.2 One-time server preparation
 
@@ -191,8 +189,8 @@ know which keys are expected.
 | `ADMIN_API_KEY` | **You invent it.** Use `openssl rand -hex 32`. | Protects `/admin/*`, which exposes customer conversations. If blank, those pages are **open to the internet** — always set it. |
 | `HUMAN_ESCALATION_PHONE` | Your own number | Where the bot sends "a customer needs you" alerts. Currently `+918796551990` (Mr. Guru Dayal Singh). |
 | `HUMAN_ESCALATION_EMAIL` | Your own email | Recorded on escalations. |
-| `GEMINI_API_KEY` | https://aistudio.google.com/app/apikey | **Optional.** Only for `menu_vision_parser.py`, the tool that reads a weekly menu photo. Free tier is enough. |
-| `GOOGLE_SHEET_CSV_URL` | Google Sheets → File → Share → Publish to web → CSV | **Optional.** Lets you update prices from a spreadsheet instead of editing code. |
+| `GEMINI_API_KEY` | https://aistudio.google.com/app/apikey | **Optional.** Used for Gemini RAG fallback responses. Free tier is enough. |
+| `GOOGLE_SHEET_CSV_URL` | Google Sheets → File → Share → Publish to web → CSV | **Optional.** Self-service menu sync: lets you update prices & items from a spreadsheet without editing code. |
 | `ENABLE_WEB_TESTER` | **You choose.** Leave it `false`. | Controls the browser chat tester at `/chat`. It writes real conversation rows and pages your phone, so on a public domain anyone who finds the URL can abuse it. When `false` the page returns 404. |
 | `DATA_RETENTION_DAYS` | **You choose.** Default `90`. | Conversations, escalations and sessions older than this are deleted every time the bot starts. This number is the promise printed on your `/privacy` page — change one, change the other. `0` disables deletion entirely (not recommended). |
 | `BUSINESS_LEGAL_NAME` | Your registered business name | Printed on `/privacy` and `/terms`. |
@@ -306,14 +304,13 @@ Then send a real WhatsApp message to your business number and watch the log.
 ├── .env                              ← ALL SECRETS. chmod 600. Not in git.
 ├── app.py                            ← the web service (webhooks, admin, web tester)
 ├── responder.py                      ← decides which scripted answer to send
-├── ollama_responder.py               ← optional local-AI fallback
+├── gemini_responder.py               ← Google Gemini 1.5 Flash Cloud AI RAG engine
 ├── ad_gate.py                        ← blocks non-ad Instagram DMs
 ├── escalator.py                      ← alerts a human when the bot is unsure
 ├── session_memory.py                 ← remembers the customer's name mid-chat (in RAM)
 ├── whatsapp_adapter.py               ← sends/receives on WhatsApp Cloud API
 ├── database.py                       ← SQLite read/write
-├── sheet_sync.py                     ← optional Google Sheet price sync
-├── menu_vision_parser.py             ← optional: read a weekly menu from a photo
+├── sheet_sync.py                     ← Google Sheet live menu & price sync module
 ├── qa_templates.json                 ← THE ANSWER SCRIPT — edit this to change wording
 ├── menu.json                         ← collections, flavours, prices, weekly menus
 ├── AAMAR MISHTI.jpeg                 ← menu photo cards, served at /images/...
@@ -453,8 +450,8 @@ anyway when someone asks about a custom order.
 | --- | --- |
 | Meta Business Verification | ₹0 |
 | WhatsApp business number (if you buy a new SIM) | ₹200 – ₹500 one-time |
-| Gemini Vision API for menu-photo parsing | ₹0 on the free tier; a few rupees a month beyond it |
-| Developer time for wording/price changes | ₹0 — edit the JSON files yourself |
+| Google Sheets Menu Sync (`sheet_sync.py`) | ₹0 (uses free published Google Sheet CSV) |
+| Developer time for wording/price changes | ₹0 — update Google Sheet or edit the JSON files yourself |
 
 ### 6.5 Cost summary
 

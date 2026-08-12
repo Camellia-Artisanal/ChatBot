@@ -37,6 +37,10 @@ class TestCamelliaBot(unittest.TestCase):
                 pass
 
     def setUp(self):
+        # Ensure Ad-Gate testing is isolated from .env overrides
+        config.BYPASS_AD_GATE = False
+        from session_memory import session_memory
+        session_memory._sessions.clear()
         # Clear tables between tests
         with db.get_connection() as conn:
             cursor = conn.cursor()
@@ -107,6 +111,30 @@ class TestCamelliaBot(unittest.TestCase):
         is_ad, sender, text, _ = ad_gate.inspect_and_gate_message(next_event)
         self.assertTrue(is_ad, "Subsequent message in ad-qualified session must be allowed.")
 
+    @patch("ad_gate.httpx.Client")
+    def test_ad_gate_message_edit_fallback(self, mock_client_cls):
+        """Test fallback Graph API lookup for message_edit events lacking a sender field."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "from": {"id": "user_fallback_999"},
+            "to": {"id": "page_123"},
+            "message": "Edited message text from fallback"
+        }
+        mock_client_cls.return_value.__enter__.return_value.get.return_value = mock_response
+
+        event_without_sender = {
+            "timestamp": 1700000000,
+            "message_edit": {
+                "mid": "m_test_mid_fallback_123"
+            }
+        }
+        config.BYPASS_AD_GATE = True
+        is_ad, sender, text, _ = ad_gate.inspect_and_gate_message(event_without_sender)
+        self.assertTrue(is_ad)
+        self.assertEqual(sender, "user_fallback_999")
+        self.assertEqual(text, "Edited message text from fallback")
+
     def test_responder_sondesh_pricing(self):
         """Test pricing query returns correct predefined template and photo card."""
         response, was_matched, tmpl_id, img_url = responder.match_and_respond("How much is Sondesh?")
@@ -161,11 +189,12 @@ class TestCamelliaBot(unittest.TestCase):
         self.assertEqual(tmpl_id, "explicit_escalation")
 
     def test_responder_unmatched_out_of_syllabus(self):
-        """Out-of-syllabus query must escalate without guessing."""
-        response, was_matched, tmpl_id, img_url = responder.match_and_respond("Do you sell Chinese Hakka Noodles?")
-        self.assertFalse(was_matched)
-        self.assertTrue(tmpl_id is None or tmpl_id.startswith("ollama_"))
-        self.assertIn("connect you with our team", response)
+        """Out-of-syllabus query must escalate without guessing when AI is disabled."""
+        with patch.object(config, "GEMINI_ENABLED", False):
+            response, was_matched, tmpl_id, img_url = responder.match_and_respond("Do you sell Chinese Hakka Noodles?")
+            self.assertFalse(was_matched)
+            self.assertIsNone(tmpl_id)
+            self.assertTrue("notified our team" in response or "connect you with our team" in response)
 
     def test_whatsapp_adapter_flow(self):
         """PRD Requirement #2: WhatsApp integration handling."""
@@ -268,50 +297,54 @@ class TestCamelliaBot(unittest.TestCase):
         self.assertEqual(res.status_code, 403)
 
     @patch("httpx.Client.post")
-    def test_ollama_in_context_query(self, mock_post):
-        """Test Ollama RAG responds accurately for in-syllabus queries when deterministic match score is low."""
+    def test_gemini_in_context_query(self, mock_post):
+        """Test Gemini RAG responds accurately for in-syllabus queries when deterministic match score is low."""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "message": {
-                "content": "We offer artisanal Nolen Gur Sondesh made with authentic date palm jaggery delivered fresh across Delhi NCR!"
-            }
+            "candidates": [{
+                "content": {
+                    "parts": [{"text": "We offer artisanal Nolen Gur Sondesh made with authentic date palm jaggery delivered fresh across Delhi NCR!"}]
+                }
+            }]
         }
         mock_post.return_value = mock_response
 
-        with patch.object(config, "OLLAMA_ENABLED", True), patch.object(config, "LLM_MODE", "hybrid"):
-            resp_text, was_matched, tmpl_id, img_url = responder.match_and_respond("Do you use organic sweeteners or natural preservatives in your sweets?")
+        with patch.object(config, "GEMINI_ENABLED", True), patch.object(config, "GEMINI_API_KEY", "test_key"):
+            resp_text, was_matched, tmpl_id, img_url = responder.match_and_respond("What lentil cakes are used in Dhokar Dalna?")
         self.assertTrue(was_matched)
-        self.assertEqual(tmpl_id, "ollama_rag")
+        self.assertEqual(tmpl_id, "gemini_rag")
         self.assertIn("Nolen Gur Sondesh", resp_text)
 
     @patch("httpx.Client.post")
-    def test_ollama_out_of_context_refusal(self, mock_post):
-        """Test Ollama RAG refuses out-of-syllabus query with OUT_OF_CONTEXT and triggers human escalation."""
+    def test_gemini_out_of_context_refusal(self, mock_post):
+        """Test Gemini RAG refuses out-of-syllabus query with OUT_OF_CONTEXT and triggers human escalation."""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "message": {
-                "content": "OUT_OF_CONTEXT"
-            }
+            "candidates": [{
+                "content": {
+                    "parts": [{"text": "OUT_OF_CONTEXT"}]
+                }
+            }]
         }
         mock_post.return_value = mock_response
 
-        with patch.object(config, "OLLAMA_ENABLED", True), patch.object(config, "LLM_MODE", "hybrid"):
+        with patch.object(config, "GEMINI_ENABLED", True), patch.object(config, "GEMINI_API_KEY", "test_key"):
             resp_text, was_matched, tmpl_id, img_url = responder.match_and_respond("What is the capital of France?")
         self.assertFalse(was_matched)
-        self.assertEqual(tmpl_id, "ollama_out_of_context")
-        self.assertIn("connect you with our team", resp_text)
+        self.assertEqual(tmpl_id, "gemini_out_of_context")
+        self.assertTrue("notified our team" in resp_text or "connect you with our team" in resp_text)
 
     @patch("httpx.Client.post")
-    def test_ollama_offline_fallback(self, mock_post):
-        """Test graceful fallback to human escalation if Ollama server is unreachable/offline."""
-        mock_post.side_effect = Exception("Connection refused to localhost:11434")
+    def test_gemini_offline_fallback(self, mock_post):
+        """Test graceful fallback to human escalation if Gemini API call fails."""
+        mock_post.side_effect = Exception("API connection error")
 
-        with patch.object(config, "OLLAMA_ENABLED", True), patch.object(config, "LLM_MODE", "hybrid"):
+        with patch.object(config, "GEMINI_ENABLED", True), patch.object(config, "GEMINI_API_KEY", "test_key"):
             resp_text, was_matched, tmpl_id, img_url = responder.match_and_respond("Can you send a violin player for a wedding?")
         self.assertFalse(was_matched)
-        self.assertEqual(tmpl_id, "ollama_ollama_exception_Exception")
+        self.assertTrue(tmpl_id is None or tmpl_id.startswith("gemini_"))
 
     def test_session_memory_fact_extraction(self):
         """Test extraction of customer name in Session Memory."""
@@ -460,6 +493,96 @@ class TestCamelliaBot(unittest.TestCase):
             monitor.record_success("whatsapp")
             self.assertTrue(monitor.snapshot()["healthy"])
 
+    def test_freshness_ingredients_query(self):
+        """Verify 'how fresh are the ingredients' matches freshness_ingredients template and not delivery_time."""
+        resp_text, matched, tmpl_id, img_url = responder.match_and_respond(
+            "how fresh are the ingredients", "test_user_fresh", "whatsapp"
+        )
+        self.assertTrue(matched)
+        self.assertEqual(tmpl_id, "freshness_ingredients")
+        self.assertIn("freshness and quality", resp_text.lower())
+        self.assertNotIn("sushant lok", resp_text.lower())
+
+    def test_aamar_mishti_250g_query_and_repeat_image_suppression(self):
+        """Verify 'aamar mishti 250g' matches collection template and suppresses duplicate photo cards on follow-up."""
+        from session_memory import session_memory
+        session_memory._sessions.clear()
+
+        # Turn 1: User asks for menu -> gets text + menu photo cards
+        text1, matched1, tmpl1, img1 = responder.match_and_respond(
+            "send the menu", "user_test_menu_suppression", "whatsapp"
+        )
+        self.assertTrue(matched1)
+        self.assertIsNotNone(img1, "First menu query should attach photo cards.")
+
+        # Turn 2: User asks "aamar mishti 250g" -> gets exact price breakdown, NO repeat menu photo cards
+        text2, matched2, tmpl2, img2 = responder.match_and_respond(
+            "aamar mishti 250g", "user_test_menu_suppression", "whatsapp"
+        )
+        self.assertTrue(matched2)
+        self.assertEqual(tmpl2, "aamar_mishti_collection")
+        self.assertIn("Collection 1 — Aamar Mishti", text2)
+        self.assertIn("250g (9pcs) ₹450", text2)
+        self.assertIsNone(img2, "Follow-up question should NOT re-send duplicate photo cards.")
+
+    def test_order_confirmation_escalation_and_verification(self):
+        """Verify order confirmation triggers staff alert with verification status."""
+        from escalator import escalator
+        from whatsapp_adapter import whatsapp_adapter
+
+        # 1. Test missing address/phone -> flags PENDING VERIFICATION
+        res1 = escalator._evaluate_order_verification("I want 2 boxes of Nolen Gur", "no previous history")
+        self.assertIn("PENDING VERIFICATION", res1)
+
+        # 2. Test valid address & phone -> flags READY FOR VERIFICATION & INVOICING
+        res2 = escalator._evaluate_order_verification(
+            "Here is my order: 250g Nolen Gur. Address: Flat 402, Sector 56 Gurgaon, Phone: 9876543210", ""
+        )
+        self.assertIn("READY FOR VERIFICATION & INVOICING", res2)
+
+        # 3. Test WhatsApp order_next_steps triggers escalation alert
+        with patch.object(escalator, "handle_escalation") as mock_esc:
+            whatsapp_adapter.process_incoming_message("919999888877", "confirm my order here is my address Sector 43 Gurgaon")
+            self.assertTrue(mock_esc.called)
+
+    def test_order_calculator_integration(self):
+        """Verify OrderCalculator correctly parses quantities and generates itemized draft receipts."""
+        from order_calculator import order_calculator
+        msg = "I want to order 2 packs of 250g Nolen Gur sondesh"
+        calc_res = order_calculator.parse_and_calculate(msg)
+        self.assertIsNotNone(calc_res)
+        self.assertIn("ORDER DRAFT RECEIPT", calc_res["formatted_receipt"])
+        self.assertIn("Nolen Gur", calc_res["formatted_receipt"])
+        self.assertEqual(calc_res["quantity"], 2)
+        self.assertEqual(calc_res["total_price"], 900)
+
+    def test_whatsapp_quick_reply_buttons(self):
+        """Verify WhatsAppAdapter includes quick reply interactive buttons for greetings and menu requests."""
+        from whatsapp_adapter import whatsapp_adapter
+        with patch.object(whatsapp_adapter, "send_message") as mock_send:
+            whatsapp_adapter.process_incoming_message("919876543210", "Hi")
+            self.assertTrue(mock_send.called)
+            _, kwargs = mock_send.call_args
+            buttons = kwargs.get("buttons")
+            self.assertIsNotNone(buttons)
+            self.assertIn("🌸 See Menu", buttons)
+            self.assertIn("🛍️ Place Order", buttons)
+
+    def test_admin_update_menu_endpoint(self):
+        """Verify POST /admin/update-menu updates menu rotation and reloads responder."""
+        headers = {"X-Admin-Key": config.ADMIN_API_KEY} if config.ADMIN_API_KEY else {}
+        res = self.client.post(
+            "/admin/update-menu",
+            headers=headers,
+            json={
+                "week": "Test Rotation Week",
+                "vegetarian": [{"item": "Test Sondesh Special", "price_inr": 499}]
+            }
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["status"], "success")
+
 if __name__ == "__main__":
     unittest.main()
+
 

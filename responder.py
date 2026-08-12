@@ -4,7 +4,7 @@ import re
 from typing import Dict, Any, Tuple, Optional
 from config import config
 from monitoring import get_logger
-from ollama_responder import ollama_responder
+from gemini_responder import gemini_responder
 from session_memory import session_memory
 
 log = get_logger("camellia.responder")
@@ -13,7 +13,7 @@ class DeterministicResponder:
     """
     Hybrid Auto-Responder Engine for Camellia Artisanal.
     Combines 100% deterministic regex boundary matching, menu photo cards,
-    conversational session memory and Ollama local RAG fallback.
+    conversational session memory, and Google Gemini Flash AI RAG fallback.
     """
 
     def __init__(self, qa_path: str = None):
@@ -31,7 +31,7 @@ class DeterministicResponder:
     def reload_data(self):
         """Reload JSON files to support live menu updates."""
         self.qa_data = self._load_json(self.qa_path)
-        ollama_responder.reload_data()
+        gemini_responder.reload_data()
 
     def check_explicit_escalation_triggers(self, text: str) -> Optional[str]:
         """Checks if text contains explicit escalation keywords."""
@@ -45,7 +45,7 @@ class DeterministicResponder:
     def match_and_respond(self, user_message: str, user_id: str = None, channel: str = None) -> Tuple[str, bool, Optional[str], Optional[Any]]:
         """
         Matches incoming message against qa_templates.json & menu.json.
-        Updates session memory and falls back to Ollama RAG.
+        Updates session memory and falls back to Gemini Flash RAG.
 
         Returns:
             (response_text: str, was_matched: bool, template_id: Optional[str], image_url: str | List[str] | None)
@@ -73,7 +73,7 @@ class DeterministicResponder:
         lowered_text = user_message.lower().strip()
         user_words = set(re.findall(r'\b\w+\b', lowered_text))
         
-        STOP_WORDS = {"i", "am", "im", "my", "is", "are", "do", "you", "a", "an", "the", "to", "for", "of", "in", "on", "have", "has", "with", "and", "or", "we", "can", "your", "this", "what", "me", "show", "tell", "it", "more", "want", "send", "share"}
+        STOP_WORDS = {"i", "am", "im", "my", "is", "are", "do", "you", "a", "an", "the", "to", "for", "of", "in", "on", "have", "has", "with", "and", "or", "we", "can", "your", "this", "what", "how", "when", "where", "why", "who", "which", "many", "much", "me", "show", "tell", "it", "more", "want", "send", "share"}
         
         templates = self.qa_data.get("templates", [])
         
@@ -122,9 +122,11 @@ class DeterministicResponder:
                 best_template = tmpl
 
         # Require a minimum matching threshold (score >= 4) in hybrid/deterministic mode
-        if config.LLM_MODE != "ollama_only" and best_template and best_score >= 4:
+        if best_template and best_score >= 4:
             tmpl_id = best_template.get("id")
-            response_text, image_url = self._format_dynamic_response(tmpl_id, best_template.get("response", ""))
+            response_text, image_url = self._format_dynamic_response(
+                tmpl_id, best_template.get("response", ""), user_id=user_id, channel=channel, user_message=user_message
+            )
             
             # Dynamic Name Personalization
             if tmpl_id == "name_introduction":
@@ -141,36 +143,45 @@ class DeterministicResponder:
             session_memory.add_turn(user_id, channel, user_message, response_text)
             return response_text, True, tmpl_id, image_url
 
-        # Fallback to Ollama Local RAG if enabled
-        if config.OLLAMA_ENABLED and config.LLM_MODE in ("hybrid", "ollama_only"):
+        # Fallback to Google Gemini Flash Cloud AI RAG Engine if enabled
+        if config.GEMINI_ENABLED and config.GEMINI_API_KEY:
             context_summary = session_memory.get_context_summary(user_id, channel)
             history_turns = session_memory.get_session(user_id, channel)["turns"]
 
-            ollama_response, is_grounded, reason = ollama_responder.generate_response(
+            gemini_response, is_grounded, reason = gemini_responder.generate_response(
                 user_message,
                 user_context=context_summary,
                 history_turns=history_turns
             )
+            if is_grounded and gemini_response:
+                session_memory.add_turn(user_id, channel, user_message, gemini_response)
+                return gemini_response, True, "gemini_rag", None
+            elif reason == "out_of_context":
+                return gemini_response, False, "gemini_out_of_context", None
 
-            if is_grounded and ollama_response:
-                session_memory.add_turn(user_id, channel, user_message, ollama_response)
-                return ollama_response, True, "ollama_rag", None
-            else:
-                return ollama_response, False, f"ollama_{reason}", None
-
-        # No match found & Ollama disabled -> Escalate
+        # No match found & AI RAG disabled/unreachable -> Escalate to human
         fallback = self.qa_data.get("escalation_triggers", {}).get(
             "fallback_response", "Thanks for reaching out! Let me connect you with our team for this — they'll get back to you shortly. 🙏"
         )
         session_memory.add_turn(user_id, channel, user_message, fallback)
         return fallback, False, None, None
 
-    def _format_dynamic_response(self, template_id: str, default_response: str) -> Tuple[str, Optional[Any]]:
-        """Attaches the exact photo card(s) a template should send alongside its text."""
+    def _format_dynamic_response(
+        self, template_id: str, default_response: str, user_id: str = None, channel: str = None, user_message: str = ""
+    ) -> Tuple[str, Optional[Any]]:
+        """Attaches the exact photo card(s) a template should send alongside its text, suppressing duplicates on follow-up questions."""
         img_till_thursday = "/images/Till%20Thursday.jpeg"
         img_from_friday = "/images/From%20Friday.jpeg"
         img_signature_sondesh = "/images/Signature%20Sondesh.jpeg"
         img_aamar_mishti = "/images/AAMAR%20MISHTI.jpeg"
+
+        # Check session memory to see if photo cards were already delivered in this session
+        session = session_memory.get_session(user_id, channel) if user_id and channel else None
+        already_sent_cards = session["facts"].get("image_card_sent", False) if session else False
+
+        # Allow photo re-delivery if customer explicitly asks for image/photo/card
+        msg_lowered = user_message.lower() if user_message else ""
+        explicit_image_req = any(kw in msg_lowered for kw in ["photo", "image", "picture", "card", "send image", "send photo"])
 
         import datetime, zoneinfo
         try:
@@ -181,24 +192,38 @@ class DeterministicResponder:
         today_weekday = datetime.datetime.now(tz=ist).weekday()  # 0=Mon … 6=Sun
         current_weekly_img = img_from_friday if today_weekday in [4, 5, 6] else img_till_thursday
 
+        target_images = None
+        formatted_text = default_response
+
         # "I want to know more" -> both collection cards + this week's meal menu
         if template_id == "know_more":
-            return default_response, [img_aamar_mishti, img_signature_sondesh, current_weekly_img]
+            target_images = [img_aamar_mishti, img_signature_sondesh, current_weekly_img]
 
         # Sondesh photo card queries
-        if template_id in ["sondesh_price_general", "nolen_gur_aamar"]:
-            return default_response, [img_aamar_mishti, img_signature_sondesh]
+        elif template_id in ["sondesh_price_general", "nolen_gur_aamar", "aamar_mishti_collection"]:
+            target_images = [img_aamar_mishti, img_signature_sondesh]
+
+        elif template_id == "signature_collection":
+            target_images = [img_signature_sondesh]
 
         # Weekly menu & bento photo card queries
-        if template_id in ["weekly_menu_veg", "weekly_menu_nonveg", "combo_bento"]:
+        elif template_id in ["weekly_menu_veg", "weekly_menu_nonveg", "combo_bento"]:
+            target_images = current_weekly_img
             if today_weekday in [4, 5, 6]:
                 menu_title = "From Friday (Weekend) Menu Card"
             else:
                 menu_title = "Till Thursday (Weekday) Menu Card"
+            formatted_text = f"🌸 *Camellia Artisanal — {menu_title}*\n\nHere is our fresh menu card! Delivery across Delhi NCR. Reply to place an order! 📦"
 
-            caption = f"🌸 *Camellia Artisanal — {menu_title}*\n\nHere is our fresh menu card! Delivery across Delhi NCR. Reply to place an order! 📦"
-            return caption, current_weekly_img
+        if target_images:
+            if already_sent_cards and not explicit_image_req:
+                # Suppress repeat menu photo cards on follow-up questions for clean text-only pricing
+                return formatted_text, None
+            else:
+                if session:
+                    session["facts"]["image_card_sent"] = True
+                return formatted_text, target_images
 
-        return default_response, None
+        return formatted_text, None
 
 responder = DeterministicResponder()

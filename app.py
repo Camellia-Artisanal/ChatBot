@@ -21,10 +21,8 @@ from monitoring import get_logger, delivery_monitor
 log = get_logger("camellia.app")
 
 app = FastAPI(
-    title="Camellia Artisanal — Instagram & WhatsApp Auto-Response Bot",
-# Ad-Gated Instagram DM Bot + WhatsApp Business API with Deterministic Q&A Matching & Human Escalation
-# Reload trigger - Ollama disabled
-
+    title="FastAPI Webhook Application for Camellia Artisanal — Instagram & WhatsApp Auto-Response Bot",
+# Ad-Gated Instagram DM Bot + WhatsApp Business API with Deterministic Q&A Matching & Gemini RAG AI & Human Escalation
     version="1.0.0"
 )
 
@@ -40,15 +38,27 @@ def verify_meta_signature(raw_body: bytes, signature_header: Optional[str]) -> N
     Skipped entirely when META_APP_SECRET is unset so local development and the
     test suite can post unsigned payloads. Always set it in production.
     """
-    if not config.META_APP_SECRET:
+    secret = (config.META_APP_SECRET or "").strip()
+    if not secret:
         return
 
     expected = "sha256=" + hmac.new(
-        config.META_APP_SECRET.encode("utf-8"), raw_body, hashlib.sha256
+        secret.encode("utf-8"), raw_body, hashlib.sha256
     ).hexdigest()
 
     if not signature_header or not hmac.compare_digest(expected, signature_header):
-        log.warning("Rejected webhook payload with missing/invalid X-Hub-Signature-256.")
+        log.warning(
+            "Rejected webhook payload signature mismatch!\n"
+            "  Body length: %d bytes\n"
+            "  Secret length: %d (starts with '%s...')\n"
+            "  Received Header: %s\n"
+            "  Expected HMAC:   %s",
+            len(raw_body),
+            len(secret),
+            secret[:4] if len(secret) >= 4 else "***",
+            signature_header,
+            expected,
+        )
         raise HTTPException(status_code=403, detail="Invalid payload signature")
 
 def require_admin(provided_key: Optional[str]) -> None:
@@ -142,11 +152,30 @@ async def handle_instagram_webhook(request: Request):
     if payload.get("object") != "instagram":
         return {"status": "ignored", "reason": "Not an instagram object"}
 
+    log.info("Instagram Webhook Raw Payload:\n%s", json.dumps(payload, indent=2))
+
     results = []
     for entry in payload.get("entry", []):
-        for messaging_event in entry.get("messaging", []):
+        events = list(entry.get("messaging", []))
+        if "changes" in entry:
+            for change in entry.get("changes", []):
+                val = change.get("value")
+                if isinstance(val, dict):
+                    events.append(val)
+
+        for messaging_event in events:
             is_ad_qualified, sender_id, message_text, ad_id = ad_gate.inspect_and_gate_message(messaging_event)
             
+            if not sender_id:
+                log.info("Ignored Instagram event without sender ID (keys: %s).", list(messaging_event.keys()))
+                results.append({"action": "ignored_no_sender"})
+                continue
+
+            if not message_text:
+                log.info("Ignored Instagram event without text payload (sender: %s, keys: %s).", sender_id, list(messaging_event.keys()))
+                results.append({"sender_id": sender_id, "action": "ignored_empty_text"})
+                continue
+
             if not is_ad_qualified:
                 # Hard Gate: Ignore organic messages per PRD Requirement #4
                 log.info("Ad-gate: sender %s is a non-ad organic DM; left for manual reply.", sender_id)
@@ -159,14 +188,14 @@ async def handle_instagram_webhook(request: Request):
             # Log exchange to DB
             db.log_conversation(sender_id, "instagram", message_text, response_text, was_matched, template_id)
 
-            # If unmatched, escalate to human contact
-            if not was_matched:
+            # If unmatched OR order confirmation, escalate to human contact
+            if not was_matched or template_id == "order_next_steps":
                 escalator.handle_escalation(
                     user_id=sender_id,
                     channel="instagram",
                     user_message=message_text,
-                    reason="Unmatched Instagram Query / Sensitive Request",
-                    context_data={"ad_id": ad_id, "sender_id": sender_id}
+                    reason="Order Confirmation & Intake Request" if was_matched else "Unmatched Instagram Query / Sensitive Request",
+                    context_data={"ad_id": ad_id, "sender_id": sender_id, "template_id": template_id}
                 )
 
             # Dispatch outbound reply via Meta Graph API
@@ -193,7 +222,8 @@ def send_instagram_reply(recipient_id: str, text: str, image_url=None) -> Dict[s
         log.info("[MOCK IG OUTBOUND] [%s] To: %s | Message: %s...", msg_type, recipient_id, safe_text)
         return {"mock": True, "status": "sent", "recipient": recipient_id, "type": msg_type}
 
-    url = f"https://graph.facebook.com/{config.WHATSAPP_API_VERSION}/me/messages"
+    page_id = config.INSTAGRAM_PAGE_ID or "me"
+    url = f"https://graph.facebook.com/{config.WHATSAPP_API_VERSION}/{page_id}/messages"
     headers = {
         "Authorization": f"Bearer {config.INSTAGRAM_ACCESS_TOKEN}",
         "Content-Type": "application/json"
@@ -217,6 +247,8 @@ def send_instagram_reply(recipient_id: str, text: str, image_url=None) -> Dict[s
             return last.json() if last is not None else {"status": "no_content"}
     except Exception as e:
         delivery_monitor.record_failure("instagram", str(e))
+        if hasattr(e, "response") and getattr(e, "response", None) is not None:
+            log.error("Instagram Meta API Error Body: %s", e.response.text)
         return {"error": str(e), "status": "failed"}
 
 # --------------------------------------------------------------------------
@@ -471,6 +503,40 @@ def sync_menu(csv_url: Optional[str] = None, x_admin_key: Optional[str] = Header
         result = sheet_sync.sync_local_reload()
     return result
 
+@app.post("/admin/update-menu")
+async def update_menu(request: Request, x_admin_key: Optional[str] = Header(None)):
+    """Dynamically updates the latest weekly menu rotation block in menu.json and hot-reloads the responder."""
+    require_admin(x_admin_key)
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    menu_path = config.MENU_JSON_PATH
+    try:
+        with open(menu_path, "r", encoding="utf-8") as f:
+            menu_data = json.load(f)
+
+        if "weekly_menus" in menu_data and menu_data["weekly_menus"]:
+            current_week = menu_data["weekly_menus"][-1]
+            if "week" in body:
+                current_week["week"] = body["week"]
+            if "vegetarian" in body and isinstance(body["vegetarian"], list):
+                current_week["vegetarian"] = body["vegetarian"]
+            if "non_vegetarian" in body and isinstance(body["non_vegetarian"], list):
+                current_week["non_vegetarian"] = body["non_vegetarian"]
+
+            with open(menu_path, "w", encoding="utf-8") as f:
+                json.dump(menu_data, f, indent=2, ensure_ascii=False)
+
+            responder.reload_data()
+            return {"status": "success", "message": "Weekly menu updated and responder hot-reloaded successfully."}
+        else:
+            return {"status": "failed", "reason": "No weekly_menus block found in menu.json"}
+    except Exception as e:
+        log.error("Failed to update menu: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
 # --------------------------------------------------------------------------
 # Interactive Web Chat Tester Endpoint (/chat)
 # --------------------------------------------------------------------------
@@ -704,3 +770,8 @@ def get_web_chat():
     </html>
     """
     return HTMLResponse(content=html_content)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("app:app", host="127.0.0.1", port=5000, reload=True)
+
