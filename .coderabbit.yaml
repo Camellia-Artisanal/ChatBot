@@ -1,0 +1,42 @@
+# CodeRabbit Configuration File
+# https://docs.coderabbit.ai/getting-started/configure-coderabbit/
+
+version: "2"
+language: "en-US"
+tone_instructions: |
+  Focus on production reliability, Python type safety, FastAPI performance, 
+  webhook security, and clear unit test coverage. Be concise and actionable.
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    - "!*.json"
+    - "!*.jpeg"
+    - "!*.jpg"
+    - "!*.png"
+    - "!*.svg"
+  path_instructions:
+    - path: "app.py"
+      instructions: "Check for FastAPI error handling, HMAC-SHA256 signature verification, and admin key protection."
+    - path: "responder.py"
+      instructions: "Ensure exact template matching logic, session memory integration, and image suppression behavior."
+    - path: "whatsapp_adapter.py"
+      instructions: "Verify Meta Cloud API payload formatting, interactive quick reply buttons, and error delivery tracking."
+    - path: "order_calculator.py"
+      instructions: "Check unit price lookups, itemized receipt formatting, and mathematical correctness."
+    - path: "test_bot.py"
+      instructions: "Verify unit test completeness and ensure mock objects properly simulate external network calls."
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  opt_out: false
