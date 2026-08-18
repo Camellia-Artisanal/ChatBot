@@ -21,7 +21,14 @@ class SessionMemoryManager:
             self._sessions[key] = {
                 "facts": {
                     "name": None,
-                    "image_card_sent": False
+                    "image_card_sent": False,
+                    "cart": [],
+                    "order_draft": {
+                        "flavour": None,
+                        "collection": None,
+                        "size": None,
+                        "quantity": 1
+                    }
                 },
                 "turns": [] # List of {"role": "user"|"assistant", "content": str}
             }
@@ -36,14 +43,28 @@ class SessionMemoryManager:
         if key in self._sessions:
             del self._sessions[key]
 
+    def clear_order_draft(self, user_id: str, channel: str) -> None:
+        """Resets the active order draft and cart for a session."""
+        session = self.get_session(user_id, channel)
+        session["facts"]["cart"] = []
+        session["facts"]["order_draft"] = {
+            "flavour": None,
+            "collection": None,
+            "size": None,
+            "quantity": 1
+        }
+
     def extract_and_update_facts(self, user_id: str, channel: str, text: str) -> Dict[str, Any]:
-        """Extracts customer attributes like Name from user message."""
+        """Extracts customer attributes (Name) & order preferences (Flavour, Collection, Size, Quantity) from user message."""
         session = self.get_session(user_id, channel)
         facts = session["facts"]
+        if "order_draft" not in facts:
+            facts["order_draft"] = {"flavour": None, "collection": None, "size": None, "quantity": 1}
+        order_draft = facts["order_draft"]
         clean_text = text.strip()
+        text_lower = clean_text.lower()
 
-        # Extract Name
-        # Patterns: "my name is Shoaib", "i am Shoaib", "i'm Shoaib", "call me Shoaib", "name: Shoaib"
+        # 1. Extract Name
         name_patterns = [
             r"(?:my\s+name\s+is|i\s+am|i'm|call\s+me|name\s*[:=])\s+([A-Z][a-z]+|[a-z]+)",
         ]
@@ -51,11 +72,39 @@ class SessionMemoryManager:
             match = re.search(pattern, clean_text, re.IGNORECASE)
             if match:
                 extracted_name = match.group(1).capitalize()
-                # Ignore common words misidentified as names
                 ignored_words = {"a", "an", "the", "asking", "looking", "ordering", "wanting", "having", "here", "there"}
                 if extracted_name.lower() not in ignored_words and len(extracted_name) >= 2:
                     facts["name"] = extracted_name
                     break
+
+        # 2. Extract Order Attributes into Slots
+        # Flavour
+        for fl in ["jolbhora", "mahua", "mango", "kesar", "rose", "vanilla", "cinnamon", "classic", "nolen gur"]:
+            if fl in text_lower:
+                order_draft["flavour"] = fl
+                break
+
+        # Collection
+        if "signature" in text_lower:
+            order_draft["collection"] = "signature"
+        elif "aamar mishti" in text_lower or "aamar_mishti" in text_lower or "aamar" in text_lower:
+            order_draft["collection"] = "aamar_mishti"
+
+        # Size
+        if any(kw in text_lower for kw in ["1kg", "1 kg", "1000g", "36 pcs", "36pcs"]):
+            order_draft["size"] = "1kg"
+        elif any(kw in text_lower for kw in ["500g", "500 g", "18 pcs", "18pcs"]):
+            order_draft["size"] = "500g"
+        elif any(kw in text_lower for kw in ["250g", "250 g", "9 pcs", "9pcs"]):
+            order_draft["size"] = "250g"
+
+        # Quantity
+        qty_match = re.search(r'\b(\d+)\s*(?:box|boxes|pack|packs|pcs)\b', text_lower)
+        if qty_match:
+            try:
+                order_draft["quantity"] = max(1, int(qty_match.group(1)))
+            except ValueError:
+                pass
 
         return facts
 

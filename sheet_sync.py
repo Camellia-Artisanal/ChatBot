@@ -2,12 +2,28 @@ import csv
 import io
 import json
 import httpx
+from urllib.parse import urlparse
 from typing import Dict, Any
 from config import config
 from monitoring import get_logger
 from responder import responder
 
 log = get_logger("camellia.sheet_sync")
+
+ALLOWED_SHEET_DOMAINS = {"docs.google.com", "drive.google.com", "google.com", "sheets.google.com"}
+
+def is_safe_csv_url(url: str) -> bool:
+    """Validates that URL uses HTTPS and points to an authorized Google Sheets domain to prevent SSRF."""
+    try:
+        parsed = urlparse(url.strip())
+        if parsed.scheme.lower() != "https":
+            return False
+        hostname = (parsed.hostname or "").lower()
+        if not hostname:
+            return False
+        return any(hostname == domain or hostname.endswith("." + domain) for domain in ALLOWED_SHEET_DOMAINS)
+    except Exception:
+        return False
 
 class SheetSync:
     """
@@ -23,12 +39,19 @@ class SheetSync:
 
     def sync_from_csv_url(self, csv_url: str = None) -> Dict[str, Any]:
         """Fetches published Google Sheet CSV and updates current weekly menu items."""
-        target_url = csv_url or self.sheet_url
+        target_url = (csv_url or self.sheet_url or "").strip()
         if not target_url:
             return {"status": "skipped", "reason": "No GOOGLE_SHEET_CSV_URL configured"}
 
+        if not is_safe_csv_url(target_url):
+            log.warning("Rejected suspicious/non-Google CSV URL for SSRF prevention: %s", target_url)
+            return {
+                "status": "error",
+                "reason": "Invalid or untrusted CSV URL. Must be an HTTPS URL from docs.google.com or sheets.google.com"
+            }
+
         try:
-            with httpx.Client(timeout=15.0) as client:
+            with httpx.Client(timeout=15.0, follow_redirects=True) as client:
                 resp = client.get(target_url)
                 resp.raise_for_status()
                 csv_text = resp.text

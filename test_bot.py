@@ -37,8 +37,9 @@ class TestCamelliaBot(unittest.TestCase):
                 pass
 
     def setUp(self):
-        # Ensure Ad-Gate testing is isolated from .env overrides
+        # Ensure Ad-Gate and AI testing are isolated from .env overrides
         config.BYPASS_AD_GATE = False
+        config.GEMINI_ENABLED = False
         from session_memory import session_memory
         session_memory._sessions.clear()
         # Clear tables between tests
@@ -220,7 +221,8 @@ class TestCamelliaBot(unittest.TestCase):
         self.assertEqual(body, "Hi, what is the price of Sondesh?")
 
         # Process through adapter
-        result = whatsapp_adapter.process_incoming_message(sender, body)
+        with patch.object(whatsapp_adapter, "send_message"):
+            result = whatsapp_adapter.process_incoming_message(sender, body)
         self.assertEqual(result["status"], "processed")
         self.assertTrue(result["was_matched"])
         self.assertEqual(result["template_id"], "sondesh_price_general")
@@ -283,7 +285,8 @@ class TestCamelliaBot(unittest.TestCase):
                 }]
             }]
         }
-        res_post_ad = self._post_signed("/webhook/instagram", payload_ad)
+        with patch("app.send_instagram_reply"):
+            res_post_ad = self._post_signed("/webhook/instagram", payload_ad)
         self.assertEqual(res_post_ad.status_code, 200)
         data_ad = res_post_ad.json()
         self.assertEqual(data_ad["results"][0]["action"], "auto_replied")
@@ -368,7 +371,8 @@ class TestCamelliaBot(unittest.TestCase):
 
         # 2. Trigger unmatched escalation
         resp_text, was_matched, tmpl_id, img_url = responder.match_and_respond("Can you send a violin player for a wedding?", user_id=user_id, channel=channel)
-        escalator.handle_escalation(user_id, channel, "Can you send a violin player for a wedding?", "Unmatched Query", {})
+        with patch.object(escalator, "send_human_alert", return_value={"status": "sent", "mock": True}):
+            escalator.handle_escalation(user_id, channel, "Can you send a violin player for a wedding?", "Unmatched Query", {})
 
         escalation_record = db.get_escalations(limit=1)[0]
 
@@ -503,8 +507,8 @@ class TestCamelliaBot(unittest.TestCase):
         self.assertIn("freshness and quality", resp_text.lower())
         self.assertNotIn("sushant lok", resp_text.lower())
 
-    def test_aamar_mishti_250g_query_and_repeat_image_suppression(self):
-        """Verify 'aamar mishti 250g' matches collection template and suppresses duplicate photo cards on follow-up."""
+    def test_aamar_mishti_250g_query_and_repeat_image_delivery(self):
+        """Verify 'aamar mishti 250g' matches collection template and attaches photo cards on every request."""
         from session_memory import session_memory
         session_memory._sessions.clear()
 
@@ -515,7 +519,7 @@ class TestCamelliaBot(unittest.TestCase):
         self.assertTrue(matched1)
         self.assertIsNotNone(img1, "First menu query should attach photo cards.")
 
-        # Turn 2: User asks "aamar mishti 250g" -> gets exact price breakdown, NO repeat menu photo cards
+        # Turn 2: User asks "aamar mishti 250g" -> gets exact price breakdown and photo cards
         text2, matched2, tmpl2, img2 = responder.match_and_respond(
             "aamar mishti 250g", "user_test_menu_suppression", "whatsapp"
         )
@@ -523,7 +527,7 @@ class TestCamelliaBot(unittest.TestCase):
         self.assertEqual(tmpl2, "aamar_mishti_collection")
         self.assertIn("Collection 1 — Aamar Mishti", text2)
         self.assertIn("250g (9pcs) ₹450", text2)
-        self.assertIsNone(img2, "Follow-up question should NOT re-send duplicate photo cards.")
+        self.assertIsNotNone(img2, "Menu/collection query should attach photo cards as requested.")
 
     def test_order_confirmation_escalation_and_verification(self):
         """Verify order confirmation triggers staff alert with verification status."""
@@ -541,7 +545,7 @@ class TestCamelliaBot(unittest.TestCase):
         self.assertIn("READY FOR VERIFICATION & INVOICING", res2)
 
         # 3. Test WhatsApp order_next_steps triggers escalation alert
-        with patch.object(escalator, "handle_escalation") as mock_esc:
+        with patch.object(escalator, "handle_escalation") as mock_esc, patch.object(whatsapp_adapter, "send_message"):
             whatsapp_adapter.process_incoming_message("919999888877", "confirm my order here is my address Sector 43 Gurgaon")
             self.assertTrue(mock_esc.called)
 
@@ -554,7 +558,87 @@ class TestCamelliaBot(unittest.TestCase):
         self.assertIn("ORDER DRAFT RECEIPT", calc_res["formatted_receipt"])
         self.assertIn("Nolen Gur", calc_res["formatted_receipt"])
         self.assertEqual(calc_res["quantity"], 2)
-        self.assertEqual(calc_res["total_price"], 900)
+        self.assertEqual(calc_res["total_price"], 1200)
+
+    def test_multi_turn_order_slot_filling(self):
+        """PRD Requirement: Multi-turn order slot memory carries preferences across turns without repeating menus."""
+        from responder import responder
+        from session_memory import session_memory
+        session_memory.clear_session("test_slot_user", "whatsapp")
+
+        # Turn 1: User says "rose"
+        resp1, match1, tmpl1, _ = responder.match_and_respond("rose", user_id="test_slot_user", channel="whatsapp")
+        self.assertTrue(match1)
+        self.assertEqual(tmpl1, "sondesh_classic_rose")
+        self.assertIn("Which collection and pack size would you like?", resp1)
+
+        # Turn 2: User says "aamar mishti 500g" (combines Rose + Aamar Mishti + 500g)
+        resp2, match2, tmpl2, _ = responder.match_and_respond("aamar mishti 500g", user_id="test_slot_user", channel="whatsapp")
+        self.assertTrue(match2)
+        self.assertEqual(tmpl2, "order_draft_receipt")
+        self.assertIn("CAMELLIA ARTISANAL — ORDER DRAFT RECEIPT", resp2)
+        self.assertIn("Rose Sondesh", resp2)
+        self.assertIn("500g", resp2)
+        self.assertIn("₹800", resp2)
+
+    def test_multi_item_cart_receipt(self):
+        """PRD Requirement: Ordering multiple items in a single message or adding to cart calculates itemized receipt with grand total."""
+        from responder import responder
+        from session_memory import session_memory
+        session_memory.clear_session("test_multi_cart_user", "whatsapp")
+
+        # Test single message with multiple items: "add rose 250g and jolbhora nolen gur 500g both"
+        msg = "add rose 250g and jolbhora nolen gur 500g both"
+        resp, match, tmpl, _ = responder.match_and_respond(msg, user_id="test_multi_cart_user", channel="whatsapp")
+        self.assertTrue(match)
+        self.assertEqual(tmpl, "order_draft_receipt")
+        self.assertIn("CAMELLIA ARTISANAL — ORDER DRAFT RECEIPT", resp)
+        self.assertIn("Rose Sondesh", resp)
+        self.assertIn("Jolbhora Sondesh", resp)
+        self.assertIn("₹450", resp)
+        self.assertIn("₹1,400", resp)
+        self.assertIn("₹1,850", resp)
+
+    def test_cart_item_removal(self):
+        """PRD Requirement: Removing an item from cart recalculates receipt for remaining items."""
+        from responder import responder
+        from session_memory import session_memory
+        session_memory.clear_session("test_removal_user", "whatsapp")
+
+        # Step 1: Add 3 items
+        msg = "add rose 250g, jolbhora 500g, and mango 250g"
+        resp1, match1, tmpl1, _ = responder.match_and_respond(msg, user_id="test_removal_user", channel="whatsapp")
+        self.assertTrue(match1)
+        self.assertEqual(tmpl1, "order_draft_receipt")
+        self.assertIn("Rose Sondesh", resp1)
+        self.assertIn("Jolbhora Sondesh", resp1)
+        self.assertIn("Mango Sondesh", resp1)
+
+        # Step 2: User says "remove rose"
+        resp2, match2, tmpl2, _ = responder.match_and_respond("remove rose", user_id="test_removal_user", channel="whatsapp")
+        self.assertTrue(match2)
+        self.assertEqual(tmpl2, "order_draft_receipt")
+        self.assertIn("Rose Sondesh* has been removed", resp2)
+        self.assertNotIn("Rose Sondesh (Aamar", resp2)
+        self.assertIn("Jolbhora Sondesh", resp2)
+        self.assertIn("Mango Sondesh", resp2)
+        self.assertIn("₹1,950", resp2)
+
+    def test_out_of_context_question_does_not_trigger_receipt(self):
+        """Out-of-context questions like 'Who is the President of US?' must NOT trigger an order receipt even if draft slots exist."""
+        from responder import responder
+        from session_memory import session_memory
+        session_memory.clear_session("test_ooc_user", "whatsapp")
+
+        # Step 1: User says "rose 250g" -> generates order receipt
+        resp1, match1, tmpl1, _ = responder.match_and_respond("rose 250g", user_id="test_ooc_user", channel="whatsapp")
+        self.assertTrue(match1)
+        self.assertEqual(tmpl1, "order_draft_receipt")
+
+        # Step 2: User asks "Who is the President of US?" -> MUST NOT return order_draft_receipt!
+        resp2, match2, tmpl2, _ = responder.match_and_respond("Who is the President of US?", user_id="test_ooc_user", channel="whatsapp")
+        self.assertNotEqual(tmpl2, "order_draft_receipt")
+        self.assertNotIn("ORDER DRAFT RECEIPT", resp2)
 
     def test_whatsapp_quick_reply_buttons(self):
         """Verify WhatsAppAdapter includes quick reply interactive buttons for greetings and menu requests."""
@@ -567,6 +651,86 @@ class TestCamelliaBot(unittest.TestCase):
             self.assertIsNotNone(buttons)
             self.assertIn("🌸 See Menu", buttons)
             self.assertIn("🛍️ Place Order", buttons)
+
+    def test_parse_raw_menu_text(self):
+        """Test MenuParser regex extraction of items, quantities, prices, and categories from unstructured text."""
+        from menu_parser import menu_parser
+        raw = """
+        Bengal Sweet Special:
+        • Rose Sondesh 250g - ₹450
+        • Jolbhora Nolen Gur 500g - ₹1400
+        
+        Non-Veg Items:
+        • Mutton Kosha Bento 1 box - ₹650
+        • Chicken Cutlet 2pcs - ₹350
+        """
+        parsed = menu_parser.parse_menu_text(raw)
+        self.assertTrue(len(parsed["vegetarian"]) >= 2)
+        self.assertTrue(len(parsed["non_vegetarian"]) >= 2)
+        
+        veg_names = [item["item"] for item in parsed["vegetarian"]]
+        self.assertTrue(any("Rose" in name for name in veg_names))
+        
+        nonveg_names = [item["item"] for item in parsed["non_vegetarian"]]
+        self.assertTrue(any("Mutton" in name for name in nonveg_names))
+
+    def test_parse_menu_card_endpoint(self):
+        """Test POST /admin/parse-menu-card endpoint."""
+        headers = {"X-Admin-Key": config.ADMIN_API_KEY} if config.ADMIN_API_KEY else {}
+        raw_text = "Rose Sondesh 250g - Rs 450\nKosha Mangsho Bento ₹650 (non veg)"
+        response = self.client.post("/admin/parse-menu-card", json={"raw_text": raw_text}, headers=headers)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["status"], "success")
+        self.assertTrue(data["updated_items_count"] >= 2)
+
+    def test_collection_1_and_2_matching(self):
+        """Verify that typing 'collection 1' or 'collection 2' matches specific collection templates rather than generic know_more."""
+        from responder import responder
+        
+        resp1, match1, tmpl1, _ = responder.match_and_respond("collection 1", user_id="test_col1", channel="whatsapp")
+        self.assertTrue(match1)
+        self.assertEqual(tmpl1, "aamar_mishti_collection")
+        self.assertIn("Collection 1 — Aamar Mishti", resp1)
+
+        resp2, match2, tmpl2, _ = responder.match_and_respond("collection 2", user_id="test_col2", channel="whatsapp")
+        self.assertTrue(match2)
+        self.assertEqual(tmpl2, "signature_collection")
+        self.assertIn("Collection 2 — Signature Collection", resp2)
+
+    @patch("gemini_responder.httpx.Client")
+    def test_gemini_template_refinement(self, mock_httpx_cls):
+        """Verify Gemini AI refines template response when enabled."""
+        from responder import responder
+        from gemini_responder import gemini_responder
+        
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [{"text": "Hello Shoaib! Here are the details for Collection 2 — Signature Collection made from desi A2 cow milk."}]
+                    }
+                }
+            ]
+        }
+        mock_httpx_cls.return_value.__enter__.return_value.post.return_value = mock_response
+
+        with patch.object(config, "GEMINI_ENABLED", True), patch.object(config, "GEMINI_API_KEY", "fake_key"):
+            resp, match, tmpl, _ = responder.match_and_respond("collection 2", user_id="test_ai_refine", channel="whatsapp")
+            self.assertTrue(match)
+            self.assertEqual(tmpl, "signature_collection")
+            self.assertIn("Hello Shoaib!", resp)
+            self.assertIn("Collection 2 — Signature Collection", resp)
+
+    def test_how_much_is_sondesh_price_inquiry(self):
+        """Verify 'How much is Sondesh?' returns price info template/RAG instead of order receipt draft."""
+        from responder import responder
+        resp, match, tmpl, _ = responder.match_and_respond("How much is Sondesh?", user_id="test_price_inquiry", channel="whatsapp")
+        self.assertTrue(match)
+        self.assertNotEqual(tmpl, "order_draft_receipt")
+        self.assertEqual(tmpl, "sondesh_price_general")
 
     def test_admin_update_menu_endpoint(self):
         """Verify POST /admin/update-menu updates menu rotation and reloads responder."""
@@ -582,7 +746,127 @@ class TestCamelliaBot(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json()["status"], "success")
 
+    def test_collection_2_and_collection_1_full_precision_menu_details(self):
+        """Verify Collection 2, Collection 1, and Kanchagolla responses list all flavours, items, Kanchagolla & Jolbhora explicitly."""
+        from responder import responder
+
+        # Collection 2 check
+        resp2, match2, tmpl2, _ = responder.match_and_respond("collection 2 options", user_id="test_col2_user", channel="whatsapp")
+        self.assertTrue(match2)
+        self.assertEqual(tmpl2, "signature_collection")
+        self.assertIn("Classic / Rose Sondesh", resp2)
+        self.assertIn("Real Vanilla / Cinnamon (Dalchini)", resp2)
+        self.assertIn("Thandai / Medjool Dates / Chocolate", resp2)
+        self.assertIn("Mahua Sondesh", resp2)
+        self.assertIn("Jolbhora (Nolen Gur liquid fill)", resp2)
+        self.assertIn("Kanchagolla (Classic / Nolen Gur)", resp2)
+
+        # Collection 1 check
+        resp1, match1, tmpl1, _ = responder.match_and_respond("collection 1 options", user_id="test_col1_user", channel="whatsapp")
+        self.assertTrue(match1)
+        self.assertEqual(tmpl1, "aamar_mishti_collection")
+        self.assertIn("Aam Ada", resp1)
+        self.assertIn("Jolbhora (Nolen Gur liquid fill)", resp1)
+        self.assertIn("Kanchagolla", resp1)
+
+        # Kanchagolla check
+        resp_k, match_k, tmpl_k, _ = responder.match_and_respond("kanchagolla price", user_id="test_k_user", channel="whatsapp")
+        self.assertTrue(match_k)
+        self.assertEqual(tmpl_k, "kanchagolla")
+        self.assertIn("Aamar Mishti Collection", resp_k)
+        self.assertIn("Signature A2 Collection", resp_k)
+        self.assertIn("₹450", resp_k)
+        self.assertIn("₹600", resp_k)
+        self.assertIn("₹700", resp_k)
+
+    def test_individual_flavour_and_pack_size_queries(self):
+        """Verify queries for individual flavours, Mahua special, and pack size breakdowns."""
+        from responder import responder
+
+        # Mahua price check
+        resp, match, tmpl, imgs = responder.match_and_respond("what are the price of mahua", user_id="test_mahua_user", channel="whatsapp")
+        self.assertTrue(match)
+        self.assertEqual(tmpl, "mahua_signature_special")
+        self.assertIn("₹900", resp)
+        self.assertIn("₹1600", resp)
+        self.assertIn("₹2900", resp)
+        self.assertEqual(imgs, ["/images/Signature%20Sondesh.jpeg"])
+
+        # Classic & Rose price check
+        resp, match, tmpl, imgs = responder.match_and_respond("rose sondesh price", user_id="test_rose_user", channel="whatsapp")
+        self.assertTrue(match)
+        self.assertEqual(tmpl, "sondesh_classic_rose")
+        self.assertIn("₹450", resp)
+        self.assertIn("₹600", resp)
+        self.assertEqual(len(imgs), 2)
+
+        # Vanilla / Mango / Cinnamon check
+        resp, match, tmpl, imgs = responder.match_and_respond("real vanilla price", user_id="test_vanilla_user", channel="whatsapp")
+        self.assertTrue(match)
+        self.assertEqual(tmpl, "sondesh_mango_kesar")
+        self.assertIn("₹550", resp)
+        self.assertIn("₹650", resp)
+
+        # Thandai / Dates / Nolen Gur check
+        resp, match, tmpl, imgs = responder.match_and_respond("thandai price", user_id="test_thandai_user", channel="whatsapp")
+        self.assertTrue(match)
+        self.assertEqual(tmpl, "sondesh_nolen_gur")
+        self.assertIn("₹600", resp)
+        self.assertIn("₹700", resp)
+
+        # Jolbhora check
+        resp, match, tmpl, imgs = responder.match_and_respond("price of jolbhora", user_id="test_jol_user", channel="whatsapp")
+        self.assertTrue(match)
+        self.assertEqual(tmpl, "jolbhora")
+        self.assertIn("₹750", resp)
+        self.assertIn("₹900", resp)
+
+        # Pack sizes (250g, 500g, 1kg)
+        resp250, match250, tmpl250, _ = responder.match_and_respond("250g box options", user_id="test_250_user", channel="whatsapp")
+        self.assertTrue(match250)
+        self.assertEqual(tmpl250, "pack_size_250g")
+        self.assertIn("Classic / Rose: ₹450", resp250)
+        self.assertIn("Mahua: ₹900", resp250)
+
+        resp500, match500, tmpl500, _ = responder.match_and_respond("500g box options", user_id="test_500_user", channel="whatsapp")
+        self.assertTrue(match500)
+        self.assertEqual(tmpl500, "pack_size_500g")
+        self.assertIn("Classic / Rose: ₹800", resp500)
+        self.assertIn("Mahua: ₹1600", resp500)
+
+        resp1k, match1k, tmpl1k, _ = responder.match_and_respond("1kg box options", user_id="test_1k_user", channel="whatsapp")
+        self.assertTrue(match1k)
+        self.assertEqual(tmpl1k, "pack_size_1kg")
+        self.assertIn("Classic / Rose: ₹1500", resp1k)
+        self.assertIn("Mahua: ₹2900", resp1k)
+
+    def test_weekly_meals_and_bento_order_calculation(self):
+        """Verify order calculation for weekly bentos, combos, and curries."""
+        from responder import responder
+
+        # Single meal order
+        resp, match, tmpl, _ = responder.match_and_respond("I want to order 2 veg bento", user_id="test_bento_u1", channel="whatsapp")
+        self.assertTrue(match)
+        self.assertEqual(tmpl, "order_draft_receipt")
+        self.assertIn("Veg Bento Box", resp)
+        self.assertIn("2 boxes", resp)
+        self.assertIn("₹800", resp)
+
+        # Multi-item meal + sweet order
+        resp2, match2, tmpl2, _ = responder.match_and_respond(
+            "Please deliver 1 non veg bento and 1 classic sondesh 500g",
+            user_id="test_bento_u2",
+            channel="whatsapp"
+        )
+        self.assertTrue(match2)
+        self.assertEqual(tmpl2, "order_draft_receipt")
+        self.assertIn("Non-Veg Bento Box", resp2)
+        self.assertIn("Classic Sondesh", resp2)
+        self.assertIn("₹1,500", resp2)
+
 if __name__ == "__main__":
     unittest.main()
+
+
 
 

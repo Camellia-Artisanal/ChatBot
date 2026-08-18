@@ -113,7 +113,7 @@ class GeminiResponder:
             ],
             "generationConfig": {
                 "temperature": 0.1,
-                "maxOutputTokens": 300
+                "maxOutputTokens": 1024
             }
         }
 
@@ -129,6 +129,7 @@ class GeminiResponder:
                 if not candidates:
                     return "", False, "gemini_no_candidates"
 
+                finish_reason = candidates[0].get("finishReason", "")
                 assistant_text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "").strip()
 
                 # Check if Gemini flagged the query as OUT_OF_CONTEXT
@@ -148,5 +149,72 @@ class GeminiResponder:
                 "Thanks for reaching out! Let me connect you with our team — they'll get back to you shortly. 🙏"
             )
             return fallback, False, f"gemini_exception_{type(e).__name__}"
+
+    def refine_template_response(
+        self,
+        template_id: str,
+        template_text: str,
+        user_message: str,
+        user_context: str = None,
+        history_turns: list = None
+    ) -> Tuple[str, bool]:
+        """
+        Uses Gemini AI to think through and format a natural, personalized response
+        based on a matched QA template and active customer context.
+        Falls back to template_text if Gemini is disabled, offline, or times out.
+        """
+        if not config.GEMINI_ENABLED or not config.GEMINI_API_KEY:
+            return template_text, False
+
+        context_str = self._build_context_string()
+        user_ctx_block = f"\nACTIVE CUSTOMER PROFILE:\n{user_context}\n" if user_context else ""
+
+        system_prompt = (
+            "You are the customer support AI for Camellia Artisanal, a boutique bakery & kitchen in Delhi NCR.\n\n"
+            f"MATCHED SUPPORT TEMPLATE ({template_id}):\n{template_text}\n\n"
+            "INSTRUCTIONS:\n"
+            "1. Answer the customer's message using the MATCHED SUPPORT TEMPLATE and the CONTEXT/CUSTOMER PROFILE.\n"
+            "2. Keep all prices, product details, collection details, and policy facts 100% accurate to the template and menu.\n"
+            "3. Personalize the tone warmly (addressing customer by name if known) and answer any specific nuance in their message.\n"
+            "4. Keep the output clear, concise, and structured with bullet points where appropriate.\n"
+            "5. Ensure the response is fully completed and never truncated.\n"
+            "6. Do NOT invent prices or dishes not in the context.\n\n"
+            f"--- CONTEXT ---\n{context_str}\n"
+            f"{user_ctx_block}"
+        )
+
+        prompt_text = f"{system_prompt}\n\nCustomer Message: {user_message}"
+        if history_turns:
+            history_str = "\n".join([f"{t['role'].capitalize()}: {t['content']}" for t in history_turns[-4:]])
+            prompt_text = f"{system_prompt}\n\nRecent Chat History:\n{history_str}\n\nCustomer Message: {user_message}"
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{config.GEMINI_MODEL}:generateContent?key={config.GEMINI_API_KEY}"
+
+        payload = {
+            "contents": [{"parts": [{"text": prompt_text}]}],
+            "generationConfig": {
+                "temperature": 0.2,
+                "maxOutputTokens": 1024
+            }
+        }
+
+        try:
+            with httpx.Client(timeout=config.GEMINI_TIMEOUT) as client:
+                resp = client.post(url, json=payload)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    candidates = data.get("candidates", [])
+                    if candidates:
+                        finish_reason = candidates[0].get("finishReason", "")
+                        if finish_reason == "MAX_TOKENS":
+                            log.warning("Gemini refinement hit MAX_TOKENS for %s. Falling back to template.", template_id)
+                            return template_text, False
+                        assistant_text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "").strip()
+                        if assistant_text and "OUT_OF_CONTEXT" not in assistant_text.upper():
+                            return assistant_text, True
+        except Exception as e:
+            log.warning("Gemini template refinement failed for %s: %s", template_id, e)
+
+        return template_text, False
 
 gemini_responder = GeminiResponder()

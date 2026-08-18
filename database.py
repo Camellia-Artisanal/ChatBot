@@ -22,6 +22,10 @@ class Database:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             
+            # Enable Write-Ahead Logging for high-concurrency read/write operations
+            cursor.execute("PRAGMA journal_mode=WAL;")
+            cursor.execute("PRAGMA synchronous=NORMAL;")
+            
             # Sessions table to track ad qualification
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS sessions (

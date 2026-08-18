@@ -7,6 +7,8 @@ from monitoring import get_logger
 from gemini_responder import gemini_responder
 from session_memory import session_memory
 
+from order_calculator import order_calculator
+
 log = get_logger("camellia.responder")
 
 class DeterministicResponder:
@@ -56,7 +58,7 @@ class DeterministicResponder:
             )
             return fallback, False, None, None
 
-        # 1. Update & Extract Session Memory Facts (Name)
+        # 1. Update & Extract Session Memory Facts (Name, Order Draft)
         user_id = user_id or "default_user"
         channel = channel or "default_channel"
         facts = session_memory.extract_and_update_facts(user_id, channel, user_message)
@@ -71,6 +73,23 @@ class DeterministicResponder:
             return fallback, False, "explicit_escalation", None
 
         lowered_text = user_message.lower().strip()
+
+        # 2.5 Check if accumulated order_draft slots form a complete order receipt
+        order_draft = facts.get("order_draft", {})
+        existing_cart = facts.get("cart", [])
+        is_general_menu_query = any(phrase in lowered_text for phrase in [
+            "full menu", "send menu", "price list", "show menu", "what is your menu",
+            "how much is sondesh", "sondesh price", "how much sondesh", "sondesh cost", "cost of sondesh", "price of sondesh"
+        ])
+        if not is_general_menu_query:
+            calc_result = order_calculator.parse_and_calculate(user_message, existing_draft=order_draft, existing_cart=existing_cart)
+            if calc_result and calc_result.get("formatted_receipt"):
+                if calc_result.get("items"):
+                    facts["cart"] = calc_result["items"]
+                response_text = calc_result["formatted_receipt"]
+                session_memory.add_turn(user_id, channel, user_message, response_text)
+                return response_text, True, "order_draft_receipt", None
+
         user_words = set(re.findall(r'\b\w+\b', lowered_text))
         
         STOP_WORDS = {"i", "am", "im", "my", "is", "are", "do", "you", "a", "an", "the", "to", "for", "of", "in", "on", "have", "has", "with", "and", "or", "we", "can", "your", "this", "what", "how", "when", "where", "why", "who", "which", "many", "much", "me", "show", "tell", "it", "more", "want", "send", "share"}
@@ -128,7 +147,7 @@ class DeterministicResponder:
                 tmpl_id, best_template.get("response", ""), user_id=user_id, channel=channel, user_message=user_message
             )
             
-            # Dynamic Name Personalization
+            # Dynamic Name Personalization & Order Draft reset on order confirmation
             if tmpl_id == "name_introduction":
                 if facts.get("name"):
                     response_text = f"Nice to meet you, {facts['name']}! 👋 Welcome to Camellia Artisanal. Ask us about our Sondesh flavours & prices, weekly menu, or delivery — happy to help!"
@@ -139,6 +158,20 @@ class DeterministicResponder:
                     response_text = f"Yes! Your name is {facts['name']}. 😊 How can I assist you today with our Sondesh or weekly menu?"
                 else:
                     response_text = "You haven't told me your name yet! What should I call you?"
+            elif tmpl_id == "order_next_steps":
+                session_memory.clear_order_draft(user_id, channel)
+            elif config.GEMINI_ENABLED and config.GEMINI_API_KEY:
+                context_summary = session_memory.get_context_summary(user_id, channel)
+                history_turns = session_memory.get_session(user_id, channel)["turns"]
+                refined_text, used_ai = gemini_responder.refine_template_response(
+                    template_id=tmpl_id,
+                    template_text=response_text,
+                    user_message=user_message,
+                    user_context=context_summary,
+                    history_turns=history_turns
+                )
+                if used_ai and refined_text:
+                    response_text = refined_text
 
             session_memory.add_turn(user_id, channel, user_message, response_text)
             return response_text, True, tmpl_id, image_url
@@ -169,19 +202,11 @@ class DeterministicResponder:
     def _format_dynamic_response(
         self, template_id: str, default_response: str, user_id: str = None, channel: str = None, user_message: str = ""
     ) -> Tuple[str, Optional[Any]]:
-        """Attaches the exact photo card(s) a template should send alongside its text, suppressing duplicates on follow-up questions."""
+        """Attaches the exact photo card(s) a template should send alongside its text whenever requested."""
         img_till_thursday = "/images/Till%20Thursday.jpeg"
         img_from_friday = "/images/From%20Friday.jpeg"
         img_signature_sondesh = "/images/Signature%20Sondesh.jpeg"
         img_aamar_mishti = "/images/AAMAR%20MISHTI.jpeg"
-
-        # Check session memory to see if photo cards were already delivered in this session
-        session = session_memory.get_session(user_id, channel) if user_id and channel else None
-        already_sent_cards = session["facts"].get("image_card_sent", False) if session else False
-
-        # Allow photo re-delivery if customer explicitly asks for image/photo/card
-        msg_lowered = user_message.lower() if user_message else ""
-        explicit_image_req = any(kw in msg_lowered for kw in ["photo", "image", "picture", "card", "send image", "send photo"])
 
         import datetime, zoneinfo
         try:
@@ -200,10 +225,14 @@ class DeterministicResponder:
             target_images = [img_aamar_mishti, img_signature_sondesh, current_weekly_img]
 
         # Sondesh photo card queries
-        elif template_id in ["sondesh_price_general", "nolen_gur_aamar", "aamar_mishti_collection"]:
+        elif template_id in [
+            "sondesh_price_general", "nolen_gur_aamar", "aamar_mishti_collection",
+            "sondesh_classic_rose", "sondesh_mango_kesar", "sondesh_nolen_gur",
+            "jolbhora", "kanchagolla", "pack_size_250g", "pack_size_500g", "pack_size_1kg"
+        ]:
             target_images = [img_aamar_mishti, img_signature_sondesh]
 
-        elif template_id == "signature_collection":
+        elif template_id in ["signature_collection", "mahua_signature_special"]:
             target_images = [img_signature_sondesh]
 
         # Weekly menu & bento photo card queries
@@ -216,13 +245,7 @@ class DeterministicResponder:
             formatted_text = f"🌸 *Camellia Artisanal — {menu_title}*\n\nHere is our fresh menu card! Delivery across Delhi NCR. Reply to place an order! 📦"
 
         if target_images:
-            if already_sent_cards and not explicit_image_req:
-                # Suppress repeat menu photo cards on follow-up questions for clean text-only pricing
-                return formatted_text, None
-            else:
-                if session:
-                    session["facts"]["image_card_sent"] = True
-                return formatted_text, target_images
+            return formatted_text, target_images
 
         return formatted_text, None
 

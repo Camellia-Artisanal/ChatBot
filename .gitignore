@@ -13,10 +13,17 @@ ENV/
 
 # SQLite databases & test databases
 *.db
+*.db-shm
+*.db-wal
+*.db-journal
 camellia.db
 test_camellia.db
+
+# Pytest cache
+.pytest_cache/
 
 # IDE settings
 .vscode/
 .idea/
 .ds_store
+

@@ -24,6 +24,7 @@ class Config:
 
     # Protects /admin/* endpoints (customer logs & menu overwrite). Unset = open.
     ADMIN_API_KEY: str = os.getenv("ADMIN_API_KEY", "")
+    ADMIN_PIN: str = os.getenv("ADMIN_PIN", "51990")  # Default PIN matches kitchen manager contact suffix (51990)
 
     # The browser chat tester writes real rows and fires real escalation alerts,
     # so it is disabled unless explicitly switched on.

@@ -37,17 +37,24 @@ Built specifically to solve Meta Ad lead conversion bottlenecks, filter non-ad n
 - **Sensitive Trigger Guard**: Queries containing sensitive keywords (`refund`, `complaint`, `cancel order`, `custom order`, `bulk order`, `payment link`) immediately flag human escalation.
 - **Owner Notification**: Logged into `camellia.db` with customer ID, channel, and message snippet, then alerts human staff via SMS/Email.
 
-### 5. 📊 Self-Service Menu Updates (PRD Requirement Option A)
-- Syncs live menu updates directly from a published Google Sheet CSV URL (`POST /admin/sync-menu`) without requiring developer code changes.
+### 5. 🔐 Kitchen & Menu Admin Portal (`/admin` / `/admin/dashboard`)
+- **PIN Authentication**: Secure 5-digit PIN lock for kitchen staff and managers (Default: `51990` or custom `ADMIN_PIN`).
+- **📋 Paste Menu Card Parser**: Paste raw WhatsApp text, flyer notes, or dish lists; regex & Gemini AI automatically extract dish names, descriptions, weights, prices, and categorize into Veg / Non-Veg.
+- **📸 Flyer Photo & Graphic OCR**: Drag-and-drop printed menu photos or Instagram flyers; Gemini Vision extracts items and syncs with the live bot.
+- **📊 Google Sheets Live Sync**: One-click sync from Google Sheets CSV without touching server files.
+- **🍱 Active Menu Viewer**: Visual inspection of live dishes with instant **Reset to Authentic Bengali Culinary Baseline**.
+- **📈 Analytics & Escalations**: Real-time match rates, total queries, and unresolved human escalation tracking.
 
 ### 6. 💬 Browser-Based Live Chat Tester (`/chat`)
 - Built-in WhatsApp/Instagram-style web chat interface for live interactive testing in your browser (`http://localhost:8000/chat`).
+- Interactive memory badges, channel switcher, and direct link to Kitchen Admin Portal.
 
 ---
 
 ## 🛠️ Technology Stack
 
 - **Backend Framework**: Python 3.11+, FastAPI, Uvicorn
+- **Multimodal AI / OCR**: Google Gemini Vision (`gemini-flash-latest` / `gemini-pro`)
 - **HTTP Client**: `httpx` (Async Meta Graph API & WhatsApp Cloud API calls)
 - **Database**: SQLite3 (`camellia.db`)
 - **API Standards**: Meta Graph API v19.0 (Instagram Messaging API & WhatsApp Business Cloud API)
@@ -58,16 +65,19 @@ Built specifically to solve Meta Ad lead conversion bottlenecks, filter non-ad n
 
 ```
 Camellia.artisal/
-├── app.py                   # FastAPI app entry point & Meta Webhook handlers
+├── app.py                   # FastAPI app entry point, Webhooks & /admin Portal
+├── menu_parser.py           # Text & Multimodal image menu extraction engine
 ├── ad_gate.py               # Instagram Ad-Gate filter module
 ├── responder.py             # Deterministic Q&A matcher & Photo Card engine
 ├── whatsapp_adapter.py      # Meta WhatsApp Cloud API integration adapter
 ├── database.py              # SQLite storage (logs, ad sessions, escalations)
 ├── escalator.py             # Human escalation & alert notification pipeline
 ├── sheet_sync.py            # Self-service Google Sheet CSV live menu update module
+├── session_memory.py        # Customer fact & preference state retention
 ├── config.py                # Environment variable loader
 ├── simulate_bot.py          # Interactive CLI terminal simulator
-├── test_bot.py              # Automated test suite (10 core test scenarios)
+├── test_bot.py              # Core bot test suite (43 scenarios)
+├── test_admin_portal.py     # Admin portal & PIN auth test suite
 ├── menu.json                # Structured weekly menu database
 ├── qa_templates.json        # Q&A trigger keywords & template responses
 ├── Till Thursday.jpeg       # Weekday Menu Photo Card

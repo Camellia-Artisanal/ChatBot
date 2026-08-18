@@ -3,10 +3,13 @@ import hashlib
 import json
 import os
 import httpx
-from fastapi import FastAPI, Request, Response, Query, Header, HTTPException
+from fastapi import FastAPI, Request, Response, Query, Header, HTTPException, File, UploadFile
 from fastapi.responses import PlainTextResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from typing import Dict, Any, Optional
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from config import config
 from database import db
@@ -15,16 +18,30 @@ from responder import responder
 from whatsapp_adapter import whatsapp_adapter
 from escalator import escalator
 from sheet_sync import sheet_sync
+from menu_parser import menu_parser
 from session_memory import session_memory
 from monitoring import get_logger, delivery_monitor
 
 log = get_logger("camellia.app")
 
+limiter = Limiter(key_func=get_remote_address, default_limits=["300/minute"])
 app = FastAPI(
     title="FastAPI Webhook Application for Camellia Artisanal — Instagram & WhatsApp Auto-Response Bot",
-# Ad-Gated Instagram DM Bot + WhatsApp Business API with Deterministic Q&A Matching & Gemini RAG AI & Human Escalation
     version="1.0.0"
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Security Headers Middleware (Clickjacking, MIME-sniffing, XSS protection)
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    return response
 
 # Serve menu photo JPEGs from the dedicated images/ subdirectory.
 # Mounting BASE_DIR directly would expose .env, source files and the database.
@@ -61,15 +78,22 @@ def verify_meta_signature(raw_body: bytes, signature_header: Optional[str]) -> N
         )
         raise HTTPException(status_code=403, detail="Invalid payload signature")
 
-def require_admin(provided_key: Optional[str]) -> None:
+def require_admin(provided_key: Optional[str] = None, provided_pin: Optional[str] = None) -> None:
     """
     Guards /admin/* routes, which expose customer conversations and can
-    overwrite the live menu. Skipped when ADMIN_API_KEY is unset.
+    overwrite the live menu. Accepts either ADMIN_API_KEY or ADMIN_PIN.
+    Fails closed if no admin keys or pins are configured in the environment.
     """
-    if not config.ADMIN_API_KEY:
-        return
-    if not provided_key or not hmac.compare_digest(config.ADMIN_API_KEY, provided_key):
-        raise HTTPException(status_code=403, detail="Invalid or missing X-Admin-Key header")
+    valid_keys = [k.strip() for k in (config.ADMIN_API_KEY, config.ADMIN_PIN) if k and k.strip()]
+    if not valid_keys:
+        log.error("Admin access blocked: neither ADMIN_API_KEY nor ADMIN_PIN is configured.")
+        raise HTTPException(
+            status_code=503,
+            detail="Admin interface disabled: no ADMIN_API_KEY or ADMIN_PIN configured in environment"
+        )
+    token = (provided_key or provided_pin or "").strip()
+    if not token or not any(hmac.compare_digest(k, token) for k in valid_keys):
+        raise HTTPException(status_code=403, detail="Invalid or missing X-Admin-Key or PIN")
 
 def require_web_tester() -> None:
     """
@@ -89,6 +113,7 @@ def require_web_tester() -> None:
 @app.on_event("startup")
 def purge_expired_on_startup():
     """Enforces the retention window promised on /privacy."""
+    db.init_db()
     if not config.META_APP_SECRET:
         log.warning(
             "META_APP_SECRET is not set. Webhook signature verification is DISABLED — "
@@ -136,6 +161,7 @@ def verify_instagram_webhook(
     return Response(content="Forbidden", media_type="text/plain", status_code=403)
 
 @app.post("/webhook/instagram")
+@limiter.limit("120/minute")
 async def handle_instagram_webhook(request: Request):
     """
     Handles Instagram DM Webhooks.
@@ -268,6 +294,7 @@ def verify_whatsapp_webhook(
     raise HTTPException(status_code=403, detail="Verification token mismatch")
 
 @app.post("/webhook/whatsapp")
+@limiter.limit("120/minute")
 async def handle_whatsapp_webhook(request: Request):
     """Handles WhatsApp Business Webhook events."""
     raw_body = await request.body()
@@ -470,10 +497,131 @@ def health_check():
         status_code=status_code,
     )
 
+MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB limit for menu images
+
+@app.post("/admin/verify-pin")
+@limiter.limit("10/minute")
+async def verify_admin_pin(request: Request):
+    """Validates the 5-digit PIN or API key for the Admin dashboard."""
+    try:
+        body = await request.json()
+        pin = str(body.get("pin", "")).strip()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    valid_keys = [k.strip() for k in (config.ADMIN_PIN, config.ADMIN_API_KEY) if k and k.strip()]
+    if not valid_keys:
+        log.error("Admin PIN verification blocked: no credentials configured in environment.")
+        raise HTTPException(
+            status_code=503, 
+            detail="Admin interface disabled: no ADMIN_PIN or ADMIN_API_KEY configured in environment"
+        )
+
+    if pin and any(hmac.compare_digest(k, pin) for k in valid_keys):
+        return {"valid": True, "message": "PIN verified successfully."}
+
+    raise HTTPException(status_code=401, detail="Incorrect Admin PIN or Key")
+
+@app.get("/admin/menu/active")
+def get_active_menu(x_admin_key: Optional[str] = Header(None), x_admin_pin: Optional[str] = Header(None)):
+    """Returns the currently active menu JSON data."""
+    require_admin(x_admin_key, x_admin_pin)
+    try:
+        with open(config.MENU_JSON_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return {"status": "success", "menu": data}
+    except Exception as e:
+        log.error("Failed to read menu.json: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/admin/menu/upload-image")
+@limiter.limit("10/minute")
+async def upload_menu_image(
+    request: Request,
+    file: Optional[UploadFile] = File(None),
+    x_admin_key: Optional[str] = Header(None),
+    x_admin_pin: Optional[str] = Header(None),
+):
+    """
+    Multimodal Menu Ingestion:
+    Uploads a photo of a printed menu flyer or Instagram graphic, extracts dishes and prices with Gemini Vision,
+    and updates menu.json with hot reload.
+    """
+    require_admin(x_admin_key, x_admin_pin)
+
+    image_bytes = None
+    mime_type = "image/jpeg"
+
+    if file:
+        image_bytes = await file.read()
+        if len(image_bytes) > MAX_UPLOAD_SIZE:
+            raise HTTPException(status_code=413, detail="File too large (maximum 10MB allowed).")
+        mime_type = file.content_type or "image/jpeg"
+    else:
+        try:
+            body = await request.json()
+            b64_str = body.get("image_base64")
+            mime_type = body.get("mime_type", "image/jpeg")
+            if b64_str:
+                if len(b64_str) > (MAX_UPLOAD_SIZE * 4 // 3 + 1024):
+                    raise HTTPException(status_code=413, detail="Image payload too large (maximum 10MB allowed).")
+                import base64
+                if "," in b64_str:
+                    b64_str = b64_str.split(",", 1)[1]
+                image_bytes = base64.b64decode(b64_str)
+                if len(image_bytes) > MAX_UPLOAD_SIZE:
+                    raise HTTPException(status_code=413, detail="Image payload exceeds 10MB limit.")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="No image file or base64 data provided.")
+
+    result = menu_parser.parse_image_and_update_menu(image_bytes, mime_type)
+    return result
+
+@app.post("/admin/menu/reset-defaults")
+def reset_menu_defaults(x_admin_key: Optional[str] = Header(None), x_admin_pin: Optional[str] = Header(None)):
+    """Resets weekly menu dishes to default Bengal-rooted culinary baseline and reloads."""
+    require_admin(x_admin_key, x_admin_pin)
+    default_veg = [
+        {"item": "Chholar Daal", "description": "Authentic Bengali gram dal with coconut chips", "price_inr": 250, "quantity": "250g"},
+        {"item": "Dhokar Dalna", "description": "Lentil cakes in rich ginger-cumin gravy", "price_inr": 300, "quantity": "250g"},
+        {"item": "Shukto", "description": "Traditional bitter-sweet medley with bodi & milk gravy", "price_inr": 280, "quantity": "250g"},
+        {"item": "Chanar Dalna", "description": "Fresh handmade cottage cheese koftas in spiced curry", "price_inr": 350, "quantity": "250g"},
+        {"item": "Tomato Aamsottwo Chatni", "description": "Sweet tangy tomato chutney with sun-dried mango pulp", "price_inr": 180, "quantity": "150g"}
+    ]
+    default_nonveg = [
+        {"item": "Mangsho (Mutton Kosha)", "description": "Slow-cooked artisanal Bengali goat meat curry", "price_inr": 650, "quantity": "350g"},
+        {"item": "Rui Machher Kalia", "description": "Fresh river carp in robust onion-raisin gravy", "price_inr": 450, "quantity": "2 pcs"},
+        {"item": "Chingri Malaikari", "description": "Gold tiger prawns in creamy coconut milk sauce", "price_inr": 550, "quantity": "4 pcs"},
+        {"item": "Chicken Kosha", "description": "Tender chicken braised with mustard oil & spices", "price_inr": 420, "quantity": "350g"}
+    ]
+
+    menu_path = config.MENU_JSON_PATH
+    try:
+        with open(menu_path, "r", encoding="utf-8") as f:
+            menu_data = json.load(f)
+        if "weekly_menus" in menu_data and menu_data["weekly_menus"]:
+            current_week = menu_data["weekly_menus"][-1]
+            current_week["vegetarian"] = default_veg
+            current_week["non_vegetarian"] = default_nonveg
+            with open(menu_path, "w", encoding="utf-8") as f:
+                json.dump(menu_data, f, indent=2, ensure_ascii=False)
+            sheet_sync.sync_local_reload()
+            return {"status": "success", "message": "Weekly menu successfully reset to authentic Bengali culinary defaults."}
+        else:
+            return {"status": "failed", "reason": "No weekly_menus block found in menu.json"}
+    except Exception as e:
+        log.error("Failed to reset menu defaults: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.delete("/admin/user-data/{user_id}")
-def delete_user_data(user_id: str, x_admin_key: Optional[str] = Header(None)):
+def delete_user_data(user_id: str, x_admin_key: Optional[str] = Header(None), x_admin_pin: Optional[str] = Header(None)):
     """Erases everything held about one customer, for DPDP deletion requests."""
-    require_admin(x_admin_key)
+    require_admin(x_admin_key, x_admin_pin)
     removed = db.delete_user_data(user_id)
     session_memory.clear_session(user_id, "instagram")
     session_memory.clear_session(user_id, "whatsapp")
@@ -481,22 +629,23 @@ def delete_user_data(user_id: str, x_admin_key: Optional[str] = Header(None)):
     return {"status": "deleted", "user_id": user_id, "removed": removed}
 
 @app.get("/admin/escalations")
-def get_escalations_list(limit: int = 50, status: Optional[str] = None, x_admin_key: Optional[str] = Header(None)):
+def get_escalations_list(limit: int = 50, status: Optional[str] = None, x_admin_key: Optional[str] = Header(None), x_admin_pin: Optional[str] = Header(None)):
     """Returns recorded human escalations for client dashboard/records."""
-    require_admin(x_admin_key)
+    require_admin(x_admin_key, x_admin_pin)
     escalations = db.get_escalations(limit, status)
     return {"count": len(escalations), "escalations": escalations}
 
 @app.get("/admin/analytics")
-def get_analytics(x_admin_key: Optional[str] = Header(None)):
+def get_analytics(x_admin_key: Optional[str] = Header(None), x_admin_pin: Optional[str] = Header(None)):
     """Returns match rate vs escalation analytics summary."""
-    require_admin(x_admin_key)
+    require_admin(x_admin_key, x_admin_pin)
     return db.get_analytics()
 
 @app.post("/admin/sync-menu")
-def sync_menu(csv_url: Optional[str] = None, x_admin_key: Optional[str] = Header(None)):
+@limiter.limit("20/minute")
+def sync_menu(request: Request, csv_url: Optional[str] = None, x_admin_key: Optional[str] = Header(None), x_admin_pin: Optional[str] = Header(None)):
     """Triggers live menu reload from Google Sheet CSV or local files."""
-    require_admin(x_admin_key)
+    require_admin(x_admin_key, x_admin_pin)
     if csv_url:
         result = sheet_sync.sync_from_csv_url(csv_url)
     else:
@@ -504,9 +653,9 @@ def sync_menu(csv_url: Optional[str] = None, x_admin_key: Optional[str] = Header
     return result
 
 @app.post("/admin/update-menu")
-async def update_menu(request: Request, x_admin_key: Optional[str] = Header(None)):
+async def update_menu(request: Request, x_admin_key: Optional[str] = Header(None), x_admin_pin: Optional[str] = Header(None)):
     """Dynamically updates the latest weekly menu rotation block in menu.json and hot-reloads the responder."""
-    require_admin(x_admin_key)
+    require_admin(x_admin_key, x_admin_pin)
     try:
         body = await request.json()
     except Exception:
@@ -536,6 +685,880 @@ async def update_menu(request: Request, x_admin_key: Optional[str] = Header(None
     except Exception as e:
         log.error("Failed to update menu: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/admin/parse-menu-card")
+async def parse_menu_card(request: Request, x_admin_key: Optional[str] = Header(None), x_admin_pin: Optional[str] = Header(None)):
+    """
+    Auto-extracts menu items, descriptions, quantities, prices, and categories (veg/non-veg)
+    from raw unstructured text pasted by the user (flyer, message, notes) and updates menu.json.
+    """
+    require_admin(x_admin_key, x_admin_pin)
+    try:
+        body = await request.json()
+        raw_text = body.get("raw_text", "")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    if not raw_text or not raw_text.strip():
+        raise HTTPException(status_code=400, detail="raw_text cannot be empty")
+
+    result = menu_parser.parse_and_update_menu(raw_text)
+    return result
+
+@app.get("/admin", response_class=HTMLResponse)
+@app.get("/admin/dashboard", response_class=HTMLResponse)
+def get_admin_dashboard():
+    """
+    Dedicated PIN-Protected Kitchen & Menu Management Portal for Camellia Artisanal.
+    Features:
+    - PIN Authentication (5-digit PIN / Guru Dayal Singh's PIN)
+    - 📋 Paste Menu Card Text Parser
+    - 📸 Drag-and-Drop Image Flyer Upload with Gemini Vision OCR
+    - 📊 Google Sheets Live Sync
+    - 🍱 Active Menu Viewer & Baseline Reset
+    - 📈 Bot Performance & Escalations
+    """
+    html_content = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camellia Artisanal — Kitchen & Menu Admin Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #8B1E3F;
+            --primary-dark: #65122B;
+            --primary-light: #A8284F;
+            --gold: #D4AF37;
+            --gold-light: #FBF4E4;
+            --bg: #F8F9FA;
+            --surface: #FFFFFF;
+            --text-dark: #2B2D42;
+            --text-muted: #6C757D;
+            --border: #E8DFD8;
+            --success: #10B981;
+            --warning: #F59E0B;
+            --danger: #EF4444;
+            --shadow: 0 10px 25px rgba(139, 30, 63, 0.08);
+            --shadow-lg: 0 20px 40px rgba(139, 30, 63, 0.12);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; }
+        body { background: var(--bg); color: var(--text-dark); min-height: 100vh; display: flex; flex-direction: column; }
+        
+        /* PIN Lock Overlay */
+        .auth-overlay {
+            position: fixed; inset: 0; background: linear-gradient(135deg, rgba(101,18,43,0.96), rgba(139,30,63,0.98));
+            backdrop-filter: blur(12px); display: flex; justify-content: center; align-items: center; z-index: 1000; padding: 20px;
+        }
+        .auth-card {
+            background: var(--surface); width: 100%; max-width: 420px; border-radius: 24px; padding: 36px 28px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.3); text-align: center; border: 1px solid rgba(212,175,55,0.3);
+            animation: fadeIn 0.4s ease-out;
+        }
+        .auth-icon {
+            width: 68px; height: 68px; background: #FDF2F4; color: var(--primary); border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; font-size: 28px; margin: 0 auto 16px;
+            border: 2px solid var(--primary-light);
+        }
+        .auth-card h2 { font-family: 'Outfit', sans-serif; font-size: 1.45rem; color: var(--primary); margin-bottom: 6px; }
+        .auth-card p { font-size: 0.88rem; color: var(--text-muted); margin-bottom: 24px; line-height: 1.4; }
+        .pin-input-wrap { margin-bottom: 20px; }
+        .pin-input {
+            width: 100%; max-width: 260px; font-size: 2rem; letter-spacing: 12px; text-align: center;
+            padding: 12px 16px; border: 2px solid #E2E8F0; border-radius: 16px; outline: none; font-weight: 700;
+            color: var(--primary); background: #FAF9F8; transition: all 0.2s ease;
+        }
+        .pin-input:focus { border-color: var(--primary); background: #FFFFFF; box-shadow: 0 0 0 4px rgba(139,30,63,0.12); }
+        .auth-btn {
+            width: 100%; max-width: 260px; background: var(--primary); color: white; border: none; padding: 14px 20px;
+            border-radius: 14px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.2s;
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .auth-btn:hover { background: var(--primary-dark); transform: translateY(-1px); box-shadow: 0 6px 16px rgba(139,30,63,0.25); }
+        .auth-hint { font-size: 0.76rem; color: #888; margin-top: 16px; line-height: 1.4; }
+        .shake { animation: shake 0.4s ease-in-out; }
+        
+        /* Top Navigation */
+        header {
+            background: linear-gradient(90deg, var(--primary-dark), var(--primary)); color: white;
+            padding: 16px 28px; display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 4px 16px rgba(101,18,43,0.15);
+        }
+        .brand-box { display: flex; align-items: center; gap: 14px; }
+        .brand-logo { font-size: 1.7rem; }
+        .brand-text h1 { font-family: 'Outfit', sans-serif; font-size: 1.25rem; font-weight: 700; letter-spacing: 0.3px; }
+        .brand-text p { font-size: 0.78rem; opacity: 0.88; font-weight: 400; }
+        .header-actions { display: flex; align-items: center; gap: 10px; }
+        .header-btn {
+            background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: white;
+            padding: 8px 14px; border-radius: 10px; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+            text-decoration: none; display: inline-flex; align-items: center; gap: 6px; transition: background 0.2s;
+        }
+        .header-btn:hover { background: rgba(255,255,255,0.28); }
+        
+        /* Status Bar */
+        .status-bar {
+            background: #FFFFFF; border-bottom: 1px solid var(--border); padding: 10px 28px;
+            display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem;
+            flex-wrap: wrap; gap: 12px;
+        }
+        .status-items { display: flex; gap: 20px; align-items: center; }
+        .status-pill { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+        .dot.green { background: var(--success); box-shadow: 0 0 8px rgba(16,185,129,0.5); }
+        .dot.gold { background: var(--gold); }
+        
+        /* Main Layout */
+        .main-container { max-width: 1100px; width: 100%; margin: 24px auto; padding: 0 20px 40px; flex: 1; }
+        
+        /* Navigation Tabs */
+        .tabs-nav {
+            display: flex; gap: 8px; background: #EDE8E3; padding: 6px; border-radius: 16px;
+            margin-bottom: 24px; overflow-x: auto; scrollbar-width: none;
+        }
+        .tab-btn {
+            flex: 1; padding: 12px 18px; border: none; background: transparent; border-radius: 12px;
+            font-size: 0.88rem; font-weight: 600; color: #555; cursor: pointer; transition: all 0.2s;
+            white-space: nowrap; display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .tab-btn.active {
+            background: var(--surface); color: var(--primary); box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+        }
+        .tab-btn:hover:not(.active) { background: rgba(255,255,255,0.5); color: var(--primary); }
+        
+        /* Card Panel */
+        .panel-card {
+            background: var(--surface); border-radius: 20px; padding: 28px; box-shadow: var(--shadow);
+            border: 1px solid var(--border); margin-bottom: 24px; animation: fadeIn 0.3s ease;
+        }
+        .panel-header { margin-bottom: 20px; }
+        .panel-header h2 { font-family: 'Outfit', sans-serif; font-size: 1.25rem; color: var(--primary); margin-bottom: 4px; }
+        .panel-header p { font-size: 0.86rem; color: var(--text-muted); }
+        
+        /* Forms & Inputs */
+        textarea.text-input {
+            width: 100%; height: 160px; border: 1.5px solid var(--border); border-radius: 14px; padding: 14px;
+            font-size: 0.92rem; outline: none; transition: border-color 0.2s; resize: vertical; line-height: 1.5;
+            background: #FAFAF9; color: var(--text-dark);
+        }
+        textarea.text-input:focus { border-color: var(--primary); background: #FFFFFF; }
+        
+        .action-bar { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; flex-wrap: wrap; gap: 10px; }
+        .btn-primary {
+            background: var(--primary); color: white; border: none; padding: 12px 24px; border-radius: 12px;
+            font-size: 0.92rem; font-weight: 600; cursor: pointer; transition: all 0.2s;
+            display: inline-flex; align-items: center; gap: 8px;
+        }
+        .btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); }
+        .btn-secondary {
+            background: #F1EBE6; color: #4A4A4A; border: 1px solid var(--border); padding: 12px 20px;
+            border-radius: 12px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s;
+            display: inline-flex; align-items: center; gap: 6px;
+        }
+        .btn-secondary:hover { background: #E5DED7; }
+        .btn-danger {
+            background: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5; padding: 10px 18px;
+            border-radius: 12px; font-size: 0.86rem; font-weight: 600; cursor: pointer; transition: all 0.2s;
+        }
+        .btn-danger:hover { background: #FCA5A5; color: #991B1B; }
+        
+        /* Drag & Drop Zone */
+        .drop-zone {
+            border: 2px dashed #D1C7BD; border-radius: 18px; padding: 36px 20px; text-align: center;
+            background: #FAF8F5; cursor: pointer; transition: all 0.2s ease; position: relative;
+        }
+        .drop-zone:hover, .drop-zone.dragover { border-color: var(--primary); background: #F5EEF0; }
+        .drop-zone-icon { font-size: 40px; margin-bottom: 12px; color: var(--primary); }
+        .drop-zone h3 { font-size: 1.05rem; font-weight: 600; color: var(--text-dark); margin-bottom: 6px; }
+        .drop-zone p { font-size: 0.84rem; color: var(--text-muted); }
+        .file-input-hidden { display: none; }
+        
+        .preview-box {
+            margin-top: 16px; display: none; align-items: center; gap: 14px; background: #F5F3EF;
+            padding: 12px 16px; border-radius: 12px; border: 1px solid var(--border);
+        }
+        .preview-img { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; border: 1px solid #CCC; }
+        
+        /* Result Alert Boxes */
+        .result-box {
+            margin-top: 20px; padding: 16px; border-radius: 14px; display: none; font-size: 0.88rem;
+            line-height: 1.5; border: 1px solid transparent; animation: fadeIn 0.3s;
+        }
+        .result-box.success { background: #ECFDF5; border-color: #A7F3D0; color: #065F46; }
+        .result-box.error { background: #FEF2F2; border-color: #FECACA; color: #991B1B; }
+        .result-box.info { background: #EFF6FF; border-color: #BFDBFE; color: #1E40AF; }
+        .result-box pre {
+            background: rgba(0,0,0,0.04); padding: 10px; border-radius: 8px; margin-top: 8px;
+            font-family: monospace; font-size: 0.82rem; overflow-x: auto;
+        }
+        
+        /* Active Menu Cards Grid */
+        .menu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 16px; }
+        .menu-card {
+            background: #FCFBF9; border: 1px solid var(--border); border-radius: 14px; padding: 16px;
+            transition: all 0.2s;
+        }
+        .menu-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.04); }
+        .menu-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+        .menu-item-name { font-weight: 700; font-size: 0.96rem; color: var(--text-dark); }
+        .menu-item-price { font-weight: 700; color: var(--primary); font-size: 0.98rem; }
+        .menu-item-desc { font-size: 0.82rem; color: var(--text-muted); line-height: 1.4; }
+        .badge {
+            display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 0.72rem; font-weight: 600;
+            margin-top: 8px;
+        }
+        .badge-veg { background: #D1FAE5; color: #065F46; }
+        .badge-nonveg { background: #FEE2E2; color: #991B1B; }
+        
+        /* Analytics Table */
+        table.data-table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 0.86rem; }
+        table.data-table th { background: #F5F1ED; text-align: left; padding: 10px 14px; font-weight: 600; border-bottom: 1.5px solid var(--border); }
+        table.data-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+        table.data-table tr:hover { background: #FAF8F5; }
+        
+        /* Instruction Guide */
+        .guide-box { background: var(--gold-light); border: 1px solid rgba(212,175,55,0.35); border-radius: 14px; padding: 16px; margin-top: 20px; font-size: 0.85rem; line-height: 1.5; color: #634C0A; }
+        .guide-box h4 { font-size: 0.92rem; margin-bottom: 6px; color: #523E07; }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-8px); }
+            40%, 80% { transform: translateX(8px); }
+        }
+        @media (max-width: 768px) {
+            header { padding: 14px 16px; flex-direction: column; gap: 10px; align-items: stretch; }
+            .status-bar { padding: 10px 16px; }
+            .main-container { padding: 0 14px 30px; }
+            .tabs-nav { justify-content: flex-start; }
+            .panel-card { padding: 20px 16px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Authentication PIN Overlay -->
+    <div class="auth-overlay" id="authOverlay">
+        <div class="auth-card" id="authCard">
+            <div class="auth-icon">🔐</div>
+            <h2>Kitchen Admin Portal</h2>
+            <p>Protected access for Camellia Artisanal kitchen managers & staff.</p>
+            
+            <div class="pin-input-wrap">
+                <input type="password" id="pinInput" class="pin-input" maxlength="8" placeholder="•••••" autofocus onkeydown="if(event.key==='Enter') verifyPin()">
+            </div>
+            
+            <button class="auth-btn" onclick="verifyPin()">
+                <span>Unlock Portal</span> ➔
+            </button>
+            
+            <p class="auth-hint">
+                💡 <b>Kitchen Staff PIN:</b> Enter manager PIN (e.g. <code>51990</code>) or API Key to manage dishes & live bot responses.
+            </p>
+        </div>
+    </div>
+
+    <!-- Main Navigation Header -->
+    <header>
+        <div class="brand-box">
+            <span class="brand-logo">🌸</span>
+            <div class="brand-text">
+                <h1>Camellia Artisanal — Kitchen & Menu Admin</h1>
+                <p>Bengal-Rooted Artisanal Sweets & Food &middot; Gurgaon, Delhi NCR</p>
+            </div>
+        </div>
+        <div class="header-actions">
+            <a href="/chat" target="_blank" class="header-btn">💬 Customer Chat Tester</a>
+            <button class="header-btn" onclick="lockPortal()">🔒 Lock Portal</button>
+        </div>
+    </header>
+
+    <!-- Live Status Bar -->
+    <div class="status-bar">
+        <div class="status-items">
+            <span class="status-pill"><span class="dot green"></span> Server: <b>Online</b></span>
+            <span class="status-pill"><span class="dot gold"></span> Gemini Vision OCR: <b>Ready</b></span>
+            <span class="status-pill">Active Menu Items: <b id="activeCountBadge">Loading...</b></span>
+        </div>
+        <div>
+            <span>Kitchen Manager: <b>Mr. Guru Dayal Singh</b> (+91 87965 51990)</span>
+        </div>
+    </div>
+
+    <!-- Main Workspace -->
+    <div class="main-container">
+        <!-- Tab Navigation Bar -->
+        <div class="tabs-nav">
+            <button class="tab-btn active" onclick="switchTab('tab-paste')">📋 Paste Menu Text</button>
+            <button class="tab-btn" onclick="switchTab('tab-image')">📸 Flyer Photo (Vision OCR)</button>
+            <button class="tab-btn" onclick="switchTab('tab-sheets')">📊 Google Sheets Sync</button>
+            <button class="tab-btn" onclick="switchTab('tab-active')">🍱 Active Menu Viewer</button>
+            <button class="tab-btn" onclick="switchTab('tab-stats')">📈 Escalations & Stats</button>
+        </div>
+
+        <!-- TAB 1: Paste Menu Text -->
+        <div id="tab-paste" class="panel-card">
+            <div class="panel-header">
+                <h2>📋 Quick Paste Menu Text (WhatsApp / Notes)</h2>
+                <p>Paste raw unstructured flyer text, WhatsApp broadcast message, or dish lists. The AI extractor categorizes veg/non-veg, captures prices, and updates the bot instantly.</p>
+            </div>
+            
+            <textarea id="rawTextPaste" class="text-input" placeholder="Example:
+🌸 THIS WEEK'S BENGAL SPECIALS 🌸
+- Rose Sondesh (250g) - ₹450
+- Jolbhora Nolen Gur (500g) - ₹1400
+- Kosha Mangsho (Mutton) (350g) - ₹650
+- Chholar Daal with Coconut (250g) - ₹250
+- Rui Machher Kalia 2 pcs - ₹450"></textarea>
+
+            <div class="action-bar">
+                <button class="btn-primary" onclick="submitMenuText()">✨ Auto-Extract Dishes & Update Bot</button>
+                <button class="btn-secondary" onclick="loadSampleText()">📝 Load Sample Text</button>
+            </div>
+
+            <div id="pasteResult" class="result-box"></div>
+        </div>
+
+        <!-- TAB 2: Image Flyer Upload (Vision OCR) -->
+        <div id="tab-image" class="panel-card" style="display: none;">
+            <div class="panel-header">
+                <h2>📸 Drag-and-Drop Menu Image Flyer (Gemini Vision OCR)</h2>
+                <p>Upload a photo of your printed menu card, packaging flyer, or Instagram story. Gemini Vision reads the image and hot-reloads dishes into the live bot.</p>
+            </div>
+
+            <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+                <div class="drop-zone-icon">📷</div>
+                <h3>Drag & Drop Menu Card Image or Click to Browse</h3>
+                <p>Supports JPEG, PNG, WEBP (Flyer photo, WhatsApp image, Instagram banner)</p>
+                <input type="file" id="fileInput" class="file-input-hidden" accept="image/jpeg,image/png,image/webp" onchange="handleFileSelected(event)">
+            </div>
+
+            <div class="preview-box" id="previewBox">
+                <img id="previewImg" class="preview-img" src="" alt="Flyer Preview">
+                <div style="flex: 1;">
+                    <b id="previewName" style="font-size: 0.9rem;">filename.jpg</b>
+                    <p id="previewSize" style="font-size: 0.78rem; color: #666;">0 KB</p>
+                </div>
+                <button class="btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="clearFileSelection()">Remove</button>
+            </div>
+
+            <div class="action-bar">
+                <button class="btn-primary" id="uploadImageBtn" onclick="submitMenuImage()">🔍 Scan Flyer with Gemini Vision OCR</button>
+                <button class="btn-secondary" onclick="testSampleFlyer()">🧪 Test Sample Menu Flyer (1-Click Test)</button>
+            </div>
+
+            <div id="imageResult" class="result-box"></div>
+        </div>
+
+        <!-- TAB 3: Google Sheets Sync -->
+        <div id="tab-sheets" class="panel-card" style="display: none;">
+            <div class="panel-header">
+                <h2>📊 Google Sheets Live Menu Sync</h2>
+                <p>Synchronize your weekly menu directly from a shared Google Sheet. Update prices or add weekend specials in Google Sheets and sync in 1 click.</p>
+            </div>
+
+            <div style="margin-bottom: 16px;">
+                <label style="font-size: 0.88rem; font-weight: 600; display: block; margin-bottom: 6px;">Published Google Sheet CSV URL:</label>
+                <input type="url" id="sheetUrlInput" style="width: 100%; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 12px; font-size: 0.9rem; outline: none;" placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv">
+            </div>
+
+            <div class="action-bar">
+                <button class="btn-primary" onclick="syncGoogleSheet()">🔄 Sync Live from Google Sheet</button>
+                <button class="btn-secondary" onclick="syncLocalDisk()">📂 Reload from Local Disk Files</button>
+            </div>
+
+            <div id="sheetResult" class="result-box"></div>
+
+            <div class="guide-box">
+                <h4>💡 How to setup Google Sheets Sync:</h4>
+                <ol style="padding-left: 20px; line-height: 1.6;">
+                    <li>Create columns in your Sheet: <b>Category</b> (Veg/Non-Veg), <b>Item</b>, <b>Description</b>, <b>Quantity</b>, <b>Price_INR</b>.</li>
+                    <li>In Google Sheets: Click <b>File ➔ Share ➔ Publish to web</b>.</li>
+                    <li>Select <b>Comma-separated values (.csv)</b> and paste the link above.</li>
+                </ol>
+            </div>
+        </div>
+
+        <!-- TAB 4: Active Menu Viewer & Reset -->
+        <div id="tab-active" class="panel-card" style="display: none;">
+            <div class="panel-header">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <h2>🍱 Active Weekly Menu & Standing Collections</h2>
+                        <p>Real-time view of all dishes currently served by the bot to customers on Instagram & WhatsApp.</p>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn-secondary" onclick="loadActiveMenu()">🔄 Refresh View</button>
+                        <button class="btn-danger" onclick="confirmResetDefaults()">⚠️ Reset to Baseline Bengali Menu</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="activeMenuContent">
+                <p style="color: #666; font-size: 0.9rem;">Loading current menu...</p>
+            </div>
+        </div>
+
+        <!-- TAB 5: Escalations & Analytics -->
+        <div id="tab-stats" class="panel-card" style="display: none;">
+            <div class="panel-header">
+                <h2>📈 Bot Intelligence & Escalations Log</h2>
+                <p>Monitor automated Q&A resolution rates and view queries routed to kitchen management for human attention.</p>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                <div style="background: #F8FAFC; border: 1px solid var(--border); padding: 18px; border-radius: 14px; text-align: center;">
+                    <span style="font-size: 0.8rem; color: #64748B; font-weight: 600;">TOTAL INQUIRIES</span>
+                    <h3 id="statTotal" style="font-size: 1.8rem; color: var(--text-dark); margin-top: 4px;">0</h3>
+                </div>
+                <div style="background: #ECFDF5; border: 1px solid #A7F3D0; padding: 18px; border-radius: 14px; text-align: center;">
+                    <span style="font-size: 0.8rem; color: #065F46; font-weight: 600;">AUTOMATED MATCHES</span>
+                    <h3 id="statMatched" style="font-size: 1.8rem; color: var(--success); margin-top: 4px;">0</h3>
+                </div>
+                <div style="background: #FEF2F2; border: 1px solid #FECACA; padding: 18px; border-radius: 14px; text-align: center;">
+                    <span style="font-size: 0.8rem; color: #991B1B; font-weight: 600;">HUMAN ESCALATIONS</span>
+                    <h3 id="statEscalated" style="font-size: 1.8rem; color: var(--danger); margin-top: 4px;">0</h3>
+                </div>
+            </div>
+
+            <h3 style="font-size: 1.05rem; color: var(--primary); margin-bottom: 10px;">Recent Escalations (Needs Kitchen Follow-up)</h3>
+            <div style="overflow-x: auto;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Channel</th>
+                            <th>Customer / Sender</th>
+                            <th>Customer Message</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="escalationsTableBody">
+                        <tr><td colspan="5" style="text-align: center; color: #888;">Loading escalations...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        let currentAdminKey = sessionStorage.getItem('camellia_admin_pin') || '';
+        let selectedFile = null;
+
+        // On Load: check if authenticated
+        window.addEventListener('DOMContentLoaded', () => {
+            if (currentAdminKey) {
+                document.getElementById('authOverlay').style.display = 'none';
+                loadActiveMenu();
+                loadAnalytics();
+            } else {
+                document.getElementById('authOverlay').style.display = 'flex';
+            }
+            setupDragAndDrop();
+        });
+
+        async function verifyPin() {
+            const pin = document.getElementById('pinInput').value.trim();
+            if (!pin) return;
+
+            try {
+                const resp = await fetch('/admin/verify-pin', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ pin: pin })
+                });
+
+                if (resp.ok) {
+                    currentAdminKey = pin;
+                    sessionStorage.setItem('camellia_admin_pin', pin);
+                    document.getElementById('authOverlay').style.display = 'none';
+                    loadActiveMenu();
+                    loadAnalytics();
+                } else {
+                    const card = document.getElementById('authCard');
+                    card.classList.add('shake');
+                    setTimeout(() => card.classList.remove('shake'), 400);
+                    alert('Incorrect PIN. Please enter Guru Dayal Singh’s PIN (51990) or configured admin key.');
+                }
+            } catch (err) {
+                alert('Connection error verifying PIN.');
+            }
+        }
+
+        function lockPortal() {
+            sessionStorage.removeItem('camellia_admin_pin');
+            currentAdminKey = '';
+            document.getElementById('pinInput').value = '';
+            document.getElementById('authOverlay').style.display = 'flex';
+        }
+
+        function getAuthHeaders() {
+            return {
+                'X-Admin-Key': currentAdminKey,
+                'X-Admin-Pin': currentAdminKey
+            };
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            
+            document.querySelectorAll('.panel-card').forEach(panel => panel.style.display = 'none');
+            document.getElementById(tabId).style.display = 'block';
+
+            if (tabId === 'tab-active') loadActiveMenu();
+            if (tabId === 'tab-stats') loadAnalytics();
+        }
+
+        // TAB 1: Submit Text
+        async function submitMenuText() {
+            const text = document.getElementById('rawTextPaste').value.trim();
+            const resBox = document.getElementById('pasteResult');
+            if (!text) return alert('Please enter or paste menu card text.');
+
+            resBox.style.display = 'block';
+            resBox.className = 'result-box info';
+            resBox.innerHTML = '⏳ <b>Extracting dishes and updating menu.json...</b>';
+
+            try {
+                const resp = await fetch('/admin/parse-menu-card', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                    body: JSON.stringify({ raw_text: text })
+                });
+                const data = await resp.json();
+
+                if (resp.ok && data.status === 'success') {
+                    resBox.className = 'result-box success';
+                    resBox.innerHTML = `✅ <b>Menu Successfully Updated!</b><br>${data.message || ''}<br>Updated: <b>${data.vegetarian_count || 0} Veg</b>, <b>${data.non_vegetarian_count || 0} Non-Veg</b> items.<pre>${JSON.stringify(data.parsed, null, 2)}</pre>`;
+                    loadActiveMenu();
+                } else {
+                    resBox.className = 'result-box error';
+                    resBox.innerHTML = `⚠️ <b>Extraction Failed:</b> ${data.detail || data.reason || 'Could not parse text.'}`;
+                }
+            } catch (err) {
+                resBox.className = 'result-box error';
+                resBox.innerHTML = `❌ Network error communicating with server.`;
+            }
+        }
+
+        function loadSampleText() {
+            document.getElementById('rawTextPaste').value = `🌸 Camellia Artisanal Weekly Specials 🌸
+Veg:
+• Chholar Daal (250g) - ₹250
+• Dhokar Dalna (250g) - ₹300
+• Shukto (250g) - ₹280
+• Rose Sondesh (9 pcs/250g) - ₹450
+
+Non-Veg:
+• Mangsho (Mutton Kosha) (350g) - ₹650
+• Rui Machher Kalia (2 pcs) - ₹450
+• Chingri Malaikari (4 pcs) - ₹550
+• Chicken Kosha (350g) - ₹420`;
+        }
+
+        // TAB 2: Image Drag & Drop & Upload
+        function setupDragAndDrop() {
+            const dropZone = document.getElementById('dropZone');
+            if (!dropZone) return;
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, (e) => { e.preventDefault(); dropZone.classList.add('dragover'); }, false);
+            });
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); }, false);
+            });
+            dropZone.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files && files[0]) {
+                    processFile(files[0]);
+                }
+            });
+        }
+
+        function handleFileSelected(e) {
+            if (e.target.files && e.target.files[0]) {
+                processFile(e.target.files[0]);
+            }
+        }
+
+        function processFile(file) {
+            selectedFile = file;
+            document.getElementById('previewName').innerText = file.name;
+            document.getElementById('previewSize').innerText = `${Math.round(file.size / 1024)} KB`;
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                document.getElementById('previewImg').src = e.target.result;
+                document.getElementById('previewBox').style.display = 'flex';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function clearFileSelection() {
+            selectedFile = null;
+            document.getElementById('fileInput').value = '';
+            document.getElementById('previewBox').style.display = 'none';
+        }
+
+        async function submitMenuImage() {
+            const resBox = document.getElementById('imageResult');
+            if (!selectedFile) return alert('Please drop or select a menu card image file first.');
+
+            resBox.style.display = 'block';
+            resBox.className = 'result-box info';
+            resBox.innerHTML = '🔍 <b>Scanning flyer image with Gemini Vision OCR...</b> Please wait.';
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            try {
+                const resp = await fetch('/admin/menu/upload-image', {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: formData
+                });
+                const data = await resp.json();
+
+                if (resp.ok && data.status === 'success') {
+                    resBox.className = 'result-box success';
+                    resBox.innerHTML = `✅ <b>Vision OCR Extraction Complete!</b><br>${data.message}<pre>${JSON.stringify(data.parsed, null, 2)}</pre>`;
+                    loadActiveMenu();
+                } else if (data.status === 'warning') {
+                    resBox.className = 'result-box info';
+                    resBox.innerHTML = `ℹ️ <b>Test Upload Received:</b> ${data.message}`;
+                } else {
+                    resBox.className = 'result-box error';
+                    resBox.innerHTML = `⚠️ <b>Image OCR Failed:</b> ${data.detail || data.error || data.reason || 'Could not extract dishes.'}`;
+                }
+            } catch (err) {
+                resBox.className = 'result-box error';
+                resBox.innerHTML = `❌ Error uploading image to server.`;
+            }
+        }
+
+        // Test Purpose: 1-Click Sample Flyer Test
+        async function testSampleFlyer() {
+            const resBox = document.getElementById('imageResult');
+            resBox.style.display = 'block';
+            resBox.className = 'result-box info';
+            resBox.innerHTML = '🧪 <b>Generating test flyer canvas & running Vision OCR pipeline...</b>';
+
+            // Create a small sample image in memory on canvas
+            const canvas = document.createElement('canvas');
+            canvas.width = 400;
+            canvas.height = 300;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#8B1E3F';
+            ctx.fillRect(0, 0, 400, 300);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 18px sans-serif';
+            ctx.fillText('CAMELLIA ARTISANAL MENU', 30, 40);
+            ctx.font = '14px sans-serif';
+            ctx.fillText('• Classic Rose Sondesh (250g) - Rs 450', 30, 90);
+            ctx.fillText('• Mutton Kosha Bento (350g) - Rs 650', 30, 130);
+            ctx.fillText('• Chholar Daal (250g) - Rs 250', 30, 170);
+            ctx.fillText('• Rui Machher Kalia (2 pcs) - Rs 450', 30, 210);
+
+            canvas.toBlob(async (blob) => {
+                const formData = new FormData();
+                formData.append('file', blob, 'sample_test_flyer.jpg');
+
+                try {
+                    const resp = await fetch('/admin/menu/upload-image', {
+                        method: 'POST',
+                        headers: getAuthHeaders(),
+                        body: formData
+                    });
+                    const data = await resp.json();
+                    if (data.status === 'success') {
+                        resBox.className = 'result-box success';
+                        resBox.innerHTML = `✅ <b>1-Click Test Succeeded!</b><br>${data.message}<pre>${JSON.stringify(data.parsed, null, 2)}</pre>`;
+                        loadActiveMenu();
+                    } else {
+                        resBox.className = 'result-box info';
+                        resBox.innerHTML = `🧪 <b>Test Pipeline Result:</b> ${data.message || data.reason || JSON.stringify(data)}`;
+                    }
+                } catch (e) {
+                    resBox.className = 'result-box error';
+                    resBox.innerHTML = 'Error running test flyer.';
+                }
+            }, 'image/jpeg');
+        }
+
+        // TAB 3: Google Sheets Sync
+        async function syncGoogleSheet() {
+            const url = document.getElementById('sheetUrlInput').value.trim();
+            const resBox = document.getElementById('sheetResult');
+            resBox.style.display = 'block';
+            resBox.className = 'result-box info';
+            resBox.innerHTML = '🔄 <b>Fetching Google Sheet CSV and reloading bot memory...</b>';
+
+            try {
+                const queryParam = url ? `?csv_url=${encodeURIComponent(url)}` : '';
+                const resp = await fetch(`/admin/sync-menu${queryParam}`, {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
+                const data = await resp.json();
+
+                if (resp.ok && data.status === 'success') {
+                    resBox.className = 'result-box success';
+                    resBox.innerHTML = `✅ <b>Google Sheet Synced!</b> Updated ${data.updated_items_count} items in menu.json. Bot responder hot-reloaded.`;
+                    loadActiveMenu();
+                } else {
+                    resBox.className = 'result-box error';
+                    resBox.innerHTML = `⚠️ <b>Sync Failed:</b> ${data.detail || data.reason || data.error || 'Failed to fetch sheet.'}`;
+                }
+            } catch (err) {
+                resBox.className = 'result-box error';
+                resBox.innerHTML = `❌ Error connecting to server.`;
+            }
+        }
+
+        async function syncLocalDisk() {
+            const resBox = document.getElementById('sheetResult');
+            resBox.style.display = 'block';
+            resBox.className = 'result-box info';
+            resBox.innerHTML = '📂 Reloading menu from disk files...';
+
+            try {
+                const resp = await fetch('/admin/sync-menu', {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
+                const data = await resp.json();
+                resBox.className = 'result-box success';
+                resBox.innerHTML = `✅ ${data.message || 'Reloaded from disk.'}`;
+                loadActiveMenu();
+            } catch (e) {
+                resBox.className = 'result-box error';
+                resBox.innerHTML = 'Failed to reload from disk.';
+            }
+        }
+
+        // TAB 4: Active Menu Viewer
+        async function loadActiveMenu() {
+            const container = document.getElementById('activeMenuContent');
+            try {
+                const resp = await fetch('/admin/menu/active', { headers: getAuthHeaders() });
+                if (!resp.ok) throw new Error('Auth error or failed to load');
+                const data = await resp.json();
+                const menu = data.menu;
+
+                let html = '';
+                let totalCount = 0;
+
+                if (menu.weekly_menus && menu.weekly_menus.length > 0) {
+                    const currentWeek = menu.weekly_menus[menu.weekly_menus.length - 1];
+                    const veg = currentWeek.vegetarian || [];
+                    const nonveg = currentWeek.non_vegetarian || [];
+                    totalCount = veg.length + nonveg.length;
+
+                    html += `<h3 style="color: var(--primary); margin-top: 10px; font-size: 1.1rem;">🌱 Vegetarian Weekly Specials (${veg.length})</h3>`;
+                    html += '<div class="menu-grid">';
+                    veg.forEach(item => {
+                        html += `
+                        <div class="menu-card">
+                            <div class="menu-card-header">
+                                <span class="menu-item-name">${item.item}</span>
+                                <span class="menu-item-price">₹${item.price_inr}</span>
+                            </div>
+                            <p class="menu-item-desc">${item.description || ''} (${item.quantity || '1 portion'})</p>
+                            <span class="badge badge-veg">Vegetarian</span>
+                        </div>`;
+                    });
+                    html += '</div>';
+
+                    html += `<h3 style="color: var(--primary); margin-top: 24px; font-size: 1.1rem;">🍗 Non-Vegetarian Weekly Specials (${nonveg.length})</h3>`;
+                    html += '<div class="menu-grid">';
+                    nonveg.forEach(item => {
+                        html += `
+                        <div class="menu-card">
+                            <div class="menu-card-header">
+                                <span class="menu-item-name">${item.item}</span>
+                                <span class="menu-item-price">₹${item.price_inr}</span>
+                            </div>
+                            <p class="menu-item-desc">${item.description || ''} (${item.quantity || '1 portion'})</p>
+                            <span class="badge badge-nonveg">Non-Veg</span>
+                        </div>`;
+                    });
+                    html += '</div>';
+                }
+
+                container.innerHTML = html;
+                document.getElementById('activeCountBadge').innerText = `${totalCount} dishes`;
+            } catch (err) {
+                container.innerHTML = '<p style="color: red;">Failed to load active menu. Please check your PIN.</p>';
+            }
+        }
+
+        async function confirmResetDefaults() {
+            if (!confirm("Are you sure you want to reset the weekly rotation dishes to authentic Bengali defaults?")) return;
+            
+            try {
+                const resp = await fetch('/admin/menu/reset-defaults', {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    alert(data.message);
+                    loadActiveMenu();
+                } else {
+                    alert('Error: ' + (data.detail || 'Reset failed'));
+                }
+            } catch (e) {
+                alert('Connection error resetting menu.');
+            }
+        }
+
+        // TAB 5: Analytics & Escalations
+        async function loadAnalytics() {
+            try {
+                const statsResp = await fetch('/admin/analytics', { headers: getAuthHeaders() });
+                if (statsResp.ok) {
+                    const stats = await statsResp.json();
+                    document.getElementById('statTotal').innerText = stats.total_conversations || 0;
+                    document.getElementById('statMatched').innerText = stats.matched_conversations || 0;
+                    document.getElementById('statEscalated').innerText = stats.escalated_conversations || 0;
+                }
+
+                const escResp = await fetch('/admin/escalations?limit=25', { headers: getAuthHeaders() });
+                if (escResp.ok) {
+                    const escData = await escResp.json();
+                    const tbody = document.getElementById('escalationsTableBody');
+                    if (escData.escalations && escData.escalations.length > 0) {
+                        let rows = '';
+                        escData.escalations.forEach(e => {
+                            rows += `
+                            <tr>
+                                <td style="white-space: nowrap;">${e.timestamp || 'Recent'}</td>
+                                <td><b>${e.channel}</b></td>
+                                <td><code>${e.user_id}</code></td>
+                                <td>${e.user_message}</td>
+                                <td><span class="badge ${e.status === 'open' ? 'badge-nonveg' : 'badge-veg'}">${e.status.toUpperCase()}</span></td>
+                            </tr>`;
+                        });
+                        tbody.innerHTML = rows;
+                    } else {
+                        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #888;">No escalations recorded yet.</td></tr>';
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to load analytics:", err);
+            }
+        }
+    </script>
+</body>
+</html>
+"""
+    return HTMLResponse(content=html_content)
 
 # --------------------------------------------------------------------------
 # Interactive Web Chat Tester Endpoint (/chat)
@@ -640,6 +1663,16 @@ def get_web_chat():
             .chip:hover { background: #dee2e6; }
             .chip.memory-chip { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
             .chip.memory-chip:hover { background: #bae6fd; }
+            .chip.menu-parse-chip { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; font-weight: 600; }
+            .chip.menu-parse-chip:hover { background: #fde68a; }
+            .modal-overlay { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; justify-content: center; align-items: center; padding: 16px; }
+            .modal-box { background: white; border-radius: 12px; padding: 16px; width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
+            .modal-box h3 { margin: 0; font-size: 1.05rem; color: #8B1E3F; }
+            .modal-box textarea { width: 100%; height: 140px; border: 1px solid #ccc; border-radius: 8px; padding: 10px; font-size: 0.88rem; outline: none; resize: vertical; }
+            .modal-box .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+            .modal-box button { padding: 8px 16px; border-radius: 18px; border: none; font-weight: 600; cursor: pointer; font-size: 0.85rem; }
+            .btn-cancel { background: #e9ecef; color: #495057; }
+            .btn-parse { background: #8B1E3F; color: white; }
         </style>
     </head>
     <body>
@@ -647,7 +1680,11 @@ def get_web_chat():
             <div class="header">
                 <div class="header-top">
                     <h2>🌸 Camellia Artisanal Bot Tester</h2>
-                    <button class="reset-btn" onclick="resetSession()">🧹 Clear Memory</button>
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                        <a href="/admin" target="_blank" class="reset-btn" style="text-decoration: none; display: inline-flex; align-items: center; background: #D4AF37; color: #2B2D42; font-weight: 700; border-color: #D4AF37;">🔐 Kitchen Portal</a>
+                        <button class="reset-btn" onclick="openMenuModal()">📋 Paste Menu</button>
+                        <button class="reset-btn" onclick="resetSession()">🧹 Clear Memory</button>
+                    </div>
                 </div>
                 <p>Bengal-Rooted Artisanal Sweets & Food</p>
                 <select id="channelSelect" class="channel-select" onchange="resetSession()">
@@ -668,6 +1705,7 @@ def get_web_chat():
             </div>
 
             <div class="suggestions">
+                <span class="chip menu-parse-chip" onclick="openMenuModal()">📋 Paste Menu Card Text</span>
                 <span class="chip memory-chip" onclick="quickSend('My name is Shoaib')">1. Set Name</span>
                 <span class="chip memory-chip" onclick="quickSend('What is my name?')">2. Recall Name</span>
                 <span class="chip" onclick="quickSend('Show me the veg menu this week')">Veg Menu Card</span>
@@ -681,7 +1719,47 @@ def get_web_chat():
             </div>
         </div>
 
+        <div class="modal-overlay" id="menuModal">
+            <div class="modal-box">
+                <h3>📋 Paste Raw Menu Card Text</h3>
+                <p style="margin: 0; font-size: 0.8rem; color: #555;">Paste raw flyer text, WhatsApp broadcast, or dish items with prices below. The AI/parser will structure & update the bot's menu automatically!</p>
+                <textarea id="rawMenuInput" placeholder="Example:&#10;Rose Sondesh 250g - Rs 450&#10;Jolbhora Nolen Gur 500g ₹1400&#10;Kosha Mangsho Bento ₹650 (non veg)"></textarea>
+                <div class="modal-actions">
+                    <button class="btn-cancel" onclick="closeMenuModal()">Cancel</button>
+                    <button class="btn-parse" onclick="parseMenuCardText()">✨ Auto-Extract & Update Menu</button>
+                </div>
+            </div>
+        </div>
+
         <script>
+            function openMenuModal() { document.getElementById('menuModal').style.display = 'flex'; }
+            function closeMenuModal() { document.getElementById('menuModal').style.display = 'none'; }
+
+            async function parseMenuCardText() {
+                const text = document.getElementById('rawMenuInput').value.trim();
+                if (!text) return alert('Please paste some menu text first!');
+
+                closeMenuModal();
+                appendMessage('📋 [Auto-Extracting Menu Card Text...]', 'user-msg');
+
+                try {
+                    const resp = await fetch('/admin/parse-menu-card', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ raw_text: text })
+                    });
+                    const data = await resp.json();
+
+                    if (data.status === 'success') {
+                        appendMessage(`✅ ${data.message}\n\nParsed Items:\n${JSON.stringify(data.parsed, null, 2)}`, 'bot-msg', 'Menu Hot-Reloaded');
+                    } else {
+                        appendMessage(`⚠️ Menu Parse Failed: ${data.reason || data.error}`, 'bot-msg');
+                    }
+                } catch (err) {
+                    appendMessage('Error parsing menu card.', 'bot-msg');
+                }
+            }
+
             async function sendMessage() {
                 const input = document.getElementById('userInput');
                 const text = input.value.trim();
@@ -773,5 +1851,4 @@ def get_web_chat():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app:app", host="127.0.0.1", port=5000, reload=True)
 
