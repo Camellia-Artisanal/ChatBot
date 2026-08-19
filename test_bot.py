@@ -133,11 +133,18 @@ class TestCamelliaBot(unittest.TestCase):
                 "mid": "m_test_mid_fallback_123"
             }
         }
-        config.BYPASS_AD_GATE = True
-        is_ad, sender, text, _ = ad_gate.inspect_and_gate_message(event_without_sender)
-        self.assertTrue(is_ad)
-        self.assertEqual(sender, "user_fallback_999")
-        self.assertEqual(text, "Edited message text from fallback")
+        old_token = config.INSTAGRAM_ACCESS_TOKEN
+        old_bypass = config.BYPASS_AD_GATE
+        try:
+            config.INSTAGRAM_ACCESS_TOKEN = "EAAB_test_mock_token_for_fallback_test"
+            config.BYPASS_AD_GATE = True
+            is_ad, sender, text, _ = ad_gate.inspect_and_gate_message(event_without_sender)
+            self.assertTrue(is_ad)
+            self.assertEqual(sender, "user_fallback_999")
+            self.assertEqual(text, "Edited message text from fallback")
+        finally:
+            config.INSTAGRAM_ACCESS_TOKEN = old_token
+            config.BYPASS_AD_GATE = old_bypass
 
     def test_responder_sondesh_pricing(self):
         """Test pricing query returns correct predefined template and photo card."""
