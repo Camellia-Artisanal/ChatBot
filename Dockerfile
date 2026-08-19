@@ -26,9 +26,5 @@ COPY . .
 # Expose FastAPI port
 EXPOSE 8000
 
-# Healthcheck to verify service health
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/ || exit 1
-
-# Command to run production FastAPI app using Uvicorn
+# Command to run production FastAPI app using Uvicorn on dynamic PORT
 CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port ${PORT:-8000}"]
