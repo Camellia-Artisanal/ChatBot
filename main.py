@@ -8,4 +8,10 @@ if __name__ == "__main__":
     except (ValueError, TypeError):
         port = 8000
     print(f"Starting Camellia Artisanal Bot on 0.0.0.0:{port}...")
-    uvicorn.run("app:app", host="0.0.0.0", port=port)
+    uvicorn.run(
+        "app:app",
+        host="0.0.0.0",
+        port=port,
+        proxy_headers=True,
+        forwarded_allow_ips="*"
+    )
