@@ -136,7 +136,7 @@ def require_web_tester() -> None:
     development, where a browser cannot attach an admin header on navigation.
     """
     if not config.ENABLE_WEB_TESTER:
-        raise HTTPException(status_code=404, detail="Not found")
+        raise HTTPException(status_code=404, detail="Web tester is disabled. Set ENABLE_WEB_TESTER=true in environment variables.")
 
 # --------------------------------------------------------------------------
 # Root / Health Check / Favicon
@@ -144,8 +144,11 @@ def require_web_tester() -> None:
 @app.get("/")
 def read_root(request: Request):
     accept = request.headers.get("accept", "")
-    if "text/html" in accept and config.ENABLE_WEB_TESTER:
-        return RedirectResponse(url="/chat")
+    # If opened in a web browser, redirect straight to the chat tester or admin portal
+    if "text/html" in accept or "application/xhtml+xml" in accept:
+        if config.ENABLE_WEB_TESTER:
+            return RedirectResponse(url="/chat")
+        return RedirectResponse(url="/admin")
     return {
         "client": "camellia.artisanal",
         "service": "Ad-Gated Auto-Response Bot",
@@ -2111,6 +2114,9 @@ async def api_reset_session(request: Request):
 @app.get("/chat", response_class=HTMLResponse)
 @app.get("/demo", response_class=HTMLResponse)
 @app.get("/test", response_class=HTMLResponse)
+@app.get("/web", response_class=HTMLResponse)
+@app.get("/tester", response_class=HTMLResponse)
+@app.get("/bot", response_class=HTMLResponse)
 def get_web_chat():
     """Renders a sleek browser-based chat window to ask the bot questions directly with Memory controls."""
     require_web_tester()
