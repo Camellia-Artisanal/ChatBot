@@ -64,7 +64,7 @@
     {
       "id": "sondesh_price_general",
       "triggers": ["how much is sondesh", "how much for sondesh", "price of sondesh", "cost of sondesh", "sondesh price", "sondesh cost", "how much sondesh", "sondesh rate", "what's the price", "whats the price", "what is the price", "price list", "how much does it cost", "mishti price", "menu price"],
-      "response": "Hi, thanks for connecting! 🌸\n\nWe offer two handcrafted collections:\n\n*Collection 1 — Aamar Mishti*\n• Classic / Rose: 250g (9pcs) ₹450 | 500g (18pcs) ₹800 | 1kg (36pcs) ₹1500\n• Mango / Kesar / Aam Ada: 250g (9pcs) ₹550 | 500g (18pcs) ₹1000 | 1kg (36pcs) ₹1800\n• Nolen Gur: 250g (9pcs) ₹600 | 500g (18pcs) ₹1100 | 1kg (36pcs) ₹2000\n• Jolbhora (Nolen Gur liquid fill): 250g (6pcs) ₹750 | 500g (12pcs) ₹1400 | 1kg (24pcs) ₹2500\n• Kanchagolla (Classic, Rose, Mango, Kesar, Aam Ada, Nolen Gur): Same prices & pack sizes as Sondesh above\n\n*Collection 2 — Signature A2 Collection*\n• Classic / Rose: 250g (9pcs) ₹600 | 500g (18pcs) ₹1100 | 1kg (36pcs) ₹2000\n• Mango / Kesar / Real Vanilla / Cinnamon (Dalchini): 250g (9pcs) ₹650 | 500g (18pcs) ₹1200 | 1kg (36pcs) ₹2200\n• Nolen Gur / Thandai / Medjool Dates / Chocolate: 250g (9pcs) ₹700 | 500g (18pcs) ₹1300 | 1kg (36pcs) ₹2500\n• Mahua: 250g (9pcs) ₹900 | 500g (18pcs) ₹1600 | 1kg (36pcs) ₹2900\n• Jolbhora (Nolen Gur liquid fill): 250g (6pcs) ₹900 | 500g (12pcs) ₹1600 | 1kg (24pcs) ₹2900\n• Kanchagolla (Classic / Nolen Gur): Same prices as Sondesh (Classic ₹600/1100/2000 | Nolen Gur ₹700/1300/2500)\n\nPorter delivery charges on actuals. Which collection, item, and flavour would you like?",
+      "response": "Hi, thanks for connecting! 🌸\n\nHere is our complete price breakdown table for both handcrafted collections:\n\n*Collection 1 — Aamar Mishti*\n```\n+-----------------------+-------+-------+-------+\n| Item / Flavour        | 250g  | 500g  |  1kg  |\n+-----------------------+-------+-------+-------+\n| Classic / Rose        | ₹450  | ₹800  | ₹1500 |\n| Mango / Kesar / Ada   | ₹550  | ₹1000 | ₹1800 |\n| Nolen Gur             | ₹600  | ₹1100 | ₹2000 |\n| Jolbhora (Liquid)*    | ₹750  | ₹1400 | ₹2500 |\n| Kanchagolla           | ₹450  | ₹800  | ₹1500 |\n+-----------------------+-------+-------+-------+\n* 250g(9pc) | 500g(18pc) | 1kg(36pc)\n* Jolbhora: 6pc | 12pc | 24pc\n```\n\n*Collection 2 — Signature A2 Collection (Pure Desi A2 Milk)*\n```\n+-----------------------+-------+-------+-------+\n| Item / Flavour        | 250g  | 500g  |  1kg  |\n+-----------------------+-------+-------+-------+\n| Classic / Rose        | ₹600  | ₹1100 | ₹2000 |\n| Mango/Kesar/Vanilla.. | ₹650  | ₹1200 | ₹2200 |\n| NolenGur/Thandai/Date | ₹700  | ₹1300 | ₹2500 |\n| Mahua Sondesh         | ₹900  | ₹1600 | ₹2900 |\n| Jolbhora (Liquid)*    | ₹900  | ₹1600 | ₹2900 |\n| Kanchagolla (Classic) | ₹600  | ₹1100 | ₹2000 |\n| Kanchagolla (NolenGur)| ₹700  | ₹1300 | ₹2500 |\n+-----------------------+-------+-------+-------+\n* Real Vanilla, Cinnamon, Thandai, Dates, Chocolate\n* 250g(9pc) | 500g(18pc) | 1kg(36pc)\n* Jolbhora: 6pc | 12pc | 24pc\n```\n\nPorter delivery charges on actuals from Sushant Lok, Gurgaon. Which collection, item, and flavour would you like?",
       "escalate": false,
       "source_ref": "client Q&A script > PRICE"
     },
@@ -72,7 +72,7 @@
     {
       "id": "sondesh_classic_rose",
       "triggers": ["classic sondesh", "rose sondesh", "classic rose", "classic sondesh price", "rose sondesh price", "rose mishti", "classic mishti", "rose price", "classic price", "cost of rose", "cost of classic", "rose", "classic"],
-      "response": "Classic & Rose Sondesh: 🌸\n• Collection 1 — Aamar Mishti: 250g (9pcs) ₹450 | 500g (18pcs) ₹800 | 1kg (36pcs) ₹1500\n• Collection 2 — Signature A2: 250g (9pcs) ₹600 | 500g (18pcs) ₹1100 | 1kg (36pcs) ₹2000\n\nWhich collection and pack size would you like?",
+      "response": "Classic & Rose Sondesh Price Table: 🌸\n\n```\n+-------------------------+-------+-------+-------+\n| Collection              | 250g  | 500g  |  1kg  |\n+-------------------------+-------+-------+-------+\n| Collection 1 — Aamar    | ₹450  | ₹800  | ₹1500 |\n| Collection 2 — Sig A2   | ₹600  | ₹1100 | ₹2000 |\n+-------------------------+-------+-------+-------+\n* Box count: 9 pcs (250g) | 18 pcs (500g) | 36 pcs (1kg)\n```\n\nWhich collection and pack size would you like to order?",
       "escalate": false,
       "source_ref": "menu.json > Sondesh > Classic/Rose"
     },
@@ -80,7 +80,7 @@
     {
       "id": "sondesh_mango_kesar",
       "triggers": ["mango sondesh", "kesar sondesh", "aam ada", "mango sondesh price", "kesar sondesh price", "mango price", "kesar price", "aam ada price", "mango mishti", "kesar mishti", "vanilla", "real vanilla", "cinnamon", "dalchini", "vanilla price", "cinnamon price", "dalchini price", "vanilla sondesh", "cinnamon sondesh", "dalchini sondesh", "mango", "kesar"],
-      "response": "Mango, Kesar, Vanilla & Cinnamon Sondesh: 🌸\n• Collection 1 — Aamar Mishti (Mango / Kesar / Aam Ada): 250g (9pcs) ₹550 | 500g (18pcs) ₹1000 | 1kg (36pcs) ₹1800\n• Collection 2 — Signature A2 (Mango / Kesar / Real Vanilla / Cinnamon / Dalchini): 250g (9pcs) ₹650 | 500g (18pcs) ₹1200 | 1kg (36pcs) ₹2200\n\nWhich collection, flavour, and pack size would you like to order?",
+      "response": "Mango, Kesar, Vanilla & Cinnamon Sondesh Table: 🌸\n\n```\n+-------------------------+-------+-------+-------+\n| Collection & Flavours   | 250g  | 500g  |  1kg  |\n+-------------------------+-------+-------+-------+\n| Aamar (Mango/Kesar/Ada) | ₹550  | ₹1000 | ₹1800 |\n| Sig A2 (Mango/Van/Cin)  | ₹650  | ₹1200 | ₹2200 |\n+-------------------------+-------+-------+-------+\n* Box count: 9 pcs (250g) | 18 pcs (500g) | 36 pcs (1kg)\n```\n\nWhich collection, flavour, and pack size would you like to order?",
       "escalate": false,
       "source_ref": "menu.json > Sondesh > Mango/Kesar"
     },
@@ -88,7 +88,7 @@
     {
       "id": "sondesh_nolen_gur",
       "triggers": ["nolen gur sondesh", "nolen gur price", "thandai", "medjool dates", "dates", "chocolate sondesh", "chocolate", "nolen gur sondesh price", "thandai price", "medjool dates price", "chocolate price", "dates price", "dates sondesh", "thandai sondesh", "chocolate mishti", "nolen gur mishti", "nolen gur"],
-      "response": "Nolen Gur, Thandai, Medjool Dates & Chocolate Sondesh: 🌸\n• Collection 1 — Aamar Mishti (Nolen Gur): 250g (9pcs) ₹600 | 500g (18pcs) ₹1100 | 1kg (36pcs) ₹2000\n• Collection 2 — Signature A2 (Nolen Gur / Thandai / Medjool Dates / Chocolate): 250g (9pcs) ₹700 | 500g (18pcs) ₹1300 | 1kg (36pcs) ₹2500\n\nWhich collection, flavour, and pack size would you like to order?",
+      "response": "Nolen Gur, Thandai, Medjool Dates & Chocolate Sondesh Table: 🌸\n\n```\n+-------------------------+-------+-------+-------+\n| Collection & Flavours   | 250g  | 500g  |  1kg  |\n+-------------------------+-------+-------+-------+\n| Aamar Mishti (Nolen Gur)| ₹600  | ₹1100 | ₹2000 |\n| Sig A2 (Gur/Thandai/..)| ₹700  | ₹1300 | ₹2500 |\n+-------------------------+-------+-------+-------+\n* Box count: 9 pcs (250g) | 18 pcs (500g) | 36 pcs (1kg)\n```\n\nWhich collection, flavour, and pack size would you like to order?",
       "escalate": false,
       "source_ref": "menu.json > Sondesh > Nolen Gur"
     },
@@ -96,7 +96,7 @@
     {
       "id": "jolbhora",
       "triggers": ["jolbhora", "liquid filling", "jol bhora", "jolbhora price", "jolbhora cost", "jol bhora price", "jolbhora rate", "jolbhora options", "price of jolbhora", "cost of jolbhora", "nolen gur jolbhora", "jolbhora sondesh"],
-      "response": "Jolbhora (Nolen Gur Sondesh with authentic liquid filling): 🌸\n• Collection 1 — Aamar Mishti: 250g (6pcs) ₹750 | 500g (12pcs) ₹1400 | 1kg (24pcs) ₹2500\n• Collection 2 — Signature A2: 250g (6pcs) ₹900 | 500g (12pcs) ₹1600 | 1kg (24pcs) ₹2900\n\nWhich collection and pack size would you like to order?",
+      "response": "Jolbhora (Nolen Gur Sondesh with authentic liquid filling) Table: 🌸\n\n```\n+-------------------------+-------+-------+-------+\n| Pack Size (Piece Count) | Aamar | SigA2 |\n+-------------------------+-------+-------+-------+\n| 250g Box (6 pcs)        | ₹750  | ₹900  |\n| 500g Box (12 pcs)       | ₹1400 | ₹1600 |\n| 1kg Box (24 pcs)        | ₹2500 | ₹2900 |\n+-------------------------+-------+-------+-------+\n```\n\nWhich collection and pack size would you like to order?",
       "escalate": false,
       "source_ref": "menu.json > Jolbhora"
     },
@@ -104,7 +104,7 @@
     {
       "id": "kanchagolla",
       "triggers": ["kanchagolla", "kancha golla", "kanchagolla price", "kanchagolla cost", "kanchagolla rate", "kanchagolla options", "kancha golla price", "price of kanchagolla", "cost of kanchagolla"],
-      "response": "Kanchagolla Pricing & Options: 🌸\n\n*Aamar Mishti Collection* (Classic, Rose, Mango, Kesar, Aam Ada, Nolen Gur):\n• Classic / Rose: 250g (9pcs) ₹450 | 500g (18pcs) ₹800 | 1kg (36pcs) ₹1500\n• Mango / Kesar / Aam Ada: 250g (9pcs) ₹550 | 500g (18pcs) ₹1000 | 1kg (36pcs) ₹1800\n• Nolen Gur: 250g (9pcs) ₹600 | 500g (18pcs) ₹1100 | 1kg (36pcs) ₹2000\n\n*Signature A2 Collection* (Classic, Nolen Gur):\n• Classic: 250g (9pcs) ₹600 | 500g (18pcs) ₹1100 | 1kg (36pcs) ₹2000\n• Nolen Gur: 250g (9pcs) ₹700 | 500g (18pcs) ₹1300 | 1kg (36pcs) ₹2500\n\nWhich collection, flavour, and pack size would you like to order?",
+      "response": "Kanchagolla Pricing & Options Table: 🌸\n\n```\n+-------------------------+-------+-------+-------+\n| Collection & Variety    | 250g  | 500g  |  1kg  |\n+-------------------------+-------+-------+-------+\n| Aamar: Classic / Rose   | ₹450  | ₹800  | ₹1500 |\n| Aamar: Mango / Kesar    | ₹550  | ₹1000 | ₹1800 |\n| Aamar: Nolen Gur        | ₹600  | ₹1100 | ₹2000 |\n| Signature A2: Classic   | ₹600  | ₹1100 | ₹2000 |\n| Signature A2: Nolen Gur | ₹700  | ₹1300 | ₹2500 |\n+-------------------------+-------+-------+-------+\n* Box count: 9 pcs (250g) | 18 pcs (500g) | 36 pcs (1kg)\n```\n\nWhich collection, flavour, and pack size would you like to order?",
       "escalate": false,
       "source_ref": "menu.json > Kanchagolla"
     },
@@ -112,7 +112,7 @@
     {
       "id": "mahua_signature_special",
       "triggers": ["mahua", "mahua price", "mahua sondesh", "price of mahua", "cost of mahua", "rate of mahua", "what are the price of mahua", "what is the price of mahua", "mahua mishti", "mahua sondesh price"],
-      "response": "Mahua Sondesh (Signature A2 Collection only — handcrafted with pure desi A2 cow milk): 🌸\n• 250g (9 pcs): ₹900\n• 500g (18 pcs): ₹1600\n• 1kg (36 pcs): ₹2900\n\nPorter delivery charges on actuals. Which pack size would you like to order?",
+      "response": "Mahua Sondesh (Signature A2 Collection only — handcrafted with pure desi A2 cow milk & forest mahua flowers): 🌸\n\n```\n+-----------------+-------------+-------+\n| Pack Size       | Piece Count | Price |\n+-----------------+-------------+-------+\n| 250g Box        | 9 pcs       | ₹900  |\n| 500g Box        | 18 pcs      | ₹1600 |\n| 1kg Box         | 36 pcs      | ₹2900 |\n+-----------------+-------------+-------+\n```\n\nPorter delivery charges on actuals. Which pack size would you like to order?",
       "escalate": false,
       "source_ref": "menu.json > signature_collection > Mahua"
     },
@@ -120,7 +120,7 @@
     {
       "id": "aamar_mishti_collection",
       "triggers": ["collection 1", "collection1", "collection 1 options", "collection 1 price", "collection 1 rate", "collection 1 sondesh", "1st collection", "first collection", "col 1", "option 1", "aamar mishti", "aamar mishti collection", "aamar mishti 250g", "aamar mishti 500g", "aamar mishti 1kg", "aamar mishti price", "aamar mishti rate", "aamar mishti options", "aamar mishti sondesh"],
-      "response": "Collection 1 — Aamar Mishti (আমার মিষ্টি) 🌸\nIndulgence for your daily sweet cravings at home or work. Made using good dairy milk in our kitchen.\n\nPrice Breakdown:\n• Classic / Rose Sondesh: 250g (9pcs) ₹450 | 500g (18pcs) ₹800 | 1kg (36pcs) ₹1500\n• Mango / Kesar / Aam Ada Sondesh: 250g (9pcs) ₹550 | 500g (18pcs) ₹1000 | 1kg (36pcs) ₹1800\n• Nolen Gur Sondesh: 250g (9pcs) ₹600 | 500g (18pcs) ₹1100 | 1kg (36pcs) ₹2000\n• Jolbhora (Nolen Gur liquid fill): 250g (6pcs) ₹750 | 500g (12pcs) ₹1400 | 1kg (24pcs) ₹2500\n• Kanchagolla (Classic, Rose, Mango, Kesar, Aam Ada, Nolen Gur): Same prices & pack sizes as Sondesh above\n\nWhich item and pack size would you like to order?",
+      "response": "Collection 1 — Aamar Mishti (আমার মিষ্টি) 🌸\nIndulgence for your daily sweet cravings at home or work. Made using pure dairy milk in our kitchen.\n\n*Price Breakdown Table:*\n```\n+-----------------------+-------+-------+-------+\n| Item / Flavour        | 250g  | 500g  |  1kg  |\n+-----------------------+-------+-------+-------+\n| Classic / Rose        | ₹450  | ₹800  | ₹1500 |\n| Mango / Kesar / Ada   | ₹550  | ₹1000 | ₹1800 |\n| Nolen Gur             | ₹600  | ₹1100 | ₹2000 |\n| Jolbhora (Liquid)*    | ₹750  | ₹1400 | ₹2500 |\n| Kanchagolla           | ₹450  | ₹800  | ₹1500 |\n+-----------------------+-------+-------+-------+\n* 250g(9pc) | 500g(18pc) | 1kg(36pc)\n* Jolbhora: 6pc | 12pc | 24pc\n```\n\nWhich item and pack size would you like to order?",
       "escalate": false,
       "source_ref": "menu.json > Aamar Mishti Collection"
     },
@@ -128,7 +128,7 @@
     {
       "id": "signature_collection",
       "triggers": ["collection 2", "collection2", "collection 2 options", "collection 2 price", "collection 2 rate", "collection 2 sondesh", "2nd collection", "second collection", "col 2", "option 2", "signature collection", "signature sondesh", "signature 250g", "signature 500g", "signature 1kg", "signature price", "signature rate", "signature options", "desi a2"],
-      "response": "Collection 2 — Signature Collection 🌸\nSpecial occasion & gifting mishti made using pure desi A2 cow milk, 100% hand crafted.\n\nPrice Breakdown:\n• Classic / Rose Sondesh: 250g (9pcs) ₹600 | 500g (18pcs) ₹1100 | 1kg (36pcs) ₹2000\n• Mango / Kesar / Real Vanilla / Cinnamon (Dalchini) Sondesh: 250g (9pcs) ₹650 | 500g (18pcs) ₹1200 | 1kg (36pcs) ₹2200\n• Nolen Gur / Thandai / Medjool Dates / Chocolate Sondesh: 250g (9pcs) ₹700 | 500g (18pcs) ₹1300 | 1kg (36pcs) ₹2500\n• Mahua Sondesh: 250g (9pcs) ₹900 | 500g (18pcs) ₹1600 | 1kg (36pcs) ₹2900\n• Jolbhora (Nolen Gur liquid fill): 250g (6pcs) ₹900 | 500g (12pcs) ₹1600 | 1kg (24pcs) ₹2900\n• Kanchagolla (Classic / Nolen Gur): Same prices as Sondesh (Classic ₹600/1100/2000 | Nolen Gur ₹700/1300/2500)\n\nWhich item, flavour, and pack size would you like to order?",
+      "response": "Collection 2 — Signature Collection 🌸\nSpecial occasion & gifting mishti made using pure desi A2 cow milk, 100% handcrafted.\n\n*Price Breakdown Table:*\n```\n+-----------------------+-------+-------+-------+\n| Item / Flavour        | 250g  | 500g  |  1kg  |\n+-----------------------+-------+-------+-------+\n| Classic / Rose        | ₹600  | ₹1100 | ₹2000 |\n| Mango/Kesar/Van/Cin   | ₹650  | ₹1200 | ₹2200 |\n| NolenGur/Thandai/Date | ₹700  | ₹1300 | ₹2500 |\n| Mahua Sondesh         | ₹900  | ₹1600 | ₹2900 |\n| Jolbhora (Liquid)*    | ₹900  | ₹1600 | ₹2900 |\n| Kanchagolla (Classic) | ₹600  | ₹1100 | ₹2000 |\n| Kanchagolla (NolenGur)| ₹700  | ₹1300 | ₹2500 |\n+-----------------------+-------+-------+-------+\n* 250g(9pc) | 500g(18pc) | 1kg(36pc)\n* Jolbhora: 6pc | 12pc | 24pc\n```\n\nWhich item, flavour, and pack size would you like to order?",
       "escalate": false,
       "source_ref": "menu.json > Signature Collection"
     },
@@ -136,7 +136,7 @@
     {
       "id": "pack_size_250g",
       "triggers": ["250g", "250 g", "250g box", "250g pack", "9 pcs", "9 pieces", "box of 9"],
-      "response": "Here are all our 250g Box Options (9 pcs / 6 pcs for Jolbhora): 🌸\n\n*Aamar Mishti Collection (250g)*:\n• Classic / Rose: ₹450 (9 pcs)\n• Mango / Kesar / Aam Ada: ₹550 (9 pcs)\n• Nolen Gur: ₹600 (9 pcs)\n• Jolbhora: ₹750 (6 pcs)\n• Kanchagolla: ₹450 – ₹600 (9 pcs)\n\n*Signature A2 Collection (250g)*:\n• Classic / Rose: ₹600 (9 pcs)\n• Mango / Kesar / Real Vanilla / Cinnamon: ₹650 (9 pcs)\n• Nolen Gur / Thandai / Medjool Dates / Chocolate: ₹700 (9 pcs)\n• Jolbhora: ₹900 (6 pcs)\n• Mahua: ₹900 (9 pcs)\n• Kanchagolla: ₹600 – ₹700 (9 pcs)\n\nWhich one would you like to order?",
+      "response": "All 250g Box Options (9 pcs / 6 pcs for Jolbhora): 🌸\n\n```\n+------------------------------+-------+-------+\n| Flavour / Variety (250g Box) | Aamar | SigA2 |\n+------------------------------+-------+-------+\n| Classic / Rose Sondesh       | ₹450  | ₹600  |\n| Mango / Kesar / Vanilla..    | ₹550  | ₹650  |\n| Nolen Gur / Thandai / Dates  | ₹600  | ₹700  |\n| Mahua Special                | —     | ₹900  |\n| Jolbhora (6 pcs liquid fill) | ₹750  | ₹900  |\n| Kanchagolla (Classic)        | ₹450  | ₹600  |\n| Kanchagolla (Nolen Gur)      | ₹600  | ₹700  |\n+------------------------------+-------+-------+\n```\n\nWhich 250g pack would you like to order?",
       "escalate": false,
       "source_ref": "menu.json > 250g pack options"
     },
@@ -144,7 +144,7 @@
     {
       "id": "pack_size_500g",
       "triggers": ["500g", "500 g", "500g box", "500g pack", "18 pcs", "18 pieces", "box of 18"],
-      "response": "Here are all our 500g Box Options (18 pcs / 12 pcs for Jolbhora): 🌸\n\n*Aamar Mishti Collection (500g)*:\n• Classic / Rose: ₹800 (18 pcs)\n• Mango / Kesar / Aam Ada: ₹1000 (18 pcs)\n• Nolen Gur: ₹1100 (18 pcs)\n• Jolbhora: ₹1400 (12 pcs)\n• Kanchagolla: ₹800 – ₹1100 (18 pcs)\n\n*Signature A2 Collection (500g)*:\n• Classic / Rose: ₹1100 (18 pcs)\n• Mango / Kesar / Real Vanilla / Cinnamon: ₹1200 (18 pcs)\n• Nolen Gur / Thandai / Medjool Dates / Chocolate: ₹1300 (18 pcs)\n• Jolbhora: ₹1600 (12 pcs)\n• Mahua: ₹1600 (18 pcs)\n• Kanchagolla: ₹1100 – ₹1300 (18 pcs)\n\nWhich one would you like to order?",
+      "response": "All 500g Box Options (18 pcs / 12 pcs for Jolbhora): 🌸\n\n```\n+------------------------------+-------+-------+\n| Flavour / Variety (500g Box) | Aamar | SigA2 |\n+------------------------------+-------+-------+\n| Classic / Rose Sondesh       | ₹800  | ₹1100 |\n| Mango / Kesar / Vanilla..    | ₹1000 | ₹1200 |\n| Nolen Gur / Thandai / Dates  | ₹1100 | ₹1300 |\n| Mahua Special                | —     | ₹1600 |\n| Jolbhora (12 pcs liquid fill)| ₹1400 | ₹1600 |\n| Kanchagolla (Classic)        | ₹800  | ₹1100 |\n| Kanchagolla (Nolen Gur)      | ₹1100 | ₹1300 |\n+------------------------------+-------+-------+\n```\n\nWhich 500g pack would you like to order?",
       "escalate": false,
       "source_ref": "menu.json > 500g pack options"
     },
@@ -152,7 +152,7 @@
     {
       "id": "pack_size_1kg",
       "triggers": ["1kg", "1 kg", "1000g", "1kg box", "36 pcs", "36 pieces", "box of 36"],
-      "response": "Here are all our 1kg Box Options (36 pcs / 24 pcs for Jolbhora): 🌸\n\n*Aamar Mishti Collection (1kg)*:\n• Classic / Rose: ₹1500 (36 pcs)\n• Mango / Kesar / Aam Ada: ₹1800 (36 pcs)\n• Nolen Gur: ₹2000 (36 pcs)\n• Jolbhora: ₹2500 (24 pcs)\n• Kanchagolla: ₹1500 – ₹2000 (36 pcs)\n\n*Signature A2 Collection (1kg)*:\n• Classic / Rose: ₹2000 (36 pcs)\n• Mango / Kesar / Real Vanilla / Cinnamon: ₹2200 (36 pcs)\n• Nolen Gur / Thandai / Medjool Dates / Chocolate: ₹2500 (36 pcs)\n• Jolbhora: ₹2900 (24 pcs)\n• Mahua: ₹2900 (36 pcs)\n• Kanchagolla: ₹2000 – ₹2500 (36 pcs)\n\nWhich one would you like to order?",
+      "response": "All 1kg Box Options (36 pcs / 24 pcs for Jolbhora): 🌸\n\n```\n+------------------------------+-------+-------+\n| Flavour / Variety (1kg Box)  | Aamar | SigA2 |\n+------------------------------+-------+-------+\n| Classic / Rose Sondesh       | ₹1500 | ₹2000 |\n| Mango / Kesar / Vanilla..    | ₹1800 | ₹2200 |\n| Nolen Gur / Thandai / Dates  | ₹2000 | ₹2500 |\n| Mahua Special                | —     | ₹2900 |\n| Jolbhora (24 pcs liquid fill)| ₹2500 | ₹2900 |\n| Kanchagolla (Classic)        | ₹1500 | ₹2000 |\n| Kanchagolla (Nolen Gur)      | ₹2000 | ₹2500 |\n+------------------------------+-------+-------+\n```\n\nWhich 1kg pack would you like to order?",
       "escalate": false,
       "source_ref": "menu.json > 1kg pack options"
     },
@@ -160,7 +160,7 @@
     {
       "id": "weekly_menu_veg",
       "triggers": ["veg menu", "vegetarian menu", "this week veg", "veg dishes", "current veg menu", "show veg menu"],
-      "response": "This week's Vegetarian menu is available Friday Lunch–Thursday Dinner. It includes dishes like Aloor Dom (₹300), Dhokar Dalna (₹300), Chhanar Kofta (₹300), Shorshey Diye Dhyarosh (₹300), Potoler Dolma (V) (₹300), and Basonti Polao (₹300). Menu rotates weekly — want the current full list with prices?",
+      "response": "This week's Vegetarian menu (Friday Lunch–Thursday Dinner): 🌿\n\n```\n+-----------------------+------------------------------------+-------+\n| Dish Name             | Description                        | Price |\n+-----------------------+------------------------------------+-------+\n| Aloor Dom             | Spiced baby potato delicacy        | ₹300  |\n| Dhokar Dalna          | Lentil cake curry in rich gravy    | ₹300  |\n| Chhanar Kofta         | Homemade chhana dumplings in gravy | ₹300  |\n| Shorshey Diye Dhyarosh| Okra in mustard gravy              | ₹300  |\n| Potoler Dolma (Veg)   | Pointed gourd stuffed with chhana  | ₹300  |\n| Basanti Polao         | Fragrant sweet yellow festive rice | ₹300  |\n+-----------------------+------------------------------------+-------+\n```\n\nWould you like to add any of these to your order?",
       "escalate": false,
       "note": "Response provides current rotation dishes and prices.",
       "source_ref": "menu.json > weekly_menus[] > vegetarian"
@@ -169,7 +169,7 @@
     {
       "id": "weekly_menu_nonveg",
       "triggers": ["non veg menu", "nonveg menu", "chicken", "mutton", "fish", "prawn", "bhetki", "chingri", "bhetki paturi", "golda chingri", "robibarer mangsho", "contai chicken", "mutton curry", "potoler dolma nv"],
-      "response": "This week's Non-Vegetarian menu (Friday Lunch–Thursday Dinner) includes dishes like Contai Dhaba Chicken (₹400), Robibarer Mangsho / Mutton Curry (₹600), Bhetki Paturi (₹700), Golda Chingri Malai Curry (₹900), and Potoler Dolma (NV) (₹400). Want the full current list with exact prices?",
+      "response": "This week's Non-Vegetarian menu (Friday Lunch–Thursday Dinner): 🍖\n\n```\n+-----------------------+------------------------------------+-------+\n| Dish Name             | Description                        | Price |\n+-----------------------+------------------------------------+-------+\n| Contai Dhaba Chicken  | Countryside Bengali chicken curry  | ₹400  |\n| Robibarer Mangsho     | Slow-cooked Sunday mutton curry    | ₹600  |\n| Bhetki Paturi         | Fresh Bhetki wrapped in banana leaf| ₹700  |\n| Golda Chingri Malai   | Jumbo prawn in spiced coconut gravy| ₹900  |\n| Potoler Dolma (NV)    | Gourd stuffed with mutton/prawn    | ₹400  |\n+-----------------------+------------------------------------+-------+\n```\n\nWhich dishes would you like to order?",
       "escalate": false,
       "note": "Response provides current rotation non-veg dishes and prices.",
       "source_ref": "menu.json > weekly_menus[] > non_vegetarian"
@@ -178,7 +178,7 @@
     {
       "id": "combo_bento",
       "triggers": ["combo", "bento", "luchi combo", "bengali bento", "veg bento", "non veg bento", "mutton bento", "kosha mangsho bento"],
-      "response": "We have Bengali Combo & Bento options each week: 🍱\n• Veg Bento (₹400): 6 Luchi, Chholar Daal, Tomato Aamsottwo Chatni, and 1 Classic Aamar Sondesh\n• Non-Veg Bento (₹700): 6 Luchi, Mangsho (Mutton Kosha), Tomato Aamsottwo Chatni, and 1 Classic Aamar Sondesh\n• Luchi + Niramish Aloor Dom Combo (₹400): 4 Luchi, 150g Aloor Dom, 50g Chatni, and 1 Sondesh\n• Luchi + Robibarer Mangsho Combo (₹700): 4 Luchi, 150g Robibarer Mangsho, 50g Chatni, and 1 Sondesh\n\nWhich combo would you like to order? 🌸",
+      "response": "Bengali Combo & Bento Meals Table: 🍱\n\n```\n+-----------------------+------------------------------------+-------+\n| Bento / Combo Option  | Items Included                     | Price |\n+-----------------------+------------------------------------+-------+\n| Veg Bento Box         | 6 Luchi, Chholar Daal, 1 Sondesh   | ₹400  |\n| Non-Veg Bento Box     | 6 Luchi, Kosha Mangsho, 1 Sondesh  | ₹700  |\n| Luchi + Aloor Dom     | 4 Luchi, Aloor Dom, 1 Sondesh      | ₹400  |\n| Luchi + Robibarer     | 4 Luchi, Robibarer Mangsho, 1 Mishti| ₹700 |\n+-----------------------+------------------------------------+-------+\n```\n\nWhich combo or bento meal would you like to order? 🌸",
       "escalate": false,
       "source_ref": "menu.json > weekly_menus[] > combos / bengali_bento"
     },

@@ -27,8 +27,8 @@ class Config:
     ADMIN_PIN: str = os.getenv("ADMIN_PIN", "51990")  # Default PIN matches kitchen manager contact suffix (51990)
 
     # The browser chat tester writes real rows and fires real escalation alerts,
-    # so it is disabled unless explicitly switched on.
-    ENABLE_WEB_TESTER: bool = os.getenv("ENABLE_WEB_TESTER", "false").lower() in ("true", "1", "t", "yes")
+    # so it can be explicitly disabled in production with ENABLE_WEB_TESTER=false.
+    ENABLE_WEB_TESTER: bool = os.getenv("ENABLE_WEB_TESTER", "true").lower() in ("true", "1", "t", "yes")
 
     # When true, auto-replies to all DMs regardless of ad referral (bypasses PRD #4 Ad-Gate)
     BYPASS_AD_GATE: bool = os.getenv("BYPASS_AD_GATE", "false").lower() in ("true", "1", "t", "yes")
@@ -58,8 +58,17 @@ class Config:
     MENU_JSON_PATH: str = os.getenv("MENU_JSON_PATH", str(BASE_DIR / "menu.json"))
     QA_TEMPLATES_PATH: str = os.getenv("QA_TEMPLATES_PATH", str(BASE_DIR / "qa_templates.json"))
     
-    # Optional Live Google Sheet CSV URL for Menu Updates (Option A in PRD)
+    # Google Sheet CSV URL for Menu Updates (Option A in PRD)
     GOOGLE_SHEET_CSV_URL: str = os.getenv("GOOGLE_SHEET_CSV_URL", "")
+
+    # AI Engine & Multi-Provider Config (OpenAI / Gemini)
+    AI_PROVIDER: str = os.getenv("AI_PROVIDER", "auto").lower()  # "openai", "gemini", or "auto"
+
+    # OpenAI API Config (supports o3-mini, o1, gpt-4o, gpt-4o-mini)
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "o3-mini")
+    OPENAI_REASONING_EFFORT: str = os.getenv("OPENAI_REASONING_EFFORT", "low")  # "low", "medium", "high"
+    OPENAI_TIMEOUT: float = float(os.getenv("OPENAI_TIMEOUT", "15.0"))
 
     # Gemini Cloud API Config
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
@@ -67,4 +76,15 @@ class Config:
     GEMINI_TIMEOUT: float = float(os.getenv("GEMINI_TIMEOUT", "10.0"))
     GEMINI_ENABLED: bool = os.getenv("GEMINI_ENABLED", "true").lower() in ("true", "1", "t", "yes")
 
+    @property
+    def is_ai_enabled(self) -> bool:
+        if not self.GEMINI_ENABLED:
+            return False
+        if self.AI_PROVIDER == "openai":
+            return bool(self.OPENAI_API_KEY)
+        elif self.AI_PROVIDER == "gemini":
+            return bool(self.GEMINI_API_KEY)
+        return bool(self.OPENAI_API_KEY or self.GEMINI_API_KEY)
+
 config = Config()
+

@@ -1,4 +1,5 @@
 import os
+import re
 import sqlite3
 import json
 from datetime import datetime, timedelta
@@ -65,6 +66,20 @@ class Database:
                 context_data TEXT,
                 status TEXT DEFAULT 'pending',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+
+            # Self-Healing Learned Knowledge base
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS learned_knowledge (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                topic TEXT NOT NULL,
+                question_pattern TEXT NOT NULL,
+                verified_answer TEXT NOT NULL,
+                source TEXT DEFAULT 'staff_resolution',
+                confidence REAL DEFAULT 1.0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             """)
 
@@ -147,6 +162,165 @@ class Database:
                 cursor.execute("SELECT * FROM escalations ORDER BY id DESC LIMIT ?", (limit,))
             rows = cursor.fetchall()
             return [dict(row) for row in rows]
+
+    def get_conversations(self, limit: int = 50, offset: int = 0, channel: Optional[str] = None, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Retrieve paginated conversation logs."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            query = "SELECT * FROM conversations WHERE 1=1"
+            params = []
+            if channel:
+                query += " AND channel = ?"
+                params.append(channel)
+            if user_id:
+                query += " AND user_id = ?"
+                params.append(user_id)
+            query += " ORDER BY id DESC LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
+            cursor.execute(query, tuple(params))
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+
+    def get_conversations_count(self, channel: Optional[str] = None, user_id: Optional[str] = None) -> int:
+        """Count total logged conversations matching filters."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            query = "SELECT COUNT(*) as count FROM conversations WHERE 1=1"
+            params = []
+            if channel:
+                query += " AND channel = ?"
+                params.append(channel)
+            if user_id:
+                query += " AND user_id = ?"
+                params.append(user_id)
+            cursor.execute(query, tuple(params))
+            row = cursor.fetchone()
+            return row["count"] if row else 0
+
+    def get_sessions(self, limit: int = 50, offset: int = 0, channel: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Retrieve session records."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            query = "SELECT * FROM sessions WHERE 1=1"
+            params = []
+            if channel:
+                query += " AND channel = ?"
+                params.append(channel)
+            query += " ORDER BY updated_at DESC LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
+            cursor.execute(query, tuple(params))
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+
+    def get_sessions_count(self, channel: Optional[str] = None) -> int:
+        """Count total sessions."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            query = "SELECT COUNT(*) as count FROM sessions WHERE 1=1"
+            params = []
+            if channel:
+                query += " AND channel = ?"
+                params.append(channel)
+            cursor.execute(query, tuple(params))
+            row = cursor.fetchone()
+            return row["count"] if row else 0
+
+    def get_escalation_by_id(self, escalation_id: int) -> Optional[Dict[str, Any]]:
+        """Retrieve single escalation record."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM escalations WHERE id = ?", (escalation_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def update_escalation_status(self, escalation_id: int, status: str = "resolved") -> bool:
+        """Updates the status of an escalation."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE escalations SET status = ? WHERE id = ?", (status, escalation_id))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def add_learned_knowledge(
+        self,
+        topic: str,
+        question_pattern: str,
+        verified_answer: str,
+        source: str = "staff_resolution",
+        confidence: float = 1.0
+    ) -> int:
+        """Adds or updates a verified knowledge item in the self-healing knowledge base."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            now = datetime.utcnow().isoformat()
+            cursor.execute("""
+            INSERT INTO learned_knowledge (topic, question_pattern, verified_answer, source, confidence, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (topic.strip(), question_pattern.strip().lower(), verified_answer.strip(), source, confidence, now, now))
+            conn.commit()
+            return cursor.lastrowid
+
+    def get_learned_knowledge(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """Retrieves active learned knowledge entries ordered by most recently updated."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM learned_knowledge ORDER BY id DESC LIMIT ?", (limit,))
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+
+    def search_learned_knowledge(self, query_text: str) -> Optional[Dict[str, Any]]:
+        """
+        Searches learned knowledge base for relevant facts matching the query.
+        Returns the highest-scoring matching item if relevance threshold is met.
+        """
+        if not query_text:
+            return None
+
+        q_clean = query_text.lower().strip()
+        q_tokens = set(re.findall(r'\w+', q_clean))
+        if not q_tokens:
+            return None
+
+        items = self.get_learned_knowledge(limit=150)
+        best_match = None
+        best_score = 0.0
+
+        for item in items:
+            topic = item.get("topic", "").lower()
+            pattern = item.get("question_pattern", "").lower()
+            
+            # Direct phrase/substring match
+            if pattern in q_clean or q_clean in pattern:
+                return item
+            if topic in q_clean:
+                return item
+
+            # Token overlap scoring
+            pattern_tokens = set(re.findall(r'\w+', pattern)) | set(re.findall(r'\w+', topic))
+            # Remove generic stop words
+            stop_words = {"is", "are", "do", "you", "the", "a", "an", "and", "in", "of", "to", "for", "your", "what", "how", "can", "have"}
+            filtered_patterns = pattern_tokens - stop_words
+            filtered_q = q_tokens - stop_words
+
+            if filtered_patterns and filtered_q:
+                overlap = filtered_patterns.intersection(filtered_q)
+                score = len(overlap) / max(len(filtered_patterns), 1)
+                if len(overlap) >= 2 or (len(overlap) == 1 and len(filtered_patterns) == 1):
+                    if score > best_score:
+                        best_score = score
+                        best_match = item
+
+        if best_match and best_score >= 0.4:
+            return best_match
+        return None
+
+    def delete_learned_knowledge(self, knowledge_id: int) -> bool:
+        """Deletes a learned knowledge entry by id."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM learned_knowledge WHERE id = ?", (knowledge_id,))
+            conn.commit()
+            return cursor.rowcount > 0
 
     def get_analytics(self) -> Dict[str, Any]:
         """Get summary analytics."""

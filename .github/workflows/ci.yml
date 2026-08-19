@@ -1,0 +1,52 @@
+name: Camellia Bot CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master, feature/**, fix/**, 'feature/*' ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test-and-validate:
+    name: Test & Validate Schemas (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11"]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio flake8
+
+      - name: Syntax & Lint Check
+        run: |
+          # Stop the build if there are Python syntax errors or undefined names
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=.venv,venv,.git,__pycache__
+          # Exit-zero treats all warnings as warnings
+          flake8 . --count --exit-zero --max-complexity=15 --max-line-length=127 --statistics --exclude=.venv,venv,.git,__pycache__
+
+      - name: Validate Menu & QA Template Schemas
+        run: |
+          python validate_schemas.py
+
+      - name: Run Pytest Test Suite
+        env:
+          META_APP_SECRET: "test_secret_for_ci_pipeline"
+          ADMIN_API_KEY: "test_admin_api_key_ci"
+          ADMIN_PIN: "51990"
+          DB_PATH: "test_camellia.db"
+          ENABLE_WEB_TESTER: "true"
+        run: |
+          python -m pytest test_bot.py test_admin_portal.py -v --tb=short

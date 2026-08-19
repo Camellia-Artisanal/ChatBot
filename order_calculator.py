@@ -1,5 +1,6 @@
 import re
 from typing import Dict, Any, Optional, List
+from slang_normalizer import normalize_slang
 
 PRICING_TABLE = {
     "aamar_mishti": {
@@ -61,7 +62,8 @@ class OrderCalculator:
     """Parses order intent from chat text and generates itemized price breakdowns."""
 
     def _parse_single_clause(self, clause_text: str, default_collection: str = "aamar_mishti") -> Optional[Dict[str, Any]]:
-        text_lower = clause_text.lower()
+        norm_clause = normalize_slang(clause_text)
+        text_lower = norm_clause.lower()
 
         # Check for Meal / Bento / Curry order first (sorted by length descending to match 'non veg bento' before 'veg bento')
         for meal_key, meal_info in sorted(MEAL_PRICING_TABLE.items(), key=lambda x: len(x[0]), reverse=True):
@@ -102,6 +104,8 @@ class OrderCalculator:
             size = "500g"
         elif any(kw in text_lower for kw in ["250g", "250 g", "9 pcs", "9pcs", "6 pcs", "6pcs"]):
             size = "250g"
+        elif any(kw in text_lower for kw in ["box", "boxes", "pack", "packs", "portion"]):
+            size = "250g"
 
         # Determine flavour
         flavour = None
@@ -113,6 +117,10 @@ class OrderCalculator:
             if fl in text_lower:
                 flavour = fl
                 break
+
+        # Fallback for generic 'sondesh' / 'mishti'
+        if not flavour and "sondesh" in text_lower:
+            flavour = "classic"
 
         if not flavour or not size:
             return None
@@ -147,21 +155,23 @@ class OrderCalculator:
     @staticmethod
     def _has_order_intent_or_attributes(text_lower: str) -> bool:
         """Returns True if the message contains explicit order keywords, flavours, sizes, or collections."""
+        norm_text = normalize_slang(text_lower).lower()
         flavours = ["jolbhora", "mahua", "mango", "kesar", "rose", "vanilla", "cinnamon", "classic", "nolen gur", "sondesh", "mishti", "bento", "combo", "curry", "luchi", "paturi", "chingri", "mangsho", "kofta", "dalna", "polao"]
-        if any(fl in text_lower for fl in flavours):
+        if any(fl in norm_text for fl in flavours):
             return True
-        sizes = ["1kg", "1 kg", "1000g", "500g", "500 g", "250g", "250 g", "36 pcs", "36pcs", "18 pcs", "18pcs", "9 pcs", "9pcs"]
-        if any(sz in text_lower for sz in sizes):
+        sizes = ["1kg", "1 kg", "1000g", "500g", "500 g", "250g", "250 g", "36 pcs", "36pcs", "18 pcs", "18pcs", "9 pcs", "9pcs", "box", "pack", "dabba"]
+        if any(sz in norm_text for sz in sizes):
             return True
-        if any(cl in text_lower for cl in ["signature", "aamar"]):
+        if any(cl in norm_text for cl in ["signature", "aamar"]):
             return True
-        actions = ["order", "buy", "purchase", "cart", "receipt", "add", "remove", "delete", "drop", "clear", "pack", "box", "boxes", "pcs"]
-        if any(re.search(rf'\b{re.escape(act)}\b', text_lower) for act in actions):
+        actions = ["order", "buy", "purchase", "cart", "receipt", "add", "remove", "delete", "drop", "clear", "pack", "box", "boxes", "pcs", "send", "give", "deliver", "chahiye", "bhejo"]
+        if any(re.search(rf'\b{re.escape(act)}\b', norm_text) for act in actions):
             return True
         return False
 
     def parse_and_calculate(self, text: str, existing_draft: Optional[Dict[str, Any]] = None, existing_cart: Optional[list] = None) -> Optional[Dict[str, Any]]:
-        text_lower = text.lower().strip()
+        norm_text = normalize_slang(text)
+        text_lower = norm_text.lower().strip()
         
         # Pure price/informational inquiries without order actions should not generate an order receipt
         is_inquiry = any(phrase in text_lower for phrase in [
@@ -171,7 +181,7 @@ class OrderCalculator:
             "made of", "made with", "tell me about", "describe", "explain", "how do you make"
         ])
         has_order_action = any(verb in text_lower for verb in [
-            "order", "buy", "send", "give", "add", "want to order", "want 250g", "want 500g", "want 1kg", "deliver", "book", "need to order", "pack of"
+            "order", "buy", "send", "give", "add", "want to order", "want 250g", "want 500g", "want 1kg", "deliver", "book", "need to order", "pack of", "chahiye", "bhejo"
         ])
         if is_inquiry and not has_order_action:
             return None

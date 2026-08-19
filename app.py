@@ -3,8 +3,9 @@ import hashlib
 import json
 import os
 import httpx
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response, Query, Header, HTTPException, File, UploadFile
-from fastapi.responses import PlainTextResponse, HTMLResponse
+from fastapi.responses import PlainTextResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from typing import Dict, Any, Optional
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -24,13 +25,43 @@ from monitoring import get_logger, delivery_monitor
 
 log = get_logger("camellia.app")
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Enforces database init and the retention window promised on /privacy on startup."""
+    db.init_db()
+    if not config.META_APP_SECRET:
+        log.warning(
+            "META_APP_SECRET is not set. Webhook signature verification is DISABLED — "
+            "anyone can POST fake messages. Set it in .env before going live."
+        )
+    if not config.ADMIN_API_KEY:
+        log.warning(
+            "ADMIN_API_KEY is not set. /admin/* endpoints are open to the internet — "
+            "customer conversations and the live menu are publicly readable. Set it in .env."
+        )
+    try:
+        removed = db.purge_expired_data()
+        if any(removed.values()):
+            log.info(
+                "Retention purge removed %s conversations, %s escalations, %s sessions "
+                "older than %s days.",
+                removed["conversations"], removed["escalations"], removed["sessions"],
+                config.DATA_RETENTION_DAYS,
+            )
+    except Exception:
+        log.exception("Retention purge failed on startup.")
+    
+    yield
+
 limiter = Limiter(key_func=get_remote_address, default_limits=["300/minute"])
 app = FastAPI(
     title="FastAPI Webhook Application for Camellia Artisanal — Instagram & WhatsApp Auto-Response Bot",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 
 # Security Headers Middleware (Clickjacking, MIME-sniffing, XSS protection)
 @app.middleware("http")
@@ -108,41 +139,24 @@ def require_web_tester() -> None:
         raise HTTPException(status_code=404, detail="Not found")
 
 # --------------------------------------------------------------------------
-# Root / Health Check
+# Root / Health Check / Favicon
 # --------------------------------------------------------------------------
-@app.on_event("startup")
-def purge_expired_on_startup():
-    """Enforces the retention window promised on /privacy."""
-    db.init_db()
-    if not config.META_APP_SECRET:
-        log.warning(
-            "META_APP_SECRET is not set. Webhook signature verification is DISABLED — "
-            "anyone can POST fake messages. Set it in .env before going live."
-        )
-    if not config.ADMIN_API_KEY:
-        log.warning(
-            "ADMIN_API_KEY is not set. /admin/* endpoints are open to the internet — "
-            "customer conversations and the live menu are publicly readable. Set it in .env."
-        )
-    try:
-        removed = db.purge_expired_data()
-        if any(removed.values()):
-            log.info(
-                "Retention purge removed %s conversations, %s escalations, %s sessions "
-                "older than %s days.",
-                removed["conversations"], removed["escalations"], removed["sessions"],
-                config.DATA_RETENTION_DAYS,
-            )
-    except Exception:
-        log.exception("Retention purge failed on startup.")
-
 @app.get("/")
-def read_root():
+def read_root(request: Request):
+    accept = request.headers.get("accept", "")
+    if "text/html" in accept and config.ENABLE_WEB_TESTER:
+        return RedirectResponse(url="/chat")
     return {
         "client": "camellia.artisanal",
         "service": "Ad-Gated Auto-Response Bot",
         "status": "running",
+        "chat_url": "/chat",
+        "admin_url": "/admin"
     }
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return Response(content="", media_type="image/x-icon", status_code=204)
 
 # --------------------------------------------------------------------------
 # Instagram Webhook Endpoints
@@ -641,6 +655,178 @@ def get_analytics(x_admin_key: Optional[str] = Header(None), x_admin_pin: Option
     require_admin(x_admin_key, x_admin_pin)
     return db.get_analytics()
 
+@app.get("/admin/conversations")
+def get_conversations_list(
+    limit: int = 50,
+    offset: int = 0,
+    channel: Optional[str] = None,
+    user_id: Optional[str] = None,
+    x_admin_key: Optional[str] = Header(None),
+    x_admin_pin: Optional[str] = Header(None),
+):
+    """Returns paginated customer conversation logs."""
+    require_admin(x_admin_key, x_admin_pin)
+    limit = max(1, min(limit, 200))
+    convs = db.get_conversations(limit=limit, offset=offset, channel=channel, user_id=user_id)
+    total = db.get_conversations_count(channel=channel, user_id=user_id)
+    return {"count": len(convs), "total": total, "conversations": convs}
+
+@app.get("/admin/sessions")
+def get_sessions_list(
+    limit: int = 50,
+    offset: int = 0,
+    channel: Optional[str] = None,
+    x_admin_key: Optional[str] = Header(None),
+    x_admin_pin: Optional[str] = Header(None),
+):
+    """Returns stored user sessions."""
+    require_admin(x_admin_key, x_admin_pin)
+    limit = max(1, min(limit, 200))
+    sessions = db.get_sessions(limit=limit, offset=offset, channel=channel)
+    total = db.get_sessions_count(channel=channel)
+    return {"count": len(sessions), "total": total, "sessions": sessions}
+
+@app.get("/admin/learned-knowledge")
+def get_learned_knowledge_list(
+    limit: int = 100,
+    x_admin_key: Optional[str] = Header(None),
+    x_admin_pin: Optional[str] = Header(None),
+):
+    """Returns active learned knowledge items from escalation self-healing."""
+    require_admin(x_admin_key, x_admin_pin)
+    items = db.get_learned_knowledge(limit=limit)
+    return {"count": len(items), "learned_knowledge": items}
+
+@app.post("/admin/learned-knowledge")
+async def add_learned_knowledge_entry(
+    request: Request,
+    x_admin_key: Optional[str] = Header(None),
+    x_admin_pin: Optional[str] = Header(None),
+):
+    """Adds a new verified knowledge item to the self-healing knowledge base."""
+    require_admin(x_admin_key, x_admin_pin)
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    topic = body.get("topic", "").strip()
+    pattern = body.get("question_pattern", "").strip()
+    answer = body.get("verified_answer", "").strip()
+    source = body.get("source", "staff_resolution")
+    confidence = float(body.get("confidence", 1.0))
+
+    if not topic or not pattern or not answer:
+        raise HTTPException(status_code=400, detail="topic, question_pattern, and verified_answer are required")
+
+    entry_id = db.add_learned_knowledge(topic, pattern, answer, source, confidence)
+    return {"status": "success", "id": entry_id, "message": "Learned knowledge saved and active."}
+
+@app.delete("/admin/learned-knowledge/{knowledge_id}")
+def delete_learned_knowledge_entry(
+    knowledge_id: int,
+    x_admin_key: Optional[str] = Header(None),
+    x_admin_pin: Optional[str] = Header(None),
+):
+    """Deletes a learned knowledge entry."""
+    require_admin(x_admin_key, x_admin_pin)
+    deleted = db.delete_learned_knowledge(knowledge_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Knowledge entry not found")
+    return {"status": "deleted", "id": knowledge_id}
+
+@app.post("/admin/escalations/{escalation_id}/resolve")
+async def resolve_escalation(
+    escalation_id: int,
+    request: Request,
+    x_admin_key: Optional[str] = Header(None),
+    x_admin_pin: Optional[str] = Header(None),
+):
+    """Resolves an escalation and optionally stores a verified answer to prevent future escalations."""
+    require_admin(x_admin_key, x_admin_pin)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    status = body.get("status", "resolved")
+    verified_answer = body.get("verified_answer", "").strip()
+    topic = body.get("topic", "").strip()
+    question_pattern = body.get("question_pattern", "").strip()
+
+    knowledge_id = None
+    if verified_answer:
+        esc = db.get_escalation_by_id(escalation_id)
+        msg = esc.get("user_message", "") if esc else ""
+        if not topic:
+            topic = "General Inquiry" if not msg else msg[:40]
+        if not question_pattern:
+            question_pattern = msg or topic
+        knowledge_id = db.add_learned_knowledge(topic, question_pattern, verified_answer, source="staff_resolution")
+
+    updated = db.update_escalation_status(escalation_id, status)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Escalation not found")
+
+    return {
+        "status": "resolved",
+        "escalation_id": escalation_id,
+        "learned_knowledge_id": knowledge_id,
+        "message": "Escalation resolved successfully." + (" Knowledge base updated." if knowledge_id else "")
+    }
+
+@app.get("/admin/templates")
+def get_templates(x_admin_key: Optional[str] = Header(None), x_admin_pin: Optional[str] = Header(None)):
+    """Returns active Q&A templates from qa_templates.json."""
+    require_admin(x_admin_key, x_admin_pin)
+    try:
+        with open(config.QA_TEMPLATES_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return {"status": "success", "templates": data.get("templates", []), "matching_rules": data.get("matching_rules", {})}
+    except Exception as e:
+        log.error("Failed to read qa_templates.json: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/admin/templates")
+async def update_templates(request: Request, x_admin_key: Optional[str] = Header(None), x_admin_pin: Optional[str] = Header(None)):
+    """Updates Q&A templates in qa_templates.json and hot-reloads the responder."""
+    require_admin(x_admin_key, x_admin_pin)
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    try:
+        with open(config.QA_TEMPLATES_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if "templates" in body and isinstance(body["templates"], list):
+            data["templates"] = body["templates"]
+        elif "template" in body and isinstance(body["template"], dict):
+            new_t = body["template"]
+            t_id = new_t.get("id")
+            existing = False
+            for i, t in enumerate(data.get("templates", [])):
+                if t.get("id") == t_id:
+                    data["templates"][i] = new_t
+                    existing = True
+                    break
+            if not existing:
+                data.setdefault("templates", []).append(new_t)
+        else:
+            raise HTTPException(status_code=400, detail="Must provide 'templates' list or 'template' object")
+
+        with open(config.QA_TEMPLATES_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+
+        responder.reload_data()
+        return {"status": "success", "message": "Q&A templates updated and responder hot-reloaded successfully."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error("Failed to update qa_templates.json: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/admin/sync-menu")
 @limiter.limit("20/minute")
 def sync_menu(request: Request, csv_url: Optional[str] = None, x_admin_key: Optional[str] = Header(None), x_admin_pin: Optional[str] = Header(None)):
@@ -992,11 +1178,13 @@ def get_admin_dashboard():
     <div class="main-container">
         <!-- Tab Navigation Bar -->
         <div class="tabs-nav">
-            <button class="tab-btn active" onclick="switchTab('tab-paste')">📋 Paste Menu Text</button>
-            <button class="tab-btn" onclick="switchTab('tab-image')">📸 Flyer Photo (Vision OCR)</button>
-            <button class="tab-btn" onclick="switchTab('tab-sheets')">📊 Google Sheets Sync</button>
-            <button class="tab-btn" onclick="switchTab('tab-active')">🍱 Active Menu Viewer</button>
-            <button class="tab-btn" onclick="switchTab('tab-stats')">📈 Escalations & Stats</button>
+            <button class="tab-btn active" onclick="switchTab('tab-paste', this)">📋 Paste Menu Text</button>
+            <button class="tab-btn" onclick="switchTab('tab-image', this)">📸 Flyer Photo (Vision OCR)</button>
+            <button class="tab-btn" onclick="switchTab('tab-sheets', this)">📊 Google Sheets Sync</button>
+            <button class="tab-btn" onclick="switchTab('tab-active', this)">🍱 Active Menu Viewer</button>
+            <button class="tab-btn" onclick="switchTab('tab-stats', this)">📈 Escalations & Self-Healing</button>
+            <button class="tab-btn" onclick="switchTab('tab-conversations', this)">💬 Live Conversations</button>
+            <button class="tab-btn" onclick="switchTab('tab-knowledge', this)">🧠 Learned Knowledge</button>
         </div>
 
         <!-- TAB 1: Paste Menu Text -->
@@ -1106,7 +1294,7 @@ def get_admin_dashboard():
         <div id="tab-stats" class="panel-card" style="display: none;">
             <div class="panel-header">
                 <h2>📈 Bot Intelligence & Escalations Log</h2>
-                <p>Monitor automated Q&A resolution rates and view queries routed to kitchen management for human attention.</p>
+                <p>Monitor automated Q&A resolution rates and view queries routed to kitchen management with 1-click self-healing.</p>
             </div>
 
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
@@ -1134,15 +1322,126 @@ def get_admin_dashboard():
                             <th>Customer / Sender</th>
                             <th>Customer Message</th>
                             <th>Status</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody id="escalationsTableBody">
-                        <tr><td colspan="5" style="text-align: center; color: #888;">Loading escalations...</td></tr>
+                        <tr><td colspan="6" style="text-align: center; color: #888;">Loading escalations...</td></tr>
                     </tbody>
                 </table>
             </div>
         </div>
 
+        <!-- TAB 6: Live Customer Conversations -->
+        <div id="tab-conversations" class="panel-card" style="display: none;">
+            <div class="panel-header">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <h2>💬 Live Customer Conversations</h2>
+                        <p>Audit recent customer interactions across Instagram Ads and WhatsApp.</p>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <select id="convChannelFilter" style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border);" onchange="loadConversations()">
+                            <option value="">All Channels</option>
+                            <option value="instagram">Instagram</option>
+                            <option value="whatsapp">WhatsApp</option>
+                        </select>
+                        <button class="btn-secondary" onclick="loadConversations()">🔄 Refresh</button>
+                    </div>
+                </div>
+            </div>
+            <div style="overflow-x: auto;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Channel</th>
+                            <th>User ID</th>
+                            <th>Customer Message</th>
+                            <th>Bot Response</th>
+                            <th>Match Type</th>
+                        </tr>
+                    </thead>
+                    <tbody id="conversationsTableBody">
+                        <tr><td colspan="6" style="text-align: center; color: #888;">Loading conversations...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB 7: Learned Knowledge Base -->
+        <div id="tab-knowledge" class="panel-card" style="display: none;">
+            <div class="panel-header">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <h2>🧠 Self-Healing Learned Knowledge</h2>
+                        <p>Verified Q&A items taught by kitchen staff or auto-learned from resolved customer queries.</p>
+                    </div>
+                    <button class="btn-primary" style="font-size: 0.85rem;" onclick="toggleAddKnowledgeForm()">+ Add Verified Q&A</button>
+                </div>
+            </div>
+
+            <!-- Add Knowledge Inline Form -->
+            <div id="addKnowledgeForm" style="display: none; background: #F8FAFC; border: 1.5px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 20px;">
+                <h3 style="margin-top: 0; font-size: 1rem; color: var(--primary);">➕ Teach Bot New Verified Answer</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                    <div>
+                        <label style="font-size: 0.82rem; font-weight: 600; display: block; margin-bottom: 4px;">Topic / Category:</label>
+                        <input type="text" id="newTopic" placeholder="e.g. Corporate Gifting, Custom Packaging" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border);">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.82rem; font-weight: 600; display: block; margin-bottom: 4px;">Trigger / Question Keyword:</label>
+                        <input type="text" id="newPattern" placeholder="e.g. corporate orders, wedding packaging" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border);">
+                    </div>
+                </div>
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 0.82rem; font-weight: 600; display: block; margin-bottom: 4px;">Verified Answer for Customer:</label>
+                    <textarea id="newAnswer" placeholder="Type official response..." style="width: 100%; height: 80px; padding: 10px; border-radius: 8px; border: 1px solid var(--border);"></textarea>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn-primary" onclick="submitNewKnowledge()">💾 Save & Activate</button>
+                    <button class="btn-secondary" onclick="toggleAddKnowledgeForm()">Cancel</button>
+                </div>
+            </div>
+
+            <div style="overflow-x: auto;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Topic</th>
+                            <th>Trigger Keyword / Pattern</th>
+                            <th>Verified Bot Answer</th>
+                            <th>Source</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="knowledgeTableBody">
+                        <tr><td colspan="5" style="text-align: center; color: #888;">Loading learned knowledge...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Teach & Resolve Modal -->
+    <div id="resolveModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center; padding: 20px;">
+        <div style="background: white; border-radius: 16px; width: 100%; max-width: 520px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 style="margin: 0; color: var(--primary);">✨ Teach Bot & Resolve Escalation</h3>
+                <button onclick="closeResolveModal()" style="background: none; border: none; font-size: 1.4rem; cursor: pointer;">&times;</button>
+            </div>
+            <p style="font-size: 0.85rem; color: #555; margin-bottom: 12px;">Customer Query: <b id="modalUserMsg" style="color: #222;"></b></p>
+            <input type="hidden" id="modalEscId">
+            <div style="margin-bottom: 12px;">
+                <label style="font-size: 0.82rem; font-weight: 600; display: block; margin-bottom: 4px;">Verified Answer (Taught to Bot for Future Inquiries):</label>
+                <textarea id="modalAnswer" style="width: 100%; height: 100px; padding: 10px; border-radius: 8px; border: 1.5px solid var(--border); font-size: 0.9rem;" placeholder="Type the verified answer..."></textarea>
+            </div>
+            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                <button class="btn-secondary" onclick="resolveEscalationOnly()">Mark Resolved Only</button>
+                <button class="btn-primary" onclick="submitResolveAndLearn()">Teach & Resolve</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -1203,15 +1502,23 @@ def get_admin_dashboard():
             };
         }
 
-        function switchTab(tabId) {
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        function switchTab(tabId, el) {
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            event.currentTarget.classList.add('active');
+            if (el) el.classList.add('active');
             
             document.querySelectorAll('.panel-card').forEach(panel => panel.style.display = 'none');
-            document.getElementById(tabId).style.display = 'block';
+            const target = document.getElementById(tabId);
+            if (target) target.style.display = 'block';
 
             if (tabId === 'tab-active') loadActiveMenu();
             if (tabId === 'tab-stats') loadAnalytics();
+            if (tabId === 'tab-conversations') loadConversations();
+            if (tabId === 'tab-knowledge') loadKnowledge();
         }
 
         // TAB 1: Submit Text
@@ -1466,10 +1773,10 @@ Non-Veg:
                         html += `
                         <div class="menu-card">
                             <div class="menu-card-header">
-                                <span class="menu-item-name">${item.item}</span>
+                                <span class="menu-item-name">${escapeHtml(item.item)}</span>
                                 <span class="menu-item-price">₹${item.price_inr}</span>
                             </div>
-                            <p class="menu-item-desc">${item.description || ''} (${item.quantity || '1 portion'})</p>
+                            <p class="menu-item-desc">${escapeHtml(item.description || '')} (${escapeHtml(item.quantity || '1 portion')})</p>
                             <span class="badge badge-veg">Vegetarian</span>
                         </div>`;
                     });
@@ -1481,10 +1788,10 @@ Non-Veg:
                         html += `
                         <div class="menu-card">
                             <div class="menu-card-header">
-                                <span class="menu-item-name">${item.item}</span>
+                                <span class="menu-item-name">${escapeHtml(item.item)}</span>
                                 <span class="menu-item-price">₹${item.price_inr}</span>
                             </div>
-                            <p class="menu-item-desc">${item.description || ''} (${item.quantity || '1 portion'})</p>
+                            <p class="menu-item-desc">${escapeHtml(item.description || '')} (${escapeHtml(item.quantity || '1 portion')})</p>
                             <span class="badge badge-nonveg">Non-Veg</span>
                         </div>`;
                     });
@@ -1529,29 +1836,208 @@ Non-Veg:
                     document.getElementById('statEscalated').innerText = stats.escalated_conversations || 0;
                 }
 
-                const escResp = await fetch('/admin/escalations?limit=25', { headers: getAuthHeaders() });
+                const escResp = await fetch('/admin/escalations?limit=50', { headers: getAuthHeaders() });
                 if (escResp.ok) {
                     const escData = await escResp.json();
                     const tbody = document.getElementById('escalationsTableBody');
                     if (escData.escalations && escData.escalations.length > 0) {
                         let rows = '';
                         escData.escalations.forEach(e => {
+                            const isResolved = (e.status || '').toLowerCase() === 'resolved';
+                            const actionBtn = isResolved
+                                ? '<span style="color: var(--success); font-size: 0.8rem; font-weight: 600;">✓ Resolved</span>'
+                                : `<button class="btn-secondary" style="padding: 4px 10px; font-size: 0.78rem;" onclick="openResolveModal(${e.id}, '${escapeHtml(e.user_message)}')">✨ Teach & Resolve</button>`;
+
                             rows += `
                             <tr>
-                                <td style="white-space: nowrap;">${e.timestamp || 'Recent'}</td>
-                                <td><b>${e.channel}</b></td>
-                                <td><code>${e.user_id}</code></td>
-                                <td>${e.user_message}</td>
-                                <td><span class="badge ${e.status === 'open' ? 'badge-nonveg' : 'badge-veg'}">${e.status.toUpperCase()}</span></td>
+                                <td style="white-space: nowrap;">${escapeHtml(e.timestamp || 'Recent')}</td>
+                                <td><b>${escapeHtml(e.channel)}</b></td>
+                                <td><code>${escapeHtml(e.user_id)}</code></td>
+                                <td>${escapeHtml(e.user_message)}</td>
+                                <td><span class="badge ${isResolved ? 'badge-veg' : 'badge-nonveg'}">${escapeHtml(e.status.toUpperCase())}</span></td>
+                                <td>${actionBtn}</td>
                             </tr>`;
                         });
                         tbody.innerHTML = rows;
                     } else {
-                        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #888;">No escalations recorded yet.</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #888;">No escalations recorded yet.</td></tr>';
                     }
                 }
             } catch (err) {
                 console.error("Failed to load analytics:", err);
+            }
+        }
+
+        // TAB 6: Live Customer Conversations
+        async function loadConversations() {
+            const tbody = document.getElementById('conversationsTableBody');
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #888;">Loading conversations...</td></tr>';
+            const ch = document.getElementById('convChannelFilter').value;
+            const url = ch ? `/admin/conversations?limit=50&channel=${encodeURIComponent(ch)}` : '/admin/conversations?limit=50';
+
+            try {
+                const resp = await fetch(url, { headers: getAuthHeaders() });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (data.conversations && data.conversations.length > 0) {
+                        let rows = '';
+                        data.conversations.forEach(c => {
+                            rows += `
+                            <tr>
+                                <td style="white-space: nowrap;">${escapeHtml(c.timestamp || 'Recent')}</td>
+                                <td><b>${escapeHtml(c.channel)}</b></td>
+                                <td><code>${escapeHtml(c.user_id)}</code></td>
+                                <td>${escapeHtml(c.user_message)}</td>
+                                <td style="max-width: 260px; white-space: pre-wrap; font-size: 0.8rem;">${escapeHtml(c.bot_response || '')}</td>
+                                <td><span class="badge ${c.was_matched ? 'badge-veg' : 'badge-nonveg'}">${c.was_matched ? 'MATCHED' : 'ESCALATED'}</span></td>
+                            </tr>`;
+                        });
+                        tbody.innerHTML = rows;
+                    } else {
+                        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #888;">No conversations logged yet.</td></tr>';
+                    }
+                }
+            } catch (err) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: red;">Failed to load conversations.</td></tr>';
+            }
+        }
+
+        // TAB 7: Learned Knowledge Base
+        async function loadKnowledge() {
+            const tbody = document.getElementById('knowledgeTableBody');
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #888;">Loading learned knowledge...</td></tr>';
+
+            try {
+                const resp = await fetch('/admin/learned-knowledge?limit=100', { headers: getAuthHeaders() });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (data.learned_knowledge && data.learned_knowledge.length > 0) {
+                        let rows = '';
+                        data.learned_knowledge.forEach(k => {
+                            rows += `
+                            <tr>
+                                <td><b>${escapeHtml(k.topic)}</b></td>
+                                <td><code>${escapeHtml(k.question_pattern)}</code></td>
+                                <td style="max-width: 280px; white-space: pre-wrap; font-size: 0.82rem;">${escapeHtml(k.verified_answer)}</td>
+                                <td><span class="badge badge-veg">${escapeHtml(k.source || 'staff')}</span></td>
+                                <td><button class="btn-secondary" style="padding: 4px 8px; font-size: 0.75rem; color: var(--danger);" onclick="deleteKnowledge(${k.id})">🗑️ Delete</button></td>
+                            </tr>`;
+                        });
+                        tbody.innerHTML = rows;
+                    } else {
+                        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #888;">No learned knowledge items yet. Taught answers appear here.</td></tr>';
+                    }
+                }
+            } catch (err) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: red;">Failed to load knowledge base.</td></tr>';
+            }
+        }
+
+        function toggleAddKnowledgeForm() {
+            const form = document.getElementById('addKnowledgeForm');
+            form.style.display = form.style.display === 'none' ? 'block' : 'none';
+        }
+
+        async function submitNewKnowledge() {
+            const topic = document.getElementById('newTopic').value.trim();
+            const pattern = document.getElementById('newPattern').value.trim();
+            const answer = document.getElementById('newAnswer').value.trim();
+
+            if (!topic || !pattern || !answer) {
+                return alert('Please fill in Topic, Question Pattern, and Verified Answer.');
+            }
+
+            try {
+                const resp = await fetch('/admin/learned-knowledge', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                    body: JSON.stringify({ topic, question_pattern: pattern, verified_answer: answer, source: 'staff_dashboard' })
+                });
+
+                if (resp.ok) {
+                    alert('Verified Q&A saved! The bot will now answer this question immediately without escalation.');
+                    document.getElementById('newTopic').value = '';
+                    document.getElementById('newPattern').value = '';
+                    document.getElementById('newAnswer').value = '';
+                    document.getElementById('addKnowledgeForm').style.display = 'none';
+                    loadKnowledge();
+                } else {
+                    const err = await resp.json();
+                    alert('Error saving knowledge: ' + (err.detail || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Connection error saving knowledge.');
+            }
+        }
+
+        async function deleteKnowledge(kId) {
+            if (!confirm('Are you sure you want to delete this learned knowledge item?')) return;
+            try {
+                const resp = await fetch(`/admin/learned-knowledge/${kId}`, {
+                    method: 'DELETE',
+                    headers: getAuthHeaders()
+                });
+                if (resp.ok) {
+                    loadKnowledge();
+                } else {
+                    alert('Failed to delete knowledge item.');
+                }
+            } catch (e) {
+                alert('Error deleting knowledge item.');
+            }
+        }
+
+        // Escalation Resolution Modal Handlers
+        function openResolveModal(escId, userMsg) {
+            document.getElementById('modalEscId').value = escId;
+            document.getElementById('modalUserMsg').innerText = userMsg;
+            document.getElementById('modalAnswer').value = '';
+            document.getElementById('resolveModal').style.display = 'flex';
+        }
+
+        function closeResolveModal() {
+            document.getElementById('resolveModal').style.display = 'none';
+        }
+
+        async function submitResolveAndLearn() {
+            const escId = document.getElementById('modalEscId').value;
+            const answer = document.getElementById('modalAnswer').value.trim();
+            if (!answer) return alert('Please enter a verified answer to teach the bot.');
+
+            try {
+                const resp = await fetch(`/admin/escalations/${escId}/resolve`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                    body: JSON.stringify({ verified_answer: answer, status: 'resolved' })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    alert('Escalation resolved and taught to bot successfully!');
+                    closeResolveModal();
+                    loadAnalytics();
+                } else {
+                    alert('Failed: ' + (data.detail || 'Could not resolve escalation.'));
+                }
+            } catch (e) {
+                alert('Connection error resolving escalation.');
+            }
+        }
+
+        async function resolveEscalationOnly() {
+            const escId = document.getElementById('modalEscId').value;
+            try {
+                const resp = await fetch(`/admin/escalations/${escId}/resolve`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                    body: JSON.stringify({ status: 'resolved' })
+                });
+                if (resp.ok) {
+                    alert('Escalation marked as resolved.');
+                    closeResolveModal();
+                    loadAnalytics();
+                }
+            } catch (e) {
+                alert('Error resolving escalation.');
             }
         }
     </script>
@@ -1628,7 +2114,7 @@ async def api_reset_session(request: Request):
 def get_web_chat():
     """Renders a sleek browser-based chat window to ask the bot questions directly with Memory controls."""
     require_web_tester()
-    html_content = """
+    html_content = r"""
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -1648,9 +2134,20 @@ def get_web_chat():
             .channel-select { margin-top: 4px; padding: 6px 10px; border-radius: 6px; border: none; font-size: 0.85rem; background: #fff; color: #333; }
             .memory-badge { background: #6b1630; color: #f8f9fa; padding: 6px 12px; font-size: 0.78rem; font-weight: 500; border-bottom: 1px solid #541124; display: flex; align-items: center; justify-content: space-between; }
             .messages { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; background: #faf9f6; }
-            .message { max-width: 90%; padding: 10px 14px; border-radius: 12px; font-size: 0.92rem; line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; }
+            .message { max-width: 90%; padding: 12px 16px; border-radius: 12px; font-size: 0.92rem; line-height: 1.45; word-wrap: break-word; }
             .user-msg { align-self: flex-end; background: #8B1E3F; color: white; border-bottom-right-radius: 2px; }
-            .bot-msg { align-self: flex-start; background: #e9ecef; color: #212529; border-bottom-left-radius: 2px; }
+            .bot-msg { align-self: flex-start; background: #ffffff; color: #212529; border-bottom-left-radius: 2px; border: 1px solid #e2e8f0; box-shadow: 0 2px 6px rgba(0,0,0,0.04); }
+            .chat-table-wrapper { overflow-x: auto; margin: 10px 0; border-radius: 8px; border: 1px solid #cbd5e1; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+            .chat-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; background: #ffffff; text-align: left; }
+            .chat-table th { background: #8B1E3F; color: #ffffff; font-weight: 600; padding: 8px 10px; border-bottom: 2px solid #541124; white-space: nowrap; }
+            .chat-table td { padding: 7px 10px; border-bottom: 1px solid #f1f5f9; color: #334155; }
+            .chat-table tr:nth-child(even) td { background: #fdfbf7; }
+            .chat-table tr:last-child td { border-bottom: none; }
+            .chat-table th, .chat-table td { border-right: 1px solid #e2e8f0; }
+            .chat-table th:last-child, .chat-table td:last-child { border-right: none; }
+            .chat-code-table { background: #1e1e2e; color: #f1f5f9; border-radius: 8px; padding: 10px 12px; margin: 8px 0; font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, 'Courier New', monospace; font-size: 0.78rem; line-height: 1.38; white-space: pre; overflow-x: auto; border: 1px solid #334155; box-shadow: inset 0 1px 3px rgba(0,0,0,0.3); }
+            .chat-code-table code { font-family: inherit; color: inherit; background: transparent; padding: 0; }
+            code:not(.chat-code-table code) { background: #f1f5f9; color: #8B1E3F; padding: 2px 5px; border-radius: 4px; font-size: 0.85em; font-family: monospace; }
             .menu-card-img { width: 100%; border-radius: 8px; margin-bottom: 8px; border: 1px solid #ddd; display: block; object-fit: contain; }
             .meta-tag { font-size: 0.72rem; color: #6c757d; margin-top: 4px; display: block; }
             .input-area { padding: 12px 16px; background: white; border-top: 1px solid #e9ecef; display: flex; gap: 8px; }
@@ -1714,8 +2211,8 @@ def get_web_chat():
             </div>
 
             <div class="input-area">
-                <input type="text" id="userInput" placeholder="Ask a question..." onkeydown="if(event.key==='Enter') sendMessage()">
-                <button class="send-btn" onclick="sendMessage()">Send</button>
+                <input type="text" id="userInput" placeholder="Ask a question..." onkeydown="if(event.key==='Enter') sendMessage()" autofocus>
+                <button class="send-btn" id="sendBtn" onclick="sendMessage()">Send</button>
             </div>
         </div>
 
@@ -1762,12 +2259,29 @@ def get_web_chat():
 
             async function sendMessage() {
                 const input = document.getElementById('userInput');
+                const sendBtn = document.getElementById('sendBtn');
                 const text = input.value.trim();
-                if (!text) return;
+                if (!text) {
+                    input.focus();
+                    return;
+                }
 
                 const channel = document.getElementById('channelSelect').value;
                 appendMessage(text, 'user-msg');
                 input.value = '';
+
+                // Show typing indicator & disable button
+                if (sendBtn) { sendBtn.disabled = true; sendBtn.innerText = '...'; }
+                if (input) input.disabled = true;
+
+                const typingDiv = document.createElement('div');
+                typingDiv.id = 'typingIndicator';
+                typingDiv.className = 'message bot-msg';
+                typingDiv.style.color = '#888';
+                typingDiv.style.fontStyle = 'italic';
+                typingDiv.innerText = '🌸 Camellia is typing...';
+                document.getElementById('messages').appendChild(typingDiv);
+                document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
 
                 try {
                     const resp = await fetch('/api/test-chat', {
@@ -1775,15 +2289,35 @@ def get_web_chat():
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ message: text, channel: channel, user_id: 'web_tester' })
                     });
+                    
+                    // Remove typing indicator
+                    const indicator = document.getElementById('typingIndicator');
+                    if (indicator) indicator.remove();
+
+                    if (!resp.ok) {
+                        const errData = await resp.json().catch(() => ({}));
+                        appendMessage(`⚠️ Server Error (${resp.status}): ${errData.detail || resp.statusText || 'Unable to process request'}`, 'bot-msg');
+                        return;
+                    }
+
                     const data = await resp.json();
                     
                     let metaText = data.was_matched ? `Matched: ${data.template_id}` : `Escalated to Human`;
                     if (channel === 'instagram_organic') metaText = 'Ad-Gate Filtered';
                     
-                    appendMessage(data.response, 'bot-msg', metaText, data.image_url);
+                    const botReply = data.response || data.detail || 'No response returned.';
+                    appendMessage(botReply, 'bot-msg', metaText, data.image_url);
                     updateMemoryBadge(data.active_memory);
                 } catch (err) {
-                    appendMessage('Error connecting to server.', 'bot-msg');
+                    const indicator = document.getElementById('typingIndicator');
+                    if (indicator) indicator.remove();
+                    appendMessage(`⚠️ Connection error: Could not reach backend server (${err.message}). Is the server running?`, 'bot-msg');
+                } finally {
+                    if (sendBtn) { sendBtn.disabled = false; sendBtn.innerText = 'Send'; }
+                    if (input) {
+                        input.disabled = false;
+                        input.focus();
+                    }
                 }
             }
 
@@ -1814,6 +2348,108 @@ def get_web_chat():
                 sendMessage();
             }
 
+            function formatMarkdown(text) {
+                if (!text) return '';
+                const escapeHtml = (str) => str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                
+                const lines = text.split(/\r?\n/);
+                let out = [];
+                let inCode = false;
+                let codeLines = [];
+                let inTable = false;
+                let tableRows = [];
+
+                function renderTable(rows) {
+                    if (rows.length === 0) return '';
+                    let html = '<div class="chat-table-wrapper"><table class="chat-table">';
+                    let isHeader = true;
+                    for (let r = 0; r < rows.length; r++) {
+                        const rowStr = rows[r].trim();
+                        if (/^\|?(\s*:?-+:?\s*\|?)+$/.test(rowStr)) {
+                            isHeader = false;
+                            continue;
+                        }
+                        const rawCols = rowStr.split('|');
+                        const cols = rawCols.map(c => c.trim()).filter((c, idx, arr) => {
+                            if ((idx === 0 || idx === arr.length - 1) && c === '') return false;
+                            return true;
+                        });
+                        if (cols.length === 0) continue;
+
+                        html += '<tr>';
+                        const tag = isHeader ? 'th' : 'td';
+                        cols.forEach(cell => {
+                            let formattedCell = escapeHtml(cell)
+                                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                                .replace(/(^|[^*])\*([^*]+)\*([^*]|$)/g, '$1<strong>$2</strong>$3')
+                                .replace(/`([^`]+)`/g, '<code>$1</code>');
+                            html += `<${tag}>${formattedCell}</${tag}>`;
+                        });
+                        html += '</tr>';
+                        if (isHeader) isHeader = false;
+                    }
+                    html += '</table></div>';
+                    return html;
+                }
+
+                function renderCodeBlock(cLines) {
+                    if (cLines.length === 0) return '';
+                    return `<pre class="chat-code-table"><code>${escapeHtml(cLines.join('\n'))}</code></pre>`;
+                }
+
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i];
+                    const trimmed = line.trim();
+
+                    // Check for code block fence (```)
+                    if (trimmed.startsWith('```')) {
+                        if (inCode) {
+                            out.push(renderCodeBlock(codeLines));
+                            codeLines = [];
+                            inCode = false;
+                        } else {
+                            if (inTable) {
+                                out.push(renderTable(tableRows));
+                                tableRows = [];
+                                inTable = false;
+                            }
+                            inCode = true;
+                            codeLines = [];
+                        }
+                        continue;
+                    }
+
+                    if (inCode) {
+                        codeLines.push(line);
+                        continue;
+                    }
+
+                    if (trimmed.startsWith('|') && trimmed.endsWith('|') && !trimmed.startsWith('+')) {
+                        inTable = true;
+                        tableRows.push(line);
+                    } else {
+                        if (inTable) {
+                            out.push(renderTable(tableRows));
+                            tableRows = [];
+                            inTable = false;
+                        }
+                        let formattedLine = escapeHtml(line)
+                            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                            .replace(/(^|[^*])\*([^*]+)\*([^*]|$)/g, '$1<strong>$2</strong>$3')
+                            .replace(/`([^`]+)`/g, '<code>$1</code>');
+                        out.push(formattedLine);
+                    }
+                }
+                if (inCode) {
+                    out.push(renderCodeBlock(codeLines));
+                }
+                if (inTable) {
+                    out.push(renderTable(tableRows));
+                }
+
+                return out.join('<br>');
+            }
+
             function appendMessage(text, className, meta = '', imageUrl = null) {
                 const box = document.getElementById('messages');
                 const div = document.createElement('div');
@@ -1830,8 +2466,10 @@ def get_web_chat():
                     });
                 }
 
-                const textNode = document.createTextNode(text);
-                div.appendChild(textNode);
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'msg-content';
+                contentDiv.innerHTML = formatMarkdown(text);
+                div.appendChild(contentDiv);
                 
                 if (meta) {
                     const span = document.createElement('span');
@@ -1843,6 +2481,19 @@ def get_web_chat():
                 box.appendChild(div);
                 box.scrollTop = box.scrollHeight;
             }
+
+            // Keyboard shortcut for Enter
+            document.addEventListener('DOMContentLoaded', () => {
+                const input = document.getElementById('userInput');
+                if (input) {
+                    input.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            sendMessage();
+                        }
+                    });
+                }
+            });
         </script>
     </body>
     </html>

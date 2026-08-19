@@ -86,8 +86,7 @@ class WhatsAppAdapter:
             )
 
         # Quick reply buttons logic for WhatsApp
-        default_buttons = ["🌸 See Menu", "🍫 Sondesh Prices", "🛍️ Place Order"]
-        buttons = default_buttons if template_id in ["greeting", "menu_general", "order_next_steps", "how_to_order"] or not was_matched else None
+        buttons = self._get_contextual_buttons(template_id, was_matched)
 
         # Send response via WhatsApp API (or mock if no token configured)
         send_result = self.send_message(sender_phone, response_text, image_url=image_url, buttons=buttons)
@@ -99,8 +98,23 @@ class WhatsAppAdapter:
             "template_id": template_id,
             "response_text": response_text,
             "image_url": image_url,
+            "buttons": buttons,
             "send_result": send_result
         }
+
+    def _get_contextual_buttons(self, template_id: Optional[str], was_matched: bool) -> Optional[list]:
+        """Generates dynamic, context-aware WhatsApp quick reply buttons (max 3 buttons)."""
+        if not was_matched or template_id in ["greeting", "menu_general", "know_more"]:
+            return ["🌸 See Menu", "🍫 Sondesh Prices", "🛍️ Place Order"]
+        elif template_id in ["pricing_general", "pricing_aamar", "pricing_signature", "nolen_gur_aamar", "nolen_gur_signature", "order_calculation"]:
+            return ["🛍️ Place Order", "📦 Delivery Times", "👨‍🍳 Talk to Chef"]
+        elif template_id in ["delivery_time", "delivery_faq", "delivery_area"]:
+            return ["🌸 See Menu", "🛍️ Place Order", "📍 Kitchen Location"]
+        elif template_id in ["order_next_steps", "how_to_order"]:
+            return ["📋 Confirm Details", "💳 Payment Info", "📞 Call Kitchen"]
+        elif template_id in ["festive_gifting", "custom_order"]:
+            return ["🎁 Gift Hampers", "🛍️ Custom Box", "📞 Speak to Chef"]
+        return ["🌸 See Menu", "🍫 Sondesh Prices", "🛍️ Place Order"]
 
     def _public_url(self, path: str) -> str:
         """Converts a relative image path to a full public URL Meta can fetch.

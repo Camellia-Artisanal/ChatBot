@@ -1,7 +1,8 @@
 import difflib
 import json
 import re
-from typing import Dict, Any, Tuple, Optional
+from dataclasses import dataclass
+from typing import Dict, Any, Tuple, Optional, List
 from config import config
 from monitoring import get_logger
 from gemini_responder import gemini_responder
@@ -10,6 +11,16 @@ from session_memory import session_memory
 from order_calculator import order_calculator
 
 log = get_logger("camellia.responder")
+
+@dataclass
+class BotResponse:
+    text: str
+    was_matched: bool = True
+    template_id: Optional[str] = None
+    image_url: Optional[Any] = None
+
+    def __str__(self):
+        return self.text
 
 class DeterministicResponder:
     """
@@ -94,6 +105,24 @@ class DeterministicResponder:
         
         STOP_WORDS = {"i", "am", "im", "my", "is", "are", "do", "you", "a", "an", "the", "to", "for", "of", "in", "on", "have", "has", "with", "and", "or", "we", "can", "your", "this", "what", "how", "when", "where", "why", "who", "which", "many", "much", "me", "show", "tell", "it", "more", "want", "send", "share"}
         
+        # Check Self-Healing Learned Knowledge Base (Saved from Staff Escalation Resolutions)
+        try:
+            from database import db
+            learned_items = db.get_learned_knowledge(limit=100)
+            for item in learned_items:
+                pattern = item.get("question_pattern", "").lower().strip()
+                ans = item.get("verified_answer", "").strip()
+                if not pattern or not ans:
+                    continue
+                p_words = set(re.findall(r'\b\w+\b', pattern))
+                sub_p_words = p_words - STOP_WORDS
+                sub_u_words = user_words - STOP_WORDS
+                if pattern in lowered_text or (sub_p_words and sub_p_words.issubset(sub_u_words)):
+                    session_memory.add_turn(user_id, channel, user_message, ans)
+                    return ans, True, f"learned_kb_{item.get('id')}", None
+        except Exception as e:
+            log.warning("Learned knowledge check error: %s", e)
+
         templates = self.qa_data.get("templates", [])
         
         best_template = None
@@ -121,15 +150,17 @@ class DeterministicResponder:
                     if matching_substantive:
                         score += len(matching_substantive) * 4
                     else:
-                        # Check 3: Fuzzy word similarity match
+                        # Check 3: Fuzzy word similarity match (Tiered: len >= 3 allowed with stricter threshold)
                         for u_word in substantive_user_words:
-                            if len(u_word) < 4:
+                            if len(u_word) < 3:
                                 continue
                             for t_word in substantive_trigger_words:
-                                if len(t_word) < 4:
+                                if len(t_word) < 3:
                                     continue
                                 ratio = difflib.SequenceMatcher(None, u_word, t_word).ratio()
-                                if ratio >= 0.80:
+                                # 3-letter words require stricter similarity (>= 0.83), 4+ letter words use 0.80
+                                threshold = 0.83 if min(len(u_word), len(t_word)) == 3 else 0.80
+                                if ratio >= threshold:
                                     score += 3
 
             # Give non-greeting templates priority over generic greeting if substantive product keywords are present
@@ -160,7 +191,7 @@ class DeterministicResponder:
                     response_text = "You haven't told me your name yet! What should I call you?"
             elif tmpl_id == "order_next_steps":
                 session_memory.clear_order_draft(user_id, channel)
-            elif config.GEMINI_ENABLED and config.GEMINI_API_KEY:
+            elif config.is_ai_enabled:
                 context_summary = session_memory.get_context_summary(user_id, channel)
                 history_turns = session_memory.get_session(user_id, channel)["turns"]
                 refined_text, used_ai = gemini_responder.refine_template_response(
@@ -176,8 +207,8 @@ class DeterministicResponder:
             session_memory.add_turn(user_id, channel, user_message, response_text)
             return response_text, True, tmpl_id, image_url
 
-        # Fallback to Google Gemini Flash Cloud AI RAG Engine if enabled
-        if config.GEMINI_ENABLED and config.GEMINI_API_KEY:
+        # Fallback to Cloud AI RAG Engine (OpenAI / Gemini) if enabled
+        if config.is_ai_enabled:
             context_summary = session_memory.get_context_summary(user_id, channel)
             history_turns = session_memory.get_session(user_id, channel)["turns"]
 
@@ -248,5 +279,10 @@ class DeterministicResponder:
             return formatted_text, target_images
 
         return formatted_text, None
+
+    def respond(self, user_message: str, user_id: str = None, channel: str = None) -> BotResponse:
+        """Convenience wrapper returning a structured BotResponse object with .text attribute."""
+        text, was_matched, tmpl_id, image_url = self.match_and_respond(user_message, user_id, channel)
+        return BotResponse(text=text, was_matched=was_matched, template_id=tmpl_id, image_url=image_url)
 
 responder = DeterministicResponder()

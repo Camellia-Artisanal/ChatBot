@@ -104,5 +104,105 @@ def test_admin_analytics_and_escalations():
     # Escalations
     resp_esc = client.get("/admin/escalations", headers=ADMIN_HEADERS)
     assert resp_esc.status_code == 200
-    esc = resp_esc.json()
-    assert "escalations" in esc
+    esc_data = resp_esc.json()
+    assert "escalations" in esc_data
+    assert isinstance(esc_data["escalations"], list)
+
+def test_menu_and_qa_schema_validity():
+    """Validates structural integrity of menu.json and qa_templates.json."""
+    from validate_schemas import validate_menu_schema, validate_qa_templates_schema
+    menu_ok, menu_errs = validate_menu_schema("menu.json")
+    assert menu_ok, f"menu.json schema errors: {menu_errs}"
+
+    qa_ok, qa_errs = validate_qa_templates_schema("qa_templates.json")
+    assert qa_ok, f"qa_templates.json schema errors: {qa_errs}"
+
+
+def test_admin_conversations_endpoint():
+    """Verifies that the /admin/conversations endpoint retrieves logged conversations."""
+    # Log a test interaction
+    db_module.db.log_conversation(
+        user_id="test_user_conv_123",
+        channel="instagram",
+        user_message="Do you deliver Sondesh to Salt Lake?",
+        bot_response="Yes! We deliver across Kolkata including Salt Lake.",
+        was_matched=True
+    )
+
+    resp = client.get("/admin/conversations?limit=10", headers=ADMIN_HEADERS)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "conversations" in data
+    assert len(data["conversations"]) > 0
+
+    # Test filtering by channel
+    resp_insta = client.get("/admin/conversations?channel=instagram", headers=ADMIN_HEADERS)
+    assert resp_insta.status_code == 200
+    assert "conversations" in resp_insta.json()
+
+
+def test_admin_learned_knowledge_crud_and_live_bot_matching():
+    """Tests creating, querying, matching, and deleting learned knowledge."""
+    # 1. Create a learned knowledge item
+    payload = {
+        "topic": "Corporate Diwali Hampers",
+        "question_pattern": "diwali bulk gifting hampers",
+        "verified_answer": "We offer customized artisanal Bengal sweet hampers for Diwali with personalized branding.",
+        "source": "admin_test"
+    }
+    resp_create = client.post("/admin/learned-knowledge", json=payload, headers=ADMIN_HEADERS)
+    assert resp_create.status_code == 200
+    create_data = resp_create.json()
+    assert create_data.get("status") == "success"
+    knowledge_id = create_data.get("id")
+    assert knowledge_id is not None
+
+    # 2. List learned knowledge
+    resp_list = client.get("/admin/learned-knowledge", headers=ADMIN_HEADERS)
+    assert resp_list.status_code == 200
+    items = resp_list.json().get("learned_knowledge", [])
+    assert any(k.get("topic") == "Corporate Diwali Hampers" for k in items)
+
+    # 3. Verify bot matches the question via responder
+    from responder import responder
+    bot_resp = responder.respond("Do you have diwali bulk gifting hampers?")
+    assert "customized artisanal Bengal sweet hampers" in bot_resp.text
+
+    # 4. Delete learned knowledge item
+    resp_del = client.delete(f"/admin/learned-knowledge/{knowledge_id}", headers=ADMIN_HEADERS)
+    assert resp_del.status_code == 200
+    assert resp_del.json().get("status") == "deleted"
+
+
+def test_admin_escalation_resolve_and_learn_flow():
+    """Tests resolving an escalation and automatically converting it into learned knowledge."""
+    # 1. Log an escalation
+    esc_id = db_module.db.record_escalation(
+        user_id="user_esc_789",
+        channel="whatsapp",
+        user_message="Can you pack sweets in tin boxes for flight travel to London?",
+        reason="unmatched_flight_packing"
+    )
+
+    # Get latest escalations
+    resp_esc = client.get("/admin/escalations", headers=ADMIN_HEADERS)
+    assert resp_esc.status_code == 200
+    escalations = resp_esc.json().get("escalations", [])
+    assert len(escalations) > 0
+
+    # 2. Resolve and teach bot
+    resolve_payload = {
+        "verified_answer": "Yes, we provide airtight hermetically sealed tin containers ideal for international flights.",
+        "status": "resolved"
+    }
+    resp_resolve = client.post(f"/admin/escalations/{esc_id}/resolve", json=resolve_payload, headers=ADMIN_HEADERS)
+    assert resp_resolve.status_code == 200
+    assert resp_resolve.json().get("status") == "resolved"
+
+    # 3. Verify escalation is now marked resolved
+    resp_esc_after = client.get("/admin/escalations", headers=ADMIN_HEADERS)
+    resolved_esc = next((e for e in resp_esc_after.json()["escalations"] if e["id"] == esc_id), None)
+    assert resolved_esc is not None
+    assert resolved_esc["status"] == "resolved"
+
+
