@@ -3,8 +3,7 @@ FROM python:3.11-slim
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PORT=8000
+    PYTHONDONTWRITEBYTECODE=1
 
 # Set working directory
 WORKDIR /app
@@ -22,9 +21,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files, code, and menu images
 COPY . .
-
-# Expose FastAPI port
-EXPOSE 8000
 
 # Command to run production FastAPI app using python main.py
 CMD ["python", "main.py"]
