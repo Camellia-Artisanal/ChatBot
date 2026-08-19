@@ -26,5 +26,5 @@ COPY . .
 # Expose FastAPI port
 EXPOSE 8000
 
-# Command to run production FastAPI app using Uvicorn on dynamic PORT
-CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Command to run production FastAPI app using python main.py
+CMD ["python", "main.py"]
