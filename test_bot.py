@@ -1334,6 +1334,63 @@ class TestCamelliaBot(unittest.TestCase):
             config.OPENAI_API_KEY = orig_oai
             config.GEMINI_ENABLED = orig_en
 
+    def test_human_simulation_scenarios_and_new_qa(self):
+        """Test the real-world edge case scenarios identified by human simulation agents."""
+        from session_memory import session_memory
+        responder.reload_templates()
+
+        # Scenario 1: Compound name introduction with gifting/difference inquiry
+        uid1 = "sim_user_priya_1"
+        session_memory.clear_session(uid1, "whatsapp")
+        msg1 = "Hi! I'm Priya. I want to gift sweet boxes for my parents' anniversary. What is the difference between Collection 1 and Collection 2?"
+        resp1, matched1, tmpl1, imgs1 = responder.match_and_respond(msg1, user_id=uid1, channel="whatsapp")
+        self.assertTrue(matched1)
+        self.assertIn("Priya", resp1)
+        self.assertIn("Nice to meet you", resp1)
+        self.assertTrue("Collection 1" in resp1 or "Aamar" in resp1 or "Signature" in resp1)
+        facts1 = session_memory.get_facts(uid1, "whatsapp")
+        self.assertEqual(facts1.get("name"), "Priya")
+
+        # Scenario 2: Customization and assorted box inquiries
+        uid2 = "sim_user_custom_2"
+        session_memory.clear_session(uid2, "whatsapp")
+        msg2 = "Can I customize the box with a mix of rose and classic norom pak sondesh?"
+        resp2, matched2, tmpl2, imgs2 = responder.match_and_respond(msg2, user_id=uid2, channel="whatsapp")
+        self.assertTrue(matched2)
+        self.assertEqual(tmpl2, "assorted_custom_box")
+        self.assertTrue("custom" in resp2.lower() or "assort" in resp2.lower())
+        self.assertEqual(len(imgs2), 2)
+
+        # Scenario 3: Dietary, Halal & Cooking oil inquiries
+        uid3 = "sim_user_dietary_3"
+        session_memory.clear_session(uid3, "whatsapp")
+        msg3 = "Is your food halal certified and what oil do you cook your curries in?"
+        resp3, matched3, tmpl3, imgs3 = responder.match_and_respond(msg3, user_id=uid3, channel="whatsapp")
+        self.assertTrue(matched3)
+        self.assertEqual(tmpl3, "dietary_halal_oil")
+        self.assertIn("halal", resp3.lower())
+        self.assertIn("mustard oil", resp3.lower())
+        self.assertIn("ghee", resp3.lower())
+
+        # Scenario 4: Payment methods and COD clarification
+        uid4 = "sim_user_payment_4"
+        session_memory.clear_session(uid4, "whatsapp")
+        msg4 = "What payment methods do you accept, do you take COD?"
+        resp4, matched4, tmpl4, imgs4 = responder.match_and_respond(msg4, user_id=uid4, channel="whatsapp")
+        self.assertTrue(matched4)
+        self.assertEqual(tmpl4, "payment_methods")
+        self.assertIn("UPI", resp4)
+        self.assertIn("Cash on Delivery", resp4)
+
+        # Scenario 5: Transaction failure escalation
+        uid5 = "sim_user_failed_tx_5"
+        session_memory.clear_session(uid5, "whatsapp")
+        msg5 = "My UPI transaction failed and money got deducted, please check"
+        resp5, matched5, tmpl5, imgs5 = responder.match_and_respond(msg5, user_id=uid5, channel="whatsapp")
+        self.assertFalse(matched5)
+        self.assertEqual(tmpl5, "explicit_escalation")
+        self.assertIn("Guru Dayal Singh", resp5)
+
 if __name__ == "__main__":
     unittest.main()
 

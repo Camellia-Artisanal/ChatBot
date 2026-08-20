@@ -76,51 +76,7 @@ class DeterministicResponder:
             )
             return fallback, False, None, None
 
-        # 1. Update & Extract Session Memory Facts (Name, Order Draft)
-        user_id = user_id or "default_user"
-        channel = channel or "default_channel"
-        facts = session_memory.extract_and_update_facts(user_id, channel, user_message)
-
-        # Check if user just provided their name
-        if facts.get("just_introduced_name"):
-            facts["just_introduced_name"] = False
-            user_name = facts.get("name")
-            if user_name:
-                response_text = f"Nice to meet you, {user_name}! 👋 Welcome to Camellia Artisanal. Ask us about our Sondesh flavours & prices, weekly menu, or delivery — happy to help!"
-            else:
-                response_text = "Nice to meet you! 👋 Welcome to Camellia Artisanal. Ask us about our Sondesh flavours & prices, weekly menu, or delivery — happy to help!"
-            session_memory.add_turn(user_id, channel, user_message, response_text)
-            return response_text, True, "name_introduction", None
-
-        # 2. Check explicit escalation triggers first (refund, complaint, etc.)
-        escalation_reason = self.check_explicit_escalation_triggers(user_message)
-        if escalation_reason:
-            fallback = self.qa_data.get("escalation_triggers", {}).get(
-                "fallback_response", "Thanks for reaching out! Let me connect you with our team — they'll get back to you shortly. 🙏"
-            )
-            session_memory.add_turn(user_id, channel, user_message, fallback)
-            return fallback, False, "explicit_escalation", None
-
         lowered_text = user_message.lower().strip()
-
-        # 2.5 Check if accumulated order_draft slots form a complete order receipt
-        order_draft = facts.get("order_draft", {})
-        existing_cart = facts.get("cart", [])
-        is_general_menu_query = any(phrase in lowered_text for phrase in [
-            "full menu", "send menu", "price list", "show menu", "what is your menu",
-            "how much is sondesh", "sondesh price", "how much sondesh", "sondesh cost", "cost of sondesh", "price of sondesh",
-            "tell me about your product", "about your product", "about your products", "what products", "your products", "product", "products",
-            "how can you assist", "how can you help", "what can you do", "help me", "assist me"
-        ])
-        if not is_general_menu_query:
-            calc_result = order_calculator.parse_and_calculate(user_message, existing_draft=order_draft, existing_cart=existing_cart)
-            if calc_result and calc_result.get("formatted_receipt"):
-                if calc_result.get("items"):
-                    facts["cart"] = calc_result["items"]
-                response_text = calc_result["formatted_receipt"]
-                session_memory.add_turn(user_id, channel, user_message, response_text)
-                return response_text, True, "order_draft_receipt", None
-
         user_words = set(re.findall(r'\b\w+\b', lowered_text))
         
         STOP_WORDS = {
@@ -130,6 +86,83 @@ class DeterministicResponder:
             "show", "tell", "it", "more", "want", "send", "share", "about", "some", "any",
             "please", "pls", "give", "know", "let", "sell", "use"
         }
+
+        # 1. Update & Extract Session Memory Facts (Name, Order Draft)
+        user_id = user_id or "default_user"
+        channel = channel or "default_channel"
+        facts = session_memory.extract_and_update_facts(user_id, channel, user_message)
+
+        # Check if user just provided their name
+        intro_greeting_prefix = ""
+        if facts.get("just_introduced_name"):
+            facts["just_introduced_name"] = False
+            user_name = facts.get("name")
+            name_words = set(user_name.lower().split()) if user_name else set()
+            intro_noise = {
+                "hi", "hello", "hey", "namaste", "nomoshkar", "im", "i", "am", "my", "name",
+                "names", "is", "this", "call", "me", "myself", "it", "its", "it's", "here"
+            }
+            substantive_tokens = [w for w in user_words if w not in STOP_WORDS and w not in intro_noise and w not in name_words]
+            has_substantive_inquiry = (
+                len(substantive_tokens) >= 2
+                or "?" in user_message
+                or any(kw in lowered_text for kw in [
+                    "difference", "collection", "sondesh", "menu", "price", "cost", "deliver",
+                    "delivery", "bento", "box", "order", "what", "how", "where", "can", "tell",
+                    "halal", "oil", "payment", "cod", "upi", "gift", "gifting", "jolbhora",
+                    "sugar", "diabetic", "flavour", "flavors", "sweet", "sweets", "curry", "meal",
+                    "allergy", "allergies", "nut", "pickup", "tracking"
+                ])
+            )
+
+            if not has_substantive_inquiry:
+                if user_name:
+                    response_text = f"Nice to meet you, {user_name}! 👋 Welcome to Camellia Artisanal. Ask us about our Sondesh flavours & prices, weekly menu, or delivery — happy to help!"
+                else:
+                    response_text = "Nice to meet you! 👋 Welcome to Camellia Artisanal. Ask us about our Sondesh flavours & prices, weekly menu, or delivery — happy to help!"
+                session_memory.add_turn(user_id, channel, user_message, response_text)
+                return response_text, True, "name_introduction", None
+            else:
+                if user_name:
+                    intro_greeting_prefix = f"Nice to meet you, {user_name}! 👋\n\n"
+                else:
+                    intro_greeting_prefix = "Nice to meet you! 👋\n\n"
+
+        # 2. Check explicit escalation triggers first (refund, complaint, etc.)
+        escalation_reason = self.check_explicit_escalation_triggers(user_message)
+        if escalation_reason:
+            fallback = self.qa_data.get("escalation_triggers", {}).get(
+                "fallback_response", "Thanks for reaching out! Let me connect you with our Kitchen Manager — they'll get back to you shortly. 🙏"
+            )
+            if intro_greeting_prefix:
+                fallback = intro_greeting_prefix + fallback
+            session_memory.add_turn(user_id, channel, user_message, fallback)
+            return fallback, False, "explicit_escalation", None
+
+        # 2.5 Check if accumulated order_draft slots form a complete order receipt
+        order_draft = facts.get("order_draft", {})
+        existing_cart = facts.get("cart", [])
+        is_general_menu_query = any(phrase in lowered_text for phrase in [
+            "full menu", "send menu", "price list", "show menu", "what is your menu",
+            "how much is sondesh", "sondesh price", "how much sondesh", "sondesh cost", "cost of sondesh", "price of sondesh",
+            "tell me about your product", "about your product", "about your products", "what products", "your products", "product", "products",
+            "how can you assist", "how can you help", "what can you do", "help me", "assist me",
+            "bangalore", "bengaluru", "mumbai", "pune", "kolkata", "hyderabad", "chennai", "jaipur", "ahmedabad", "chandigarh", "lucknow",
+            "courier to", "deliver to bangalore", "deliver to mumbai", "deliver to pune", "deliver to kolkata", "out of ncr", "outside ncr",
+            "allergy", "allergies", "allergic", "nut allergy", "nut-free", "nut free",
+            "order status", "track my order", "where is my order", "paid but no confirmation", "paid 2 hours ago", "paid 1 hour ago", "order tracking",
+            "kitchen address", "pickup address", "self pickup", "pick it up from kitchen", "kitchen timings"
+        ])
+        if not is_general_menu_query:
+            calc_result = order_calculator.parse_and_calculate(user_message, existing_draft=order_draft, existing_cart=existing_cart)
+            if calc_result and calc_result.get("formatted_receipt"):
+                if calc_result.get("items"):
+                    facts["cart"] = calc_result["items"]
+                response_text = calc_result["formatted_receipt"]
+                if intro_greeting_prefix:
+                    response_text = intro_greeting_prefix + response_text
+                session_memory.add_turn(user_id, channel, user_message, response_text)
+                return response_text, True, "order_draft_receipt", None
         
         # Check Self-Healing Learned Knowledge Base (Saved from Staff Escalation Resolutions)
         try:
@@ -144,6 +177,8 @@ class DeterministicResponder:
                 sub_p_words = p_words - STOP_WORDS
                 sub_u_words = user_words - STOP_WORDS
                 if pattern in lowered_text or (sub_p_words and sub_p_words.issubset(sub_u_words)):
+                    if intro_greeting_prefix:
+                        ans = intro_greeting_prefix + ans
                     session_memory.add_turn(user_id, channel, user_message, ans)
                     return ans, True, f"learned_kb_{item.get('id')}", None
         except Exception as e:
@@ -202,8 +237,12 @@ class DeterministicResponder:
                     max_trigger_score = t_score
 
             score = max_trigger_score
+            # Suppress name_introduction template when we already captured name as prefix for compound inquiries
+            if intro_greeting_prefix and tmpl_id == "name_introduction":
+                score = 0
+
             # Give non-greeting templates priority over generic greeting if substantive product keywords are present
-            if tmpl_id != "greeting" and score > 0:
+            if tmpl_id not in ["greeting", "name_introduction"] and score > 0:
                 score += 2
 
             if score > best_score:
@@ -246,6 +285,13 @@ class DeterministicResponder:
                 if used_ai and refined_text:
                     response_text = refined_text
 
+            if intro_greeting_prefix and not response_text.startswith("Nice to meet you"):
+                if response_text.startswith("Hi! "):
+                    response_text = response_text[4:]
+                elif response_text.startswith("Hello! "):
+                    response_text = response_text[7:]
+                response_text = intro_greeting_prefix + response_text
+
             session_memory.add_turn(user_id, channel, user_message, response_text)
             return response_text, True, tmpl_id, image_url
 
@@ -260,6 +306,8 @@ class DeterministicResponder:
                 history_turns=history_turns
             )
             if is_grounded and gemini_response:
+                if intro_greeting_prefix:
+                    gemini_response = intro_greeting_prefix + gemini_response
                 session_memory.add_turn(user_id, channel, user_message, gemini_response)
                 return gemini_response, True, "gemini_rag", None
             elif reason == "out_of_context":
@@ -269,6 +317,8 @@ class DeterministicResponder:
         fallback = self.qa_data.get("escalation_triggers", {}).get(
             "fallback_response", "Thanks for reaching out! Let me connect you with our team for this — they'll get back to you shortly. 🙏"
         )
+        if intro_greeting_prefix:
+            fallback = intro_greeting_prefix + fallback
         session_memory.add_turn(user_id, channel, user_message, fallback)
         return fallback, False, None, None
 
@@ -292,11 +342,11 @@ class DeterministicResponder:
             return [img_aamar_mishti]
         elif any(w in lowered for w in ["collection 2", "collection2", "2nd collection", "second collection", "signature", "desi a2", "col 2", "option 2", "mahua"]):
             return [img_signature_sondesh]
-        elif any(w in lowered for w in ["product", "all products", "what do you have", "what do you sell", "overview", "know more", "full menu", "both collections"]):
+        elif any(w in lowered for w in ["product", "all products", "what do you have", "what do you sell", "overview", "know more", "full menu", "both collections", "difference", "custom", "customize", "customise", "assorted", "mix"]):
             return [img_aamar_mishti, img_signature_sondesh, current_weekly_img]
         elif any(w in lowered for w in ["sondesh", "mishti", "sweet", "sweets", "kanchagolla", "jolbhora", "nolen gur", "250g", "500g", "1kg", "rose", "classic", "mango", "kesar", "price"]):
             return [img_aamar_mishti, img_signature_sondesh]
-        elif any(w in lowered for w in ["menu", "veg", "non veg", "non-veg", "bento", "combo", "meal", "meals", "lunch", "dinner"]):
+        elif any(w in lowered for w in ["menu", "veg", "non veg", "non-veg", "bento", "combo", "meal", "meals", "lunch", "dinner", "halal", "oil", "ghee"]):
             return current_weekly_img
         return None
 
@@ -325,6 +375,10 @@ class DeterministicResponder:
         # "I want to know more" & Product Overview -> both collection cards + this week's meal menu
         if template_id in ["know_more", "product_overview"]:
             target_images = [img_aamar_mishti, img_signature_sondesh, current_weekly_img]
+        elif template_id == "assorted_custom_box":
+            target_images = [img_aamar_mishti, img_signature_sondesh]
+        elif template_id == "dietary_halal_oil":
+            target_images = [current_weekly_img]
 
         # Collection 1 specific queries — send ONLY Collection 1 photo card
         elif template_id in ["aamar_mishti_collection", "nolen_gur_aamar"]:
@@ -374,7 +428,8 @@ class DeterministicResponder:
         elif template_id in [
             "sondesh_price_general",
             "sondesh_mango_kesar", "sondesh_nolen_gur",
-            "jolbhora", "kanchagolla", "pack_size_250g", "pack_size_500g", "pack_size_1kg"
+            "jolbhora", "kanchagolla", "pack_size_250g", "pack_size_500g", "pack_size_1kg",
+            "jolbhora_talgash_details", "sugar_free_options", "allergen_nut_safety"
         ]:
             if any(w in lowered_msg for w in ["collection 1", "collection1", "aamar mishti", "1st collection", "first collection", "col 1", "option 1"]):
                 target_images = [img_aamar_mishti]

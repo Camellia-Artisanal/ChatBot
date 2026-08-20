@@ -43,6 +43,10 @@ class SessionMemoryManager:
         if key in self._sessions:
             del self._sessions[key]
 
+    def get_facts(self, user_id: str, channel: str) -> Dict[str, Any]:
+        """Returns the facts dictionary for a session."""
+        return self.get_session(user_id, channel)["facts"]
+
     def clear_order_draft(self, user_id: str, channel: str) -> None:
         """Resets the active order draft and cart for a session."""
         session = self.get_session(user_id, channel)
@@ -67,33 +71,40 @@ class SessionMemoryManager:
         # 1. Extract Name
         extracted_name = None
 
-        name_patterns = [
-            r"^(?:my\s+name\s+(?:is|'s)|my\s+names|i\s+am|i'm|im|call\s+me|myself|this\s+is|it's|its|name\s*[:=])\s+([A-Za-z\s'\.\-]+)$",
-            r"(?:my\s+name\s+(?:is|'s)|my\s+names|call\s+me|name\s*[:=])\s+([A-Za-z\s'\.\-]+)",
-        ]
-
         ignored_name_words = {
-            "a", "an", "the", "asking", "looking", "ordering", "wanting", "having",
-            "here", "there", "interested", "trying", "planning", "searching", "buying",
-            "ready", "going", "wondering", "thinking", "sure", "ok", "okay", "fine",
-            "good", "menu", "sondesh", "sandesh", "mishti", "price", "prices", "cost",
-            "veg", "nonveg", "non-veg", "food", "delhi", "gurgaon", "noida", "order",
-            "delivery", "cancel", "refund", "hi", "hello", "hey", "namaste", "yes", "no",
-            "human", "manager", "agent", "bot", "help", "please", "thanks", "thank",
-            "what", "whats", "what's", "who", "where", "how", "when", "why"
+            "a", "an", "the", "in", "at", "from", "near", "to", "around", "on", "into", "with", "by", "for",
+            "located", "living", "based", "staying", "visiting", "asking", "looking", "ordering", "wanting", "having",
+            "here", "there", "interested", "trying", "planning", "searching", "buying", "ready", "going",
+            "wondering", "thinking", "sure", "ok", "okay", "fine", "good", "menu", "sondesh", "sandesh",
+            "mishti", "price", "prices", "cost", "veg", "nonveg", "non-veg", "food", "delhi", "gurgaon",
+            "noida", "order", "delivery", "cancel", "refund", "hi", "hello", "hey", "namaste", "yes", "no",
+            "human", "manager", "agent", "bot", "help", "please", "thanks", "thank", "what", "whats", "what's",
+            "who", "where", "how", "when", "why", "just", "also", "still", "only", "not", "so", "very"
         }
+
+        name_patterns = [
+            # "My name is John Doe" or "Name: Priya"
+            r"\b(?:my\s+name\s+(?:is|'s)|my\s+names|call\s+me|name\s*[:=])\s+([A-Za-z]{2,25}(?:\s+[A-Za-z]{2,25})?)\b",
+            # "Hi! I'm Priya Sen. What is..." or "I am Sourav" or "Myself Priya Sen" or "It's Ananya"
+            r"(?:^|[.!?]\s*|\b(?:hi|hello|hey|namaste)\b[!,.]*\s*)(?:i\s+am|i'm|im|myself|this\s+is|it's|its)\s+([A-Za-z]{2,25}(?:\s+[A-Za-z]{2,25})?)\b",
+        ]
 
         for pattern in name_patterns:
             match = re.search(pattern, clean_text, re.IGNORECASE)
             if match:
                 raw_name = match.group(1).strip().strip(".,!?:;\"'")
+                words = raw_name.split()
+                if len(words) > 1 and words[1].lower() in ignored_name_words:
+                    raw_name = words[0]
+
                 first_word = raw_name.split()[0].lower() if raw_name else ""
                 if (
                     raw_name
                     and first_word not in ignored_name_words
-                    and 2 <= len(raw_name) <= 40
+                    and raw_name.lower() not in ignored_name_words
+                    and 2 <= len(raw_name) <= 30
                     and not any(char.isdigit() for char in raw_name)
-                    and not any(term in raw_name.lower() for term in ["sondesh", "mishti", "menu", "price", "delivery", "bento", "box"])
+                    and not any(term in raw_name.lower() for term in ["sondesh", "mishti", "menu", "price", "delivery", "bento", "box", "noida", "delhi", "gurgaon", "sector"])
                 ):
                     extracted_name = raw_name.title()
                     break

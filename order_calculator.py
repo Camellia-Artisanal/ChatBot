@@ -187,11 +187,24 @@ class OrderCalculator:
             "how much", "what is the price", "what's the price", "whats the price",
             "cost of", "price of", "rate of", "how much is", "how much for", "how much does",
             "what is", "what are", "how is", "what lentil", "what ingredients", "used in",
-            "made of", "made with", "tell me about", "describe", "explain", "how do you make"
+            "made of", "made with", "tell me about", "describe", "explain", "how do you make",
+            "can i customize", "can i customise", "can you customize", "can you customise",
+            "can i mix", "can we mix", "can you mix", "custom box", "customise the box", "customize the box",
+            "assorted", "mix of", "mix flavours", "mix two", "mix and match",
+            "can you deliver", "can i get delivery", "do you deliver", "deliver to",
+            "tomorrow morning", "tomorrow evening", "by 10 am", "by 10am", "morning by",
+            "shelf life", "how many pieces", "how many pcs", "how many piece",
+            "is it possible to", "do you take", "do you accept", "is your food", "is meat", "what oil",
+            "halal", "payment method", "payment methods", "take cod", "cash on delivery", "failed", "transaction failed"
         ])
         has_order_action = any(verb in text_lower for verb in [
-            "order", "buy", "send", "give", "add", "want to order", "want 250g", "want 500g", "want 1kg", "deliver", "book", "need to order", "pack of", "chahiye", "bhejo"
-        ])
+            "i want to order", "want to order", "please order", "place order", "i would like to order",
+            "book an order", "confirm order", "need to order", "chahiye", "bhejo"
+        ]) or (
+            any(verb in text_lower for verb in ["order", "send", "give", "add", "pack of", "deliver"])
+            and any(sz in text_lower for sz in ["250g", "500g", "1kg", "1 kg", "2 portions", "1 portion", "3 portions", "2 plate", "1 plate"])
+            and not any(q in text_lower for q in ["can you", "can i", "do you", "how much", "what is", "is it possible", "how long", "when will"])
+        )
         if is_inquiry and not has_order_action:
             return None
 
