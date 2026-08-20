@@ -1,5 +1,6 @@
 {
   "matching_rules": {
+    "guard_precedence": "GUARD_ templates (id starting with GUARD_) have absolute precedence over any answer template. When matched, they escalate immediately with response: null to prevent unverified brand statements.",
     "how_it_works": "Each template has 'triggers' (keywords/phrases). If a customer message contains ANY trigger from a template's list, that template fires. If multiple templates match, the one with the MOST matched keywords wins. If nothing matches confidently, escalate to human — never guess.",
     "matching_type": "case-insensitive substring / fuzzy keyword match (no LLM reasoning, no semantic guessing)",
     "min_confidence": "At least 1 strong keyword match required. Generic words alone (e.g. 'price', 'have') should NOT fire a template without a product keyword alongside them."
@@ -188,7 +189,13 @@
 
     {
       "id": "sondesh_price_general",
-      "triggers": ["how much is sondesh", "how much for sondesh", "price of sondesh", "cost of sondesh", "sondesh price", "sondesh cost", "how much sondesh", "sondesh rate", "what's the price", "whats the price", "what is the price", "price list", "how much does it cost", "mishti price", "menu price"],
+      "triggers": [
+        "how much is sondesh", "how much for sondesh", "price of sondesh", "cost of sondesh",
+        "sondesh price", "sondesh cost", "how much sondesh", "sondesh rate", "what's the price",
+        "whats the price", "what is the price", "price list", "how much does it cost", "mishti price",
+        "menu price", "সন্দেশের দাম কত", "সন্দেশের দাম", "সন্দেশ", "দাম কত", "দাম কত?", "dam koto",
+        "sondesher dam koto", "sondesher daam koto"
+      ],
       "response": "Hi, thanks for connecting! 🌸\n\nHere is our complete price breakdown table for both handcrafted collections:\n\n*Collection 1 — Aamar Mishti*\n```\n+-----------------------+-------+-------+-------+\n| Item / Flavour        | 250g  | 500g  |  1kg  |\n+-----------------------+-------+-------+-------+\n| Classic / Rose        | ₹450  | ₹800  | ₹1500 |\n| Mango / Kesar / Ada   | ₹550  | ₹1000 | ₹1800 |\n| Nolen Gur             | ₹600  | ₹1100 | ₹2000 |\n| Jolbhora (Liquid)*    | ₹750  | ₹1400 | ₹2500 |\n| Kanchagolla           | ₹450  | ₹800  | ₹1500 |\n+-----------------------+-------+-------+-------+\n* 250g(9pc) | 500g(18pc) | 1kg(36pc)\n* Jolbhora: 6pc | 12pc | 24pc\n```\n\n*Collection 2 — Signature A2 Collection (Pure Desi A2 Milk)*\n```\n+-----------------------+-------+-------+-------+\n| Item / Flavour        | 250g  | 500g  |  1kg  |\n+-----------------------+-------+-------+-------+\n| Classic / Rose        | ₹600  | ₹1100 | ₹2000 |\n| Mango/Kesar/Vanilla.. | ₹650  | ₹1200 | ₹2200 |\n| NolenGur/Thandai/Date | ₹700  | ₹1300 | ₹2500 |\n| Mahua Sondesh         | ₹900  | ₹1600 | ₹2900 |\n| Jolbhora (Liquid)*    | ₹900  | ₹1600 | ₹2900 |\n| Kanchagolla (Classic) | ₹600  | ₹1100 | ₹2000 |\n| Kanchagolla (NolenGur)| ₹700  | ₹1300 | ₹2500 |\n+-----------------------+-------+-------+-------+\n* Real Vanilla, Cinnamon, Thandai, Dates, Chocolate\n* 250g(9pc) | 500g(18pc) | 1kg(36pc)\n* Jolbhora: 6pc | 12pc | 24pc\n```\n\nPorter delivery charges on actuals from Sushant Lok, Gurgaon. Which collection, item, and flavour would you like?",
       "escalate": false,
       "source_ref": "client Q&A script > PRICE"
@@ -212,7 +219,12 @@
 
     {
       "id": "sondesh_nolen_gur",
-      "triggers": ["nolen gur sondesh", "nolen gur price", "thandai", "medjool dates", "dates", "chocolate sondesh", "chocolate", "nolen gur sondesh price", "thandai price", "medjool dates price", "chocolate price", "dates price", "dates sondesh", "thandai sondesh", "chocolate mishti", "nolen gur mishti", "nolen gur"],
+      "triggers": [
+        "nolen gur sondesh", "nolen gur price", "thandai", "medjool dates", "dates", "chocolate sondesh",
+        "chocolate", "nolen gur sondesh price", "thandai price", "medjool dates price", "chocolate price",
+        "dates price", "dates sondesh", "thandai sondesh", "chocolate mishti", "nolen gur mishti", "nolen gur",
+        "nolen gur kotota", "kotota available", "available ache", "নলেন গুড়", "নলেন গুড়", "নলেন গুড়ের সন্দেশ"
+      ],
       "response": "Nolen Gur, Thandai, Medjool Dates & Chocolate Sondesh Table: 🌸\n\n```\n+-------------------------+-------+-------+-------+\n| Collection & Flavours   | 250g  | 500g  |  1kg  |\n+-------------------------+-------+-------+-------+\n| Aamar Mishti (Nolen Gur)| ₹600  | ₹1100 | ₹2000 |\n| Sig A2 (Gur/Thandai/..)| ₹700  | ₹1300 | ₹2500 |\n+-------------------------+-------+-------+-------+\n* Box count: 9 pcs (250g) | 18 pcs (500g) | 36 pcs (1kg)\n```\n\nWhich collection, flavour, and pack size would you like to order?",
       "escalate": false,
       "source_ref": "menu.json > Sondesh > Nolen Gur"
@@ -301,47 +313,64 @@
     },
 
     {
-      "id": "assorted_custom_box",
+      "id": "GUARD_collection_customization",
       "triggers": [
+        "difference between collection 1 and collection 2", "difference between collection 1 and 2",
+        "collection 1 vs collection 2", "compare collection 1 and collection 2",
+        "what is the difference between collection 1 and collection 2", "collection 1 and collection 2 difference",
+        "what is difference between collection 1 and collection 2", "difference between the collections",
+        "how do the collections differ", "difference between collection", "difference between collections",
         "customize", "customise", "custom box", "customised box", "customized box",
-        "mix flavours", "mix of rose", "mix of classic", "mix sondesh", "assorted box",
-        "assorted", "can i mix", "can we mix", "mix two flavours", "mix and match",
-        "mix 2 flavours", "mixed flavours", "mix of rose and classic", "customize the box",
-        "customise the box", "can i customize", "can i customise"
+        "mix flavours", "mix flavors", "mix of rose", "mix of classic", "mix sondesh",
+        "assorted box", "assorted", "can i mix", "can we mix", "mix two flavours", "mix two flavors",
+        "mix and match", "mix 2 flavours", "mix 2 flavors", "mixed flavours", "mixed flavors",
+        "mix of rose and classic", "customize the box", "customise the box", "can i customize",
+        "can i customise", "mix rose and classic", "mix classic and rose", "can i mix rose and classic",
+        "mix rose and classic flavours", "mix rose and classic flavors", "mix flavours in a 500g box",
+        "mix flavors in a 500g box", "can i mix rose and classic flavours in a 500g box"
       ],
-      "response": "Yes, absolutely! 🌸 You can customize your 500g (18 pcs) or 1kg (36 pcs) Sondesh box with a mix of your favourite flavours (e.g. half Rose & half Classic, or an assortment of Nolen Gur, Mango & Kesar) at no extra charge!\n\nFor 250g boxes (9 pcs), we usually pack a single flavour due to our handcrafted small-batch packaging.\n\nWhich flavours and pack size (500g or 1kg) would you like in your custom box?",
-      "escalate": false,
-      "source_ref": "menu.json > custom assorted boxes"
+      "response": null,
+      "escalate": true,
+      "source_ref": "GUARD: Pending client confirmation from Somdeb Ji"
     },
 
     {
-      "id": "dietary_halal_oil",
+      "id": "GUARD_dietary_halal_oil",
       "triggers": [
         "halal", "halal certified", "is food halal", "is meat halal", "is chicken halal",
         "is mutton halal", "jhatka", "what oil", "which oil", "cooking oil", "mustard oil",
-        "ghee", "what medium", "oil do you cook in", "dietary", "pure veg prep"
+        "mustard", "ghee", "what medium", "oil do you cook in", "dietary", "pure veg prep",
+        "cooking medium", "oil do you use", "what kind of oil", "which meat", "halal meat",
+        "is your meat halal and which oil do you cook in"
       ],
-      "response": "At Camellia Artisanal, we maintain the highest standards of culinary authenticity, quality, and hygiene: 🌸\n\n• *Meat & Poultry*: 100% fresh, Halal-sourced chicken and mutton for all our non-vegetarian dishes.\n• *Cooking Mediums*: We cook our festive Basonti Polao & Pulao in pure in-house artisanal ghee, and our traditional curries in pure cold-pressed mustard oil (Kachi Ghani) for authentic Bengali flavour.\n• *Vegetarian & Mishti Purity*: Our Sondesh and vegetarian curries/bhog dishes are prepared separately with pure dairy milk and 100% vegetarian ingredients.\n\nFeel free to let us know if you have any other dietary questions or preferences!",
-      "escalate": false,
-      "source_ref": "brand standards > culinary ingredients & dietary compliance"
+      "response": null,
+      "escalate": true,
+      "source_ref": "GUARD: Pending client confirmation from Somdeb Ji"
     },
 
     {
-      "id": "payment_methods",
+      "id": "GUARD_payment_methods",
       "triggers": [
         "payment methods", "payment method", "how to pay", "how do i pay", "payment options",
         "do you take cod", "cash on delivery", "cod", "do you accept upi", "accept upi",
         "gpay", "paytm", "phonepe", "net banking", "credit card", "debit card", "pay online",
-        "payment mode", "mode of payment", "take cod"
+        "payment mode", "mode of payment", "take cod", "qr code", "upi qr", "send qr", "qr",
+        "online pay", "can i pay via upi qr code or cod", "can i pay via upi", "pay via upi",
+        "pay via upi qr", "qr code or cod"
       ],
-      "response": "We accept all major digital payment methods: 💳\n\n• *UPI*: Google Pay, PhonePe, Paytm, BHIM\n• *Cards & Net Banking*: All major Debit/Credit cards and Net Banking via secure invoice link.\n\n*Payment Policy*: Because our artisanal Sondesh and Bengali meals are prepared fresh to order in small batches without artificial preservatives, all orders are **prepaid** (we do not offer Cash on Delivery / COD).\n\nOnce your order is finalized, our Kitchen Manager Mr. Guru Dayal Singh (+91 87965 51990) will verify your address and share the official payment link via WhatsApp! 🌸",
-      "escalate": false,
-      "source_ref": "operations > payment methods & policies"
+      "response": null,
+      "escalate": true,
+      "source_ref": "GUARD: Pending client confirmation from Somdeb Ji"
     },
 
     {
       "id": "combo_bento",
-      "triggers": ["combo", "bento", "luchi combo", "bengali bento", "veg bento", "non veg bento", "mutton bento", "kosha mangsho bento"],
+      "triggers": [
+        "combo", "bento", "luchi combo", "bengali bento", "veg bento", "non veg bento",
+        "non-veg bento", "mutton bento", "kosha mangsho bento", "bento box",
+        "what is in your non-veg bento box", "what is in your bento box", "what is in your bento",
+        "what is in your non-veg bento", "non-veg bento box", "veg bento box"
+      ],
       "response": "Bengali Combo & Bento Meals Table: 🍱\n\n```\n+-----------------------+------------------------------------+-------+\n| Bento / Combo Option  | Items Included                     | Price |\n+-----------------------+------------------------------------+-------+\n| Veg Bento Box         | 6 Luchi, Chholar Daal, 1 Sondesh   | ₹400  |\n| Non-Veg Bento Box     | 6 Luchi, Kosha Mangsho, 1 Sondesh  | ₹700  |\n| Luchi + Aloor Dom     | 4 Luchi, Aloor Dom, 1 Sondesh      | ₹400  |\n| Luchi + Robibarer     | 4 Luchi, Robibarer Mangsho, 1 Mishti| ₹700 |\n+-----------------------+------------------------------------+-------+\n```\n\nWhich combo or bento meal would you like to order? 🌸",
       "escalate": false,
       "source_ref": "menu.json > weekly_menus[] > combos / bengali_bento"
@@ -352,7 +381,10 @@
       "triggers": [
         "delivery", "deliver to", "do you deliver", "ship to", "courier",
         "delhi", "gurgaon", "gurugram", "noida", "ghaziabad", "faridabad",
-        "delhi ncr", "ncr", "delhi delivery", "deliver in delhi", "deliver to delhi"
+        "delhi ncr", "ncr", "delhi delivery", "deliver in delhi", "deliver to delhi",
+        "dwarka", "indirapuram", "sector 45", "sector 62", "cr park", "chittaranjan park",
+        "cybercity", "cyberhub", "delhi te deliver hoy", "delhi te delivery", "ডেলিভারি", "ডেলিভারি হবে",
+        "delhi te", "deliver hoy"
       ],
       "response": "We deliver across Delhi NCR (Delhi, Gurgaon, Noida, Ghaziabad & Faridabad). Courier charges are on actuals (added above listed prices) and shipped from Sushant Arcade, Gurgaon. Which area are you in?",
       "escalate": false,
@@ -369,12 +401,25 @@
         "outside delhi ncr", "other city", "other cities", "different city", "out of state",
         "interstate", "do you deliver to bangalore", "do you deliver in bangalore",
         "bangalore delivery", "deliver to bangalore", "ship to bangalore",
-        "do you deliver to other cities", "deliver to other cities", "ship to other cities",
-        "other cities delivery"
+        "can you deliver to bangalore", "can you deliver 2 boxes of nolen gur sondesh to bangalore",
+        "deliver 2 boxes to bangalore", "do you deliver to other cities", "deliver to other cities",
+        "ship to other cities", "other cities delivery"
       ],
       "response": "Hi, thank you for getting in touch.\n\nI would have loved to. However, the Norom Pak Sondesh that we make can be transported from one city to another only through a reliable cold-chain courier service. Unfortunately, we haven't yet found a partner who can offer this at a reasonable cost.\n\nSo for now, we're unable to ship our sondesh outside Delhi NCR — we do not deliver to Bangalore or other cities at this time. We'd love to, though, and will certainly start as soon as we find a dependable cold-chain delivery option.\n\nThat said, many of our regular customers who live in different parts of India and the world do buy our sondesh by asking friends or family travelling from Delhi NCR to carry a few boxes for them. We're happy to deliver the order to their home, office, hotel, or any other convenient location before they travel.\n\nThank you for thinking of camellia.artisanal! 🌸",
       "escalate": false,
       "source_ref": "client Q&A script > OTHER CITIES"
+    },
+
+    {
+      "id": "artisanal_differentiation",
+      "triggers": [
+        "different from", "other sweet shops", "more expensive", "why expensive", "why is it expensive",
+        "why so expensive", "worth the price", "bhikharam", "bhikharam chandmal", "haldiram",
+        "why higher price", "compare with other", "how are you different", "why should i buy"
+      ],
+      "response": "What sets Camellia Artisanal apart from commercial sweet shops: 🌸\n\n• *Pure Ingredients*: We use 100% pure dairy and unadulterated desi A2 cow milk (never milk powder or commercial stabilizers).\n• *Real Kolkata Nolen Gur*: Our liquid Nolen Gur is sourced directly from artisanal jaggery producers in Bengal — zero chemical essences or artificial coloring.\n• *Made Fresh to Order*: Every single Sondesh is handcrafted from scratch in small batches by our all-women kitchen team in Sushant Lok, Gurgaon, with subtle natural sweetness.\n• *Eco-Friendly & Pure*: Delivered in plastic-free, cornstarch-based boxes.\n\nWould you like to try a 250g tasting box of our Classic, Rose, or Nolen Gur Sondesh?",
+      "escalate": false,
+      "source_ref": "brand positioning > artisanal differentiation"
     },
 
     {
@@ -414,16 +459,19 @@
     },
 
     {
-      "id": "allergen_nut_safety",
+      "id": "GUARD_allergen_nut_safety",
       "triggers": [
         "allergy", "allergies", "nut allergy", "nuts allergy", "allergic to nuts",
         "nut-free", "nut free", "nuts free", "allergen", "allergens", "allergic",
         "pistachio allergy", "cashew allergy", "peanut allergy", "gluten allergy",
-        "gluten free", "gluten-free", "contains nuts", "without nuts", "no nuts"
+        "gluten free", "gluten-free", "contains nuts", "without nuts", "no nuts",
+        "severe nut allergy", "severe nut", "safe for someone with a severe nut allergy",
+        "are your classic and rose sondesh safe for someone with a severe nut allergy", "safe for allergy",
+        "severe allergy", "cross contamination", "severe nut allergies", "nut safety"
       ],
-      "response": "At Camellia Artisanal, food safety and allergen transparency are our top priorities: 🌸\n\n• *Nut-Free Flavours Available*: Our Classic Norom Pak, Rose Sondesh, and Nolen Gur Norom Pak are crafted without nuts in the recipe. We can also omit any dry fruit garnish (pistachio/almond) upon request!\n• *Gluten-Free*: All our Sondesh are naturally gluten-free, prepared using 100% pure dairy/A2 cow milk and artisanal sweeteners.\n• *Allergen Advisory*: While we take utmost hygiene precautions, our artisanal kitchen does handle pistachios, cashews, and almonds for certain traditional specialties. Please let us know if you have severe or airborne allergies so our kitchen team can take special care!",
-      "escalate": false,
-      "source_ref": "brand safety & allergen guidelines"
+      "response": null,
+      "escalate": true,
+      "source_ref": "GUARD: Pending client confirmation from Somdeb Ji"
     },
 
     {
@@ -440,16 +488,19 @@
     },
 
     {
-      "id": "kitchen_pickup_address",
+      "id": "GUARD_kitchen_pickup_address",
       "triggers": [
         "kitchen address", "pickup address", "self pickup", "pick it up from kitchen",
         "pick up directly", "come pick it up", "kitchen timings", "pickup timing",
         "kitchen location", "sushant arcade address", "pick up location", "can i pick up",
-        "can i come and collect", "takeaway from kitchen", "pickup from sushant", "where is your kitchen"
+        "can i come and collect", "takeaway from kitchen", "pickup from sushant", "where is your kitchen",
+        "can i pick up my order from your kitchen", "can i pick up my order from your kitchen? what is the address and timings?",
+        "collect directly", "pickup timings", "kitchen pickup", "pick up from kitchen",
+        "pick up from your kitchen", "pickup from your kitchen"
       ],
-      "response": "You are very welcome to pick up your order directly from our kitchen! 🌸\n\n📍 *Kitchen Address*: Camellia Artisanal, Sushant Arcade, Sushant Lok Phase 1, Sector 43, Gurugram (Near HUDA City Centre Metro Station).\n⏰ *Pickup Timings*: 10:00 AM – 8:00 PM (Monday to Sunday).\n\nSince all our Sondesh and Bengali dishes are freshly handcrafted, please give us a 15–30 minute heads-up on WhatsApp before dropping by so we can have your fresh box packed and ready for you! ✨",
-      "escalate": false,
-      "source_ref": "kitchen location & pickup policy"
+      "response": null,
+      "escalate": true,
+      "source_ref": "GUARD: Pending client confirmation from Somdeb Ji"
     },
 
     {
@@ -472,6 +523,46 @@
       "response": "At Camellia Artisanal, all our Sondesh are handcrafted without artificial chemical sweeteners or corn syrups: 🌸\n\n• *Authentic Nolen Gur Norom Pak*: Made with 100% natural, unrefined date palm jaggery (Nolen Gur). It has a lower glycemic index and a mild, natural sweetness compared to refined white sugar sweets.\n• *Mild Sweetness Profile*: Because we make fresh small batches with pure dairy / A2 cow milk chhena, our Sondesh is noticeably light and subtly sweetened, never cloying.\n• *Diabetic Guidance*: While naturally sweetened with pure Nolen Gur or minimal unrefined cane sugar, it is not certified medical zero-calorie sugar-free. We recommend moderation or consulting with a physician for strict diabetic diets.\n\nWould you like to try our subtly sweetened Nolen Gur Norom Pak or Classic Sondesh? 🌸",
       "escalate": false,
       "source_ref": "dietary guidelines > sugar and diabetes"
+    },
+
+    {
+      "id": "recall_order_flavour",
+      "triggers": [
+        "earlier flavour choice", "earlier flavor choice", "earlier choice", "do i need to repeat",
+        "need to repeat it", "already told you", "remember my flavour", "remember my flavor",
+        "what flavour did i choose", "what did i select"
+      ],
+      "response": "Yes! We already have your choice saved in our active session. You don't need to repeat it! 🌸",
+      "escalate": false,
+      "source_ref": "session memory > order draft recall"
+    },
+
+    {
+      "id": "GUARD_shelf_life_storage",
+      "triggers": [
+        "shelf life", "how long can i store", "how long does it last", "how long will it last",
+        "storage", "refrigeration", "refrigerate", "refrigerator", "fridge", "how to store",
+        "expiry", "how many days will it last", "how long to keep", "keep in fridge",
+        "keep in refrigerator", "storage guidelines", "how long does sondesh last",
+        "how long can i store the sondesh and does it need refrigeration", "shelf life and storage",
+        "store in fridge", "store in refrigerator", "store sondesh", "does it spoil"
+      ],
+      "response": null,
+      "escalate": true,
+      "source_ref": "GUARD: Pending client confirmation from Somdeb Ji"
+    },
+
+    {
+      "id": "GUARD_staff_identity",
+      "triggers": [
+        "who is the owner", "owner name", "who is the founder", "who is the chef",
+        "who is the cook", "who runs the kitchen", "staff names", "who works there",
+        "kitchen staff", "manager name", "who is your manager", "who is somdeb",
+        "cook name", "founder name", "head chef", "owner of camellia", "founder of camellia"
+      ],
+      "response": null,
+      "escalate": true,
+      "source_ref": "GUARD: Pending client confirmation from Somdeb Ji"
     }
   ],
 
@@ -481,7 +572,11 @@
       "refund", "complaint", "cancel order", "talk to human", "speak to human",
       "human agent", "manager", "custom order", "bulk order", "negotiation",
       "payment link", "transaction failed", "payment failed", "upi failed",
-      "money deducted", "payment error", "payment issue", "amount deducted", "failed payment"
+      "money deducted", "payment error", "payment issue", "amount deducted", "failed payment",
+      "discount", "discounts", "bulk discount", "custom branding", "ribbons", "branding",
+      "instead of", "can you do it for", "less price", "negotiate", "cheaper",
+      "same menu last week", "best seller", "bestseller", "manager number", "manager's phone number",
+      "give me the manager", "give me your manager"
     ],
     "examples": [
       "custom/bulk order pricing negotiation",

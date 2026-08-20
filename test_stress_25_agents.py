@@ -1,0 +1,349 @@
+"""
+Comprehensive 25-Agent Stress Testing Suite for Camellia Artisanal WhatsApp/Instagram Chatbot.
+Simulates 25 diverse real-world customer personas and conversational scenarios.
+Evaluates:
+  1. Response accuracy and factual correctness against menu.json & qa_templates.json
+  2. Ad-Gate enforcement (Organic Instagram blocking vs Ad-Clicking allowance)
+  3. Session memory multi-turn context and factual slot preservation
+  4. Explicit and soft escalation triggers (Forwarding to Mr. Guru Dayal Singh)
+  5. Bengali script, Banglish, typos, and cultural slang comprehension
+  6. Dietary, packaging, kitchen pickup, and shelf-life policies
+"""
+
+import sys
+import os
+import json
+import unittest
+from responder import responder, DeterministicResponder
+from session_memory import session_memory
+from order_calculator import order_calculator
+from config import config
+
+class Test25AgentStressScenarios(unittest.TestCase):
+    def setUp(self):
+        # Reset session memory before each agent test
+        self.responder = DeterministicResponder()
+        session_memory._sessions.clear()
+
+    def test_agent_01_bengali_native_speaker(self):
+        """Agent 1: Speaks in Bengali script and Banglish asking for Nolen Gur Sondesh."""
+        user_id = "user_bengali_01"
+        channel = "whatsapp"
+        
+        # Turn 1: Bengali script query
+        resp1 = self.responder.respond("নলেন গুড়ের সন্দেশ পাওয়া যাবে?", user_id=user_id, channel=channel)
+        self.assertTrue(resp1.was_matched)
+        self.assertIn("Nolen Gur", resp1.text)
+        self.assertIn("₹600", resp1.text)
+
+        # Turn 2: Banglish delivery query
+        resp2 = self.responder.respond("Delhi te deliver hoy?", user_id=user_id, channel=channel)
+        self.assertTrue(resp2.was_matched)
+        self.assertIn("Delhi NCR", resp2.text)
+
+    def test_agent_02_corporate_bulk_buyer_escalation(self):
+        """Agent 2: Corporate client wanting 100 boxes with custom branding and price discount."""
+        user_id = "user_corp_02"
+        channel = "whatsapp"
+        
+        resp = self.responder.respond(
+            "Hi, we need 100 custom boxes of Signature Sondesh for Diwali gifting with our company logo ribbons. Can we get a bulk discount?",
+            user_id=user_id,
+            channel=channel
+        )
+        # Should escalate to human manager for bulk customization & discount
+        self.assertFalse(resp.was_matched)
+        self.assertIn("Guru Dayal Singh", resp.text)
+        self.assertIn("+91 87965 51990", resp.text)
+
+    def test_agent_03_budget_haggler(self):
+        """Agent 3: Bargaining customer comparing with commercial shops."""
+        user_id = "user_haggler_03"
+        channel = "whatsapp"
+
+        # Turn 1: Why expensive / compare with Bhikharam
+        resp1 = self.responder.respond("Why is your sondesh more expensive than Bhikharam Chandmal?", user_id=user_id, channel=channel)
+        self.assertTrue(resp1.was_matched)
+        self.assertIn("pure dairy", resp1.text.lower())
+        self.assertIn("desi a2", resp1.text.lower())
+
+        # Turn 2: Attempting to negotiate price
+        resp2 = self.responder.respond("Can you do it for less price instead of ₹800?", user_id=user_id, channel=channel)
+        self.assertFalse(resp2.was_matched)
+        self.assertIn("Guru Dayal Singh", resp2.text)
+
+    def test_agent_04_health_and_dietary_inquirer(self):
+        """Agent 4: Inquiring about diabetes, Halal meat, and cooking oils."""
+        user_id = "user_health_04"
+        channel = "whatsapp"
+
+        # Turn 1: Diabetic / sugar free
+        resp1 = self.responder.respond("Do you have sugar free or diabetic friendly options?", user_id=user_id, channel=channel)
+        self.assertTrue(resp1.was_matched)
+        self.assertIn("Nolen Gur", resp1.text)
+        self.assertIn("glycemic", resp1.text.lower())
+
+        # Turn 2: Halal & Mustard oil check (Guarded until client confirms certification & cooking mediums)
+        resp2 = self.responder.respond("Is your meat halal and which oil do you cook in?", user_id=user_id, channel=channel)
+        self.assertFalse(resp2.was_matched)
+        self.assertEqual(resp2.template_id, "GUARD_dietary_halal_oil")
+        self.assertIn("Guru Dayal Singh", resp2.text)
+
+    def test_agent_05_strict_vegan_inquirer(self):
+        """Agent 5: Asking if Sondesh can be made vegan / plant-based."""
+        user_id = "user_vegan_05"
+        channel = "whatsapp"
+
+        resp = self.responder.respond("Are any of your sondesh vegan or lactose-free?", user_id=user_id, channel=channel)
+        # Should answer or escalate gracefully informing pure dairy chhana is core
+        self.assertTrue(resp.was_matched or "Guru Dayal Singh" in resp.text)
+
+    def test_agent_06_multi_turn_order_with_session_memory(self):
+        """Agent 6: 4-turn order with name introduction and slot memory recall."""
+        user_id = "user_memory_06"
+        channel = "whatsapp"
+
+        # Turn 1: Introduction
+        resp1 = self.responder.respond("Hi, my name is Priya Sen! What are your Rose Sondesh prices?", user_id=user_id, channel=channel)
+        self.assertIn("Priya Sen", resp1.text)
+        self.assertIn("Rose Sondesh", resp1.text)
+        self.assertIn("₹450", resp1.text)
+
+        # Turn 2: Specific flavour choice
+        resp2 = self.responder.respond("I want the rose flavour in signature collection", user_id=user_id, channel=channel)
+        self.assertTrue(resp2.was_matched)
+        self.assertIn("Signature", resp2.text)
+
+        # Turn 3: Inquire sizes
+        resp3 = self.responder.respond("What are the 500g box options?", user_id=user_id, channel=channel)
+        self.assertTrue(resp3.was_matched)
+        self.assertIn("500g", resp3.text)
+
+        # Turn 4: Memory check of earlier choice
+        resp4 = self.responder.respond("ok and does that come to my earlier flavour choice or do I need to repeat it", user_id=user_id, channel=channel)
+        self.assertTrue(resp4.was_matched)
+        self.assertIn("Rose", resp4.text)
+        self.assertIn("no need to repeat", resp4.text.lower())
+
+    def test_agent_07_out_of_area_bangalore_inquiry(self):
+        """Agent 7: Customer from Bangalore asking for home delivery."""
+        user_id = "user_blr_07"
+        channel = "whatsapp"
+
+        resp = self.responder.respond("Can you deliver 2 boxes of Nolen Gur Sondesh to Bangalore?", user_id=user_id, channel=channel)
+        self.assertTrue(resp.was_matched)
+        self.assertIn("Norom Pak Sondesh", resp.text)
+        self.assertIn("cold-chain", resp.text)
+        self.assertIn("unable to ship our sondesh outside Delhi NCR", resp.text)
+        self.assertIn("friends or family travelling", resp.text)
+
+    def test_agent_08_typo_and_slang_comprehension(self):
+        """Agent 8: Customer with heavy typos and phonetic Bengali terms."""
+        user_id = "user_typo_08"
+        channel = "whatsapp"
+
+        resp = self.responder.respond("whast is teh proce of jol bhora and kancha gola?", user_id=user_id, channel=channel)
+        self.assertTrue(resp.was_matched)
+        self.assertTrue("Jolbhora" in resp.text or "Kanchagolla" in resp.text)
+
+    def test_agent_09_angry_complaint_escalation(self):
+        """Agent 9: Customer with missing items or transaction problem."""
+        user_id = "user_angry_09"
+        channel = "whatsapp"
+
+        resp = self.responder.respond("I paid ₹1400 via UPI 2 hours ago but received no confirmation! Where is my manager?", user_id=user_id, channel=channel)
+        self.assertFalse(resp.was_matched)
+        self.assertIn("Guru Dayal Singh", resp.text)
+        self.assertIn("+91 87965 51990", resp.text)
+
+    def test_agent_10_instagram_ad_gate_enforcement(self):
+        """Agent 10: Instagram Ad-Gate test (Organic blocked vs Ad referral allowed)."""
+        user_id = "ig_user_10"
+        channel = "instagram"
+
+        orig_bypass = config.BYPASS_AD_GATE
+        try:
+            config.BYPASS_AD_GATE = False
+            # 10a: Organic Instagram DM -> Blocked (No auto-response)
+            resp_organic = self.responder.respond("Hi send menu", user_id=user_id, channel=channel, referral_source=None)
+            self.assertFalse(resp_organic.was_matched)
+            self.assertEqual(resp_organic.template_id, "ad_gate_blocked")
+            self.assertEqual(resp_organic.text, "")
+
+            # 10b: Ad Referral Click -> Allowed
+            resp_ad = self.responder.respond("Hi send menu", user_id=user_id, channel=channel, referral_source="ADS", referral_ad_id="ad_diwali_123")
+            self.assertTrue(resp_ad.was_matched)
+            self.assertIn("Camellia Artisanal", resp_ad.text)
+        finally:
+            config.BYPASS_AD_GATE = orig_bypass
+
+    def test_agent_11_delhi_ncr_localities_coverage(self):
+        """Agent 11: Asking delivery to various NCR localities."""
+        user_id = "user_ncr_11"
+        channel = "whatsapp"
+
+        for loc in ["Do you deliver to Dwarka Sector 12?", "Is delivery available in Indirapuram Ghaziabad?", "Can you send to CR Park Delhi?"]:
+            resp = self.responder.respond(loc, user_id=user_id, channel=channel)
+            self.assertTrue(resp.was_matched, f"Failed on locality: {loc}")
+            self.assertIn("Delhi NCR", resp.text)
+
+    def test_agent_12_kitchen_self_pickup(self):
+        """Agent 12: Customer wanting to collect directly from kitchen (Guarded until client confirms address)."""
+        user_id = "user_pickup_12"
+        channel = "whatsapp"
+
+        resp = self.responder.respond("Can I pick up my order from your kitchen? What is the address and timings?", user_id=user_id, channel=channel)
+        self.assertFalse(resp.was_matched)
+        self.assertEqual(resp.template_id, "GUARD_kitchen_pickup_address")
+        self.assertIn("Guru Dayal Singh", resp.text)
+
+    def test_agent_13_artisanal_differentiation(self):
+        """Agent 13: Customer asking what makes Camellia special."""
+        user_id = "user_diff_13"
+        channel = "whatsapp"
+
+        resp = self.responder.respond("How are you different from other sweet shops?", user_id=user_id, channel=channel)
+        self.assertTrue(resp.was_matched)
+        self.assertIn("100% pure dairy", resp.text)
+        self.assertIn("Nolen Gur", resp.text)
+        self.assertIn("all-women kitchen", resp.text)
+
+    def test_agent_14_custom_assorted_box(self):
+        """Agent 14: Mixing flavours in a 500g box (Guarded until client confirms custom mixing policy)."""
+        user_id = "user_custom_14"
+        channel = "whatsapp"
+
+        resp = self.responder.respond("Can I mix rose and classic flavours in a 500g box?", user_id=user_id, channel=channel)
+        self.assertFalse(resp.was_matched)
+        self.assertEqual(resp.template_id, "GUARD_collection_customization")
+        self.assertIn("Guru Dayal Singh", resp.text)
+
+    def test_agent_15_high_value_gifting_signature_a2(self):
+        """Agent 15: Ordering Mahua Sondesh and Jolbhora in Signature A2."""
+        user_id = "user_gift_15"
+        channel = "whatsapp"
+
+        resp1 = self.responder.respond("What is the price of Mahua Sondesh?", user_id=user_id, channel=channel)
+        self.assertTrue(resp1.was_matched)
+        self.assertIn("Mahua", resp1.text)
+        self.assertIn("₹900", resp1.text)
+
+        resp2 = self.responder.respond("Tell me about Jolbhora with liquid filling", user_id=user_id, channel=channel)
+        self.assertTrue(resp2.was_matched)
+        self.assertIn("Jolbhora", resp2.text)
+        self.assertIn("₹750", resp2.text)
+
+    def test_agent_16_weekly_rotation_dishes(self):
+        """Agent 16: Inquiring about Bengali festive dishes (Veg & Non-Veg)."""
+        user_id = "user_foodie_16"
+        channel = "whatsapp"
+
+        resp_veg = self.responder.respond("Show this week's vegetarian menu", user_id=user_id, channel=channel)
+        self.assertTrue(resp_veg.was_matched)
+        self.assertIn("Aloor Dom", resp_veg.text)
+        self.assertIn("Dhokar Dalna", resp_veg.text)
+
+        resp_nv = self.responder.respond("What non veg mutton and fish dishes do you have?", user_id=user_id, channel=channel)
+        self.assertTrue(resp_nv.was_matched)
+        self.assertIn("Robibarer Mangsho", resp_nv.text)
+        self.assertIn("Bhetki Paturi", resp_nv.text)
+
+    def test_agent_17_payment_methods_and_qr_code(self):
+        """Agent 17: Inquiring how to pay, UPI QR, and COD (Guarded until client confirms accepted methods)."""
+        user_id = "user_pay_17"
+        channel = "whatsapp"
+
+        resp = self.responder.respond("Can I pay via UPI QR code or COD?", user_id=user_id, channel=channel)
+        self.assertFalse(resp.was_matched)
+        self.assertEqual(resp.template_id, "GUARD_payment_methods")
+        self.assertIn("Guru Dayal Singh", resp.text)
+
+    def test_agent_18_shelf_life_and_storage(self):
+        """Agent 18: Inquiring how long Sondesh lasts and storage guidelines (Guarded until client confirms shelf life)."""
+        user_id = "user_storage_18"
+        channel = "whatsapp"
+
+        resp = self.responder.respond("How long can I store the sondesh and does it need refrigeration?", user_id=user_id, channel=channel)
+        self.assertFalse(resp.was_matched)
+        self.assertEqual(resp.template_id, "GUARD_shelf_life_storage")
+        self.assertIn("Guru Dayal Singh", resp.text)
+
+    def test_agent_19_spam_and_gibberish_filter(self):
+        """Agent 19: Malicious bot sending spam links and gibberish."""
+        user_id = "spam_bot_19"
+        channel = "whatsapp"
+
+        resp1 = self.responder.respond("Claim free coins at http://freecoins-crypto.xyz click now!", user_id=user_id, channel=channel)
+        self.assertFalse(resp1.was_matched)
+        self.assertIn("Guru Dayal Singh", resp1.text)
+
+        resp2 = self.responder.respond("??? !!! 🚀🌸", user_id=user_id, channel=channel)
+        self.assertFalse(resp2.was_matched)
+
+    def test_agent_20_order_receipt_calculator(self):
+        """Agent 20: Comprehensive order calculation of multiple items."""
+        user_id = "user_calc_20"
+        channel = "whatsapp"
+
+        # Ordering 2 boxes of 500g Rose Sondesh (Aamar Mishti: 2 * ₹800 = ₹1600) + 1 box 250g Jolbhora (₹750)
+        res = order_calculator.parse_and_calculate("I want 2 boxes of 500g Rose Sondesh and 1 box of 250g Jolbhora")
+        self.assertIsNotNone(res)
+        self.assertIn("ORDER DRAFT RECEIPT", res["formatted_receipt"])
+        self.assertIn("₹2,350", res["formatted_receipt"])
+
+    def test_agent_21_bengali_bento_combo(self):
+        """Agent 21: Inquiring about Bengali Bento meals."""
+        user_id = "user_bento_21"
+        channel = "whatsapp"
+
+        resp = self.responder.respond("What is in your Non-Veg Bento box?", user_id=user_id, channel=channel)
+        self.assertTrue(resp.was_matched)
+        self.assertIn("Bento", resp.text)
+        self.assertIn("Luchi", resp.text)
+
+    def test_agent_22_allergen_nut_safety(self):
+        """Agent 22: Checking nut allergies (Guarded until client confirms allergen protocol)."""
+        user_id = "user_allergy_22"
+        channel = "whatsapp"
+
+        resp = self.responder.respond("Are your classic and rose sondesh safe for someone with a severe nut allergy?", user_id=user_id, channel=channel)
+        self.assertFalse(resp.was_matched)
+        self.assertEqual(resp.template_id, "GUARD_allergen_nut_safety")
+        self.assertIn("Guru Dayal Singh", resp.text)
+
+    def test_agent_23_collection_comparison(self):
+        """Agent 23: Comparing Collection 1 vs Collection 2 (Guarded until client confirms collection differentiation)."""
+        user_id = "user_compare_23"
+        channel = "whatsapp"
+
+        resp = self.responder.respond("What is the difference between Collection 1 and Collection 2?", user_id=user_id, channel=channel)
+        self.assertFalse(resp.was_matched)
+        self.assertEqual(resp.template_id, "GUARD_collection_customization")
+        self.assertIn("Guru Dayal Singh", resp.text)
+
+    def test_agent_24_packaging_sustainability(self):
+        """Agent 24: Asking about eco-friendly packaging and plastic usage."""
+        user_id = "user_eco_24"
+        channel = "whatsapp"
+
+        resp = self.responder.respond("Is your packaging plastic-free and eco-friendly?", user_id=user_id, channel=channel)
+        self.assertTrue(resp.was_matched)
+        self.assertIn("plastic-free", resp.text.lower())
+        self.assertIn("cornstarch", resp.text.lower())
+
+    def test_agent_25_general_greeting_and_menu_browse(self):
+        """Agent 25: First-time visitor greeting and asking for full catalog."""
+        user_id = "user_greet_25"
+        channel = "whatsapp"
+
+        resp1 = self.responder.respond("Hello!", user_id=user_id, channel=channel)
+        self.assertTrue(resp1.was_matched)
+        self.assertIn("Camellia Artisanal", resp1.text)
+
+        resp2 = self.responder.respond("Please share your full menu and prices", user_id=user_id, channel=channel)
+        self.assertTrue(resp2.was_matched)
+        self.assertIn("Aamar Mishti", resp2.text)
+        self.assertIn("Signature", resp2.text)
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

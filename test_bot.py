@@ -523,10 +523,12 @@ class TestCamelliaBot(unittest.TestCase):
         session_memory.clear_session(user_id, channel)
 
         # 1. Establish session memory turns
-        responder.match_and_respond("Call me Shoaib", user_id=user_id, channel=channel)
+        responder.match_and_respond("Call me Shoaib", user_id=user_id, channel=channel, referral_source="ADS")
 
         # 2. Trigger unmatched escalation
-        resp_text, was_matched, tmpl_id, img_url = responder.match_and_respond("Can you send a violin player for a wedding?", user_id=user_id, channel=channel)
+        resp_text, was_matched, tmpl_id, img_url = responder.match_and_respond(
+            "Can you send a violin player for a wedding?", user_id=user_id, channel=channel, referral_source="ADS"
+        )
         with patch.object(escalator, "send_human_alert", return_value={"status": "sent", "mock": True}):
             escalator.handle_escalation(user_id, channel, "Can you send a violin player for a wedding?", "Unmatched Query", {})
 
@@ -1339,48 +1341,44 @@ class TestCamelliaBot(unittest.TestCase):
         from session_memory import session_memory
         responder.reload_templates()
 
-        # Scenario 1: Compound name introduction with gifting/difference inquiry
+        # Scenario 1: Compound name introduction with gifting/difference inquiry (Guarded until client confirms difference)
         uid1 = "sim_user_priya_1"
         session_memory.clear_session(uid1, "whatsapp")
         msg1 = "Hi! I'm Priya. I want to gift sweet boxes for my parents' anniversary. What is the difference between Collection 1 and Collection 2?"
         resp1, matched1, tmpl1, imgs1 = responder.match_and_respond(msg1, user_id=uid1, channel="whatsapp")
-        self.assertTrue(matched1)
+        self.assertFalse(matched1)
+        self.assertEqual(tmpl1, "GUARD_collection_customization")
         self.assertIn("Priya", resp1)
-        self.assertIn("Nice to meet you", resp1)
-        self.assertTrue("Collection 1" in resp1 or "Aamar" in resp1 or "Signature" in resp1)
+        self.assertIn("Guru Dayal Singh", resp1)
         facts1 = session_memory.get_facts(uid1, "whatsapp")
         self.assertEqual(facts1.get("name"), "Priya")
 
-        # Scenario 2: Customization and assorted box inquiries
+        # Scenario 2: Customization and assorted box inquiries (Guarded until client confirms customization rules)
         uid2 = "sim_user_custom_2"
         session_memory.clear_session(uid2, "whatsapp")
         msg2 = "Can I customize the box with a mix of rose and classic norom pak sondesh?"
         resp2, matched2, tmpl2, imgs2 = responder.match_and_respond(msg2, user_id=uid2, channel="whatsapp")
-        self.assertTrue(matched2)
-        self.assertEqual(tmpl2, "assorted_custom_box")
-        self.assertTrue("custom" in resp2.lower() or "assort" in resp2.lower())
-        self.assertEqual(len(imgs2), 2)
+        self.assertFalse(matched2)
+        self.assertEqual(tmpl2, "GUARD_collection_customization")
+        self.assertIn("Guru Dayal Singh", resp2)
 
-        # Scenario 3: Dietary, Halal & Cooking oil inquiries
+        # Scenario 3: Dietary, Halal & Cooking oil inquiries (Guarded until client confirms dietary certifications)
         uid3 = "sim_user_dietary_3"
         session_memory.clear_session(uid3, "whatsapp")
         msg3 = "Is your food halal certified and what oil do you cook your curries in?"
         resp3, matched3, tmpl3, imgs3 = responder.match_and_respond(msg3, user_id=uid3, channel="whatsapp")
-        self.assertTrue(matched3)
-        self.assertEqual(tmpl3, "dietary_halal_oil")
-        self.assertIn("halal", resp3.lower())
-        self.assertIn("mustard oil", resp3.lower())
-        self.assertIn("ghee", resp3.lower())
+        self.assertFalse(matched3)
+        self.assertEqual(tmpl3, "GUARD_dietary_halal_oil")
+        self.assertIn("Guru Dayal Singh", resp3)
 
-        # Scenario 4: Payment methods and COD clarification
+        # Scenario 4: Payment methods and COD clarification (Guarded until client confirms payment channels)
         uid4 = "sim_user_payment_4"
         session_memory.clear_session(uid4, "whatsapp")
         msg4 = "What payment methods do you accept, do you take COD?"
         resp4, matched4, tmpl4, imgs4 = responder.match_and_respond(msg4, user_id=uid4, channel="whatsapp")
-        self.assertTrue(matched4)
-        self.assertEqual(tmpl4, "payment_methods")
-        self.assertIn("UPI", resp4)
-        self.assertIn("Cash on Delivery", resp4)
+        self.assertFalse(matched4)
+        self.assertEqual(tmpl4, "GUARD_payment_methods")
+        self.assertIn("Guru Dayal Singh", resp4)
 
         # Scenario 5: Transaction failure escalation
         uid5 = "sim_user_failed_tx_5"

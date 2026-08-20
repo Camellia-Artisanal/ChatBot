@@ -226,7 +226,10 @@ async def handle_instagram_webhook(request: Request):
                 continue
 
             # Match Q&A response with session memory
-            response_text, was_matched, template_id, image_url = responder.match_and_respond(message_text, user_id=sender_id, channel="instagram")
+            referral_src = "ADS" if is_ad_qualified else None
+            response_text, was_matched, template_id, image_url = responder.match_and_respond(
+                message_text, user_id=sender_id, channel="instagram", referral_source=referral_src, referral_ad_id=ad_id
+            )
             
             # Log exchange to DB
             db.log_conversation(sender_id, "instagram", message_text, response_text, was_matched, template_id)

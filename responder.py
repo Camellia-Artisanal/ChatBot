@@ -62,7 +62,14 @@ class DeterministicResponder:
                 return f"Trigger keyword matched: '{kw}'"
         return None
 
-    def match_and_respond(self, user_message: str, user_id: str = None, channel: str = None) -> Tuple[str, bool, Optional[str], Optional[Any]]:
+    def match_and_respond(
+        self,
+        user_message: str,
+        user_id: str = None,
+        channel: str = None,
+        referral_source: str = None,
+        referral_ad_id: str = None
+    ) -> Tuple[str, bool, Optional[str], Optional[Any]]:
         """
         Matches incoming message against qa_templates.json & menu.json.
         Updates session memory and falls back to Gemini Flash RAG.
@@ -70,6 +77,14 @@ class DeterministicResponder:
         Returns:
             (response_text: str, was_matched: bool, template_id: Optional[str], image_url: str | List[str] | None)
         """
+        user_id = user_id or "default_user"
+        channel = channel or "default_channel"
+
+        # 0. Instagram Ad-Gate Verification (Deliver strictly to Ad clickers unless bypassed)
+        if channel == "instagram" and not config.BYPASS_AD_GATE and referral_source != "ADS":
+            log.info("Ad-Gate Block: Organic Instagram message from user %s blocked.", user_id)
+            return "", False, "ad_gate_blocked", None
+
         if not user_message or not user_message.strip():
             fallback = self.qa_data.get("escalation_triggers", {}).get(
                 "fallback_response", "Thanks for reaching out! Let me connect you with our team."
@@ -77,6 +92,22 @@ class DeterministicResponder:
             return fallback, False, None, None
 
         lowered_text = user_message.lower().strip()
+
+        # 0.5 Spam / External Link / Unreadable Gibberish Detection
+        if re.search(r'https?://|www\.|\.xyz|\.top|\.click\b', lowered_text):
+            fallback = self.qa_data.get("escalation_triggers", {}).get(
+                "fallback_response", "Thanks for reaching out! Let me connect you with our team."
+            )
+            session_memory.add_turn(user_id, channel, user_message, fallback)
+            return fallback, False, None, None
+
+        if not re.search(r'[a-zA-Z\u0980-\u09FF]', user_message):
+            fallback = self.qa_data.get("escalation_triggers", {}).get(
+                "fallback_response", "Thanks for reaching out! Let me connect you with our team."
+            )
+            session_memory.add_turn(user_id, channel, user_message, fallback)
+            return fallback, False, None, None
+
         user_words = set(re.findall(r'\b\w+\b', lowered_text))
         
         STOP_WORDS = {
@@ -88,8 +119,6 @@ class DeterministicResponder:
         }
 
         # 1. Update & Extract Session Memory Facts (Name, Order Draft)
-        user_id = user_id or "default_user"
-        channel = channel or "default_channel"
         facts = session_memory.extract_and_update_facts(user_id, channel, user_message)
 
         # Check if user just provided their name
@@ -245,6 +274,29 @@ class DeterministicResponder:
             if tmpl_id not in ["greeting", "name_introduction"] and score > 0:
                 score += 2
 
+            # Priority boosts for specialized intent categories
+            if score > 0:
+                if tmpl_id == "GUARD_dietary_halal_oil" and any(k in lowered_text for k in ["halal", "jhatka", "cooking oil", "mustard oil", "which oil", "what oil", "oil do you cook", "cooking medium", "what medium"]):
+                    score += 100
+                elif tmpl_id == "GUARD_allergen_nut_safety" and any(k in lowered_text for k in ["allergy", "allergies", "allergic", "nut", "nuts", "gluten", "allergen", "allergens"]):
+                    score += 100
+                elif tmpl_id == "GUARD_payment_methods" and any(k in lowered_text for k in ["payment", "how to pay", "how do i pay", "cod", "cash on delivery", "upi", "gpay", "paytm", "phonepe", "qr code", "qr", "net banking", "credit card", "debit card"]):
+                    score += 100
+                elif tmpl_id == "GUARD_shelf_life_storage" and any(k in lowered_text for k in ["shelf life", "store", "storage", "refrigerat", "fridge", "expiry", "how long"]):
+                    score += 100
+                elif tmpl_id == "GUARD_kitchen_pickup_address" and any(k in lowered_text for k in ["pickup", "pick up", "kitchen address", "self pickup", "collect from", "collect order", "collect in person", "where is your kitchen", "kitchen location", "sushant arcade"]):
+                    score += 100
+                elif tmpl_id == "GUARD_staff_identity" and any(k in lowered_text for k in ["who is the owner", "owner name", "who is the chef", "who is the cook", "who runs the kitchen", "chef name", "cook name", "who is somdeb", "founder", "head chef"]):
+                    score += 100
+                elif tmpl_id == "GUARD_collection_customization" and any(k in lowered_text for k in ["difference between collection", "difference between the collection", "collection 1 vs collection 2", "compare collection", "how do the collections differ", "customize", "customise", "custom box", "mix", "assorted"]):
+                    score += 100
+                elif tmpl_id == "delivery_out_of_area" and any(c in lowered_text for c in [
+                    "bangalore", "bengaluru", "mumbai", "kolkata", "pune", "hyderabad", "chennai", "jaipur", "ahmedabad", "chandigarh", "lucknow", "outside delhi", "outside ncr", "other cities", "out of delhi"
+                ]):
+                    score += 50
+                elif tmpl_id == "combo_bento" and any(b in lowered_text for b in ["bento", "combo"]):
+                    score += 50
+
             if score > best_score:
                 best_score = score
                 best_template = tmpl
@@ -252,8 +304,20 @@ class DeterministicResponder:
         # Require a minimum matching threshold (score >= 4) in hybrid/deterministic mode
         if best_template and best_score >= 4:
             tmpl_id = best_template.get("id")
+
+            # Hard Escalation Guard: If matched a GUARD_ template or escalate=True with response=None
+            is_guard_escalate = (tmpl_id and tmpl_id.startswith("GUARD_")) or (best_template.get("escalate") is True and best_template.get("response") is None)
+            if is_guard_escalate:
+                fallback = self.qa_data.get("escalation_triggers", {}).get(
+                    "fallback_response", "Thank you for getting in touch! 🌸 I've notified our team and Kitchen Manager, Mr. Guru Dayal Singh (+91 87965 51990), regarding your request and they'll connect you with our team directly on WhatsApp/call shortly.\n\nIn the meantime, feel free to ask me about:\n• 🌸 Our fresh Sondesh, Kanchagolla & Jolbhora (Aamar Mishti & Signature Collections)\n• 🍱 This week's fresh Bengali Lunch & Dinner Bento menu\n• 🚚 Delivery details across Delhi NCR\n\nOr reply 'menu' to see our complete price list!"
+                )
+                if intro_greeting_prefix:
+                    fallback = intro_greeting_prefix + fallback
+                session_memory.add_turn(user_id, channel, user_message, fallback)
+                return fallback, False, tmpl_id, None
+
             response_text, image_url = self._format_dynamic_response(
-                tmpl_id, best_template.get("response", ""), user_id=user_id, channel=channel, user_message=user_message
+                tmpl_id, best_template.get("response") or "", user_id=user_id, channel=channel, user_message=user_message
             )
             
             # Dynamic Name Personalization & Order Draft reset on order confirmation
@@ -375,10 +439,6 @@ class DeterministicResponder:
         # "I want to know more" & Product Overview -> both collection cards + this week's meal menu
         if template_id in ["know_more", "product_overview"]:
             target_images = [img_aamar_mishti, img_signature_sondesh, current_weekly_img]
-        elif template_id == "assorted_custom_box":
-            target_images = [img_aamar_mishti, img_signature_sondesh]
-        elif template_id == "dietary_halal_oil":
-            target_images = [current_weekly_img]
 
         # Collection 1 specific queries — send ONLY Collection 1 photo card
         elif template_id in ["aamar_mishti_collection", "nolen_gur_aamar"]:
@@ -520,14 +580,34 @@ class DeterministicResponder:
                 else:
                     formatted_text = default_response
 
+        elif template_id == "recall_order_flavour":
+            session = session_memory.get_session(user_id or "default_user", channel or "default_channel")
+            flv = session.get("facts", {}).get("order_draft", {}).get("flavour")
+            if flv:
+                formatted_text = f"Yes! We already have your selected flavour (*{flv.title()}*) saved in your active session — no need to repeat it at all! 🌸 Which pack size (250g, 500g, or 1kg) and delivery address would you like to proceed with?"
+            else:
+                formatted_text = "I don't have a flavour saved yet. Which flavour (Classic, Rose, Nolen Gur, Mango, Kesar, Jolbhora) would you like? 🌸"
+
+        elif template_id == "artisanal_differentiation":
+            target_images = [img_aamar_mishti, img_signature_sondesh]
+
         if target_images:
             return formatted_text, target_images
 
         return formatted_text, None
 
-    def respond(self, user_message: str, user_id: str = None, channel: str = None) -> BotResponse:
+    def respond(
+        self,
+        user_message: str,
+        user_id: str = None,
+        channel: str = None,
+        referral_source: str = None,
+        referral_ad_id: str = None
+    ) -> BotResponse:
         """Convenience wrapper returning a structured BotResponse object with .text attribute."""
-        text, was_matched, tmpl_id, image_url = self.match_and_respond(user_message, user_id, channel)
+        text, was_matched, tmpl_id, image_url = self.match_and_respond(
+            user_message, user_id, channel, referral_source, referral_ad_id
+        )
         return BotResponse(text=text, was_matched=was_matched, template_id=tmpl_id, image_url=image_url)
 
 responder = DeterministicResponder()

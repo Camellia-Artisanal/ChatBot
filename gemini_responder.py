@@ -79,8 +79,10 @@ class GeminiResponder:
         if templates:
             context_parts.append("\n--- FREQUENTLY ASKED QUESTIONS & POLICIES ---")
             for tmpl in templates:
+                resp = tmpl.get("response")
+                if not resp:
+                    continue
                 title = tmpl.get("id", "").replace("_", " ").title()
-                resp = tmpl.get("response", "")
                 context_parts.append(f"• {title}: {resp}")
 
         # Menu Details
