@@ -842,18 +842,30 @@ class TestCamelliaBot(unittest.TestCase):
         self.assertTrue(data["updated_items_count"] >= 2)
 
     def test_collection_1_and_2_matching(self):
-        """Verify that typing 'collection 1' or 'collection 2' matches specific collection templates rather than generic know_more."""
+        """Verify that typing 'collection 1' or 'collection 2' matches specific collection templates and delivers only their respective menu card."""
         from responder import responder
         
-        resp1, match1, tmpl1, _ = responder.match_and_respond("collection 1", user_id="test_col1", channel="whatsapp")
+        resp1, match1, tmpl1, imgs1 = responder.match_and_respond("collection 1", user_id="test_col1", channel="whatsapp")
         self.assertTrue(match1)
         self.assertEqual(tmpl1, "aamar_mishti_collection")
         self.assertIn("Collection 1 — Aamar Mishti", resp1)
+        self.assertEqual(imgs1, ["/images/AAMAR%20MISHTI.jpeg"])
 
-        resp2, match2, tmpl2, _ = responder.match_and_respond("collection 2", user_id="test_col2", channel="whatsapp")
+        resp1_menu, match1_menu, tmpl1_menu, imgs1_menu = responder.match_and_respond("collection 1 menu", user_id="test_col1_menu", channel="whatsapp")
+        self.assertTrue(match1_menu)
+        self.assertEqual(tmpl1_menu, "aamar_mishti_collection")
+        self.assertEqual(imgs1_menu, ["/images/AAMAR%20MISHTI.jpeg"])
+
+        resp2, match2, tmpl2, imgs2 = responder.match_and_respond("collection 2", user_id="test_col2", channel="whatsapp")
         self.assertTrue(match2)
         self.assertEqual(tmpl2, "signature_collection")
         self.assertIn("Collection 2 — Signature Collection", resp2)
+        self.assertEqual(imgs2, ["/images/Signature%20Sondesh.jpeg"])
+
+        resp2_menu, match2_menu, tmpl2_menu, imgs2_menu = responder.match_and_respond("collection 2 menu", user_id="test_col2_menu", channel="whatsapp")
+        self.assertTrue(match2_menu)
+        self.assertEqual(tmpl2_menu, "signature_collection")
+        self.assertEqual(imgs2_menu, ["/images/Signature%20Sondesh.jpeg"])
 
     @patch("gemini_responder.httpx.Client")
     def test_gemini_template_refinement(self, mock_httpx_cls):
@@ -950,12 +962,31 @@ class TestCamelliaBot(unittest.TestCase):
         self.assertEqual(imgs, ["/images/Signature%20Sondesh.jpeg"])
 
         # Classic & Rose price check
-        resp, match, tmpl, imgs = responder.match_and_respond("rose sondesh price", user_id="test_rose_user", channel="whatsapp")
+        resp, match, tmpl, imgs = responder.match_and_respond("how much is rose sondesh", user_id="test_rose_user", channel="whatsapp")
         self.assertTrue(match)
         self.assertEqual(tmpl, "sondesh_classic_rose")
+        self.assertIn("Rose Sondesh", resp)
         self.assertIn("₹450", resp)
         self.assertIn("₹600", resp)
+        self.assertIn("Collection 1 — Aamar Mishti", resp)
+        self.assertIn("Collection 2 — Signature", resp)
         self.assertEqual(len(imgs), 2)
+
+        # Rose Sondesh specifically in Collection 1
+        resp_c1, match_c1, tmpl_c1, imgs_c1 = responder.match_and_respond("how much is rose sondesh in collection 1", user_id="test_rose_c1", channel="whatsapp")
+        self.assertTrue(match_c1)
+        self.assertEqual(tmpl_c1, "sondesh_classic_rose")
+        self.assertIn("Collection 1 — Aamar Mishti (Rose Sondesh)", resp_c1)
+        self.assertIn("₹450", resp_c1)
+        self.assertEqual(imgs_c1, ["/images/AAMAR%20MISHTI.jpeg"])
+
+        # Rose Sondesh specifically in Collection 2
+        resp_c2, match_c2, tmpl_c2, imgs_c2 = responder.match_and_respond("how much is rose sondesh in collection 2", user_id="test_rose_c2", channel="whatsapp")
+        self.assertTrue(match_c2)
+        self.assertEqual(tmpl_c2, "sondesh_classic_rose")
+        self.assertIn("Collection 2 — Signature A2 (Rose Sondesh)", resp_c2)
+        self.assertIn("₹600", resp_c2)
+        self.assertEqual(imgs_c2, ["/images/Signature%20Sondesh.jpeg"])
 
         # Vanilla / Mango / Cinnamon check
         resp, match, tmpl, imgs = responder.match_and_respond("real vanilla price", user_id="test_vanilla_user", channel="whatsapp")

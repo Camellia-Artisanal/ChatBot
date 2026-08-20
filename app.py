@@ -2467,7 +2467,17 @@ def get_web_chat():
                         const img = document.createElement('img');
                         img.src = u;
                         img.className = 'menu-card-img';
-                        img.alt = 'Menu Card';
+                        if (u.includes('AAMAR')) {
+                            img.alt = 'Collection 1 — Aamar Mishti Menu Card';
+                        } else if (u.includes('Signature')) {
+                            img.alt = 'Collection 2 — Signature Sondesh Menu Card';
+                        } else if (u.includes('Friday')) {
+                            img.alt = 'From Friday Weekend Menu Card';
+                        } else if (u.includes('Thursday')) {
+                            img.alt = 'Till Thursday Weekday Menu Card';
+                        } else {
+                            img.alt = 'Camellia Artisanal Menu Card';
+                        }
                         div.appendChild(img);
                     });
                 }

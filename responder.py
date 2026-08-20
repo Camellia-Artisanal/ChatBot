@@ -154,16 +154,17 @@ class DeterministicResponder:
         for tmpl in templates:
             tmpl_id = tmpl.get("id")
             triggers = tmpl.get("triggers", [])
-            score = 0
+            max_trigger_score = 0
             
             for trigger in triggers:
                 trigger_lower = trigger.lower().strip()
                 trigger_words = set(re.findall(r'\b\w+\b', trigger_lower))
+                t_score = 0
                 
                 # Check 1: Exact full word boundary regex match
                 pattern = r'\b' + re.escape(trigger_lower) + r'\b'
                 if re.search(pattern, lowered_text):
-                    score += len(trigger_words) * 5 + 5
+                    t_score = len(trigger_words) * 10 + 10
                 else:
                     # Check 2: Substantive (non-stopword) token intersection
                     substantive_trigger_words = trigger_words - STOP_WORDS
@@ -171,21 +172,33 @@ class DeterministicResponder:
                     matching_substantive = substantive_trigger_words.intersection(substantive_user_words)
                     
                     if matching_substantive:
-                        score += len(matching_substantive) * 4
+                        coverage = len(matching_substantive) / max(len(substantive_trigger_words), 1)
+                        t_score = len(matching_substantive) * 6 + int(coverage * 6)
                     else:
                         # Check 3: Fuzzy word similarity match (Tiered: len >= 3 allowed with stricter threshold)
+                        fuzzy_matches = 0
+                        matched_t_words = set()
                         for u_word in substantive_user_words:
                             if len(u_word) < 3:
                                 continue
                             for t_word in substantive_trigger_words:
-                                if len(t_word) < 3:
+                                if len(t_word) < 3 or t_word in matched_t_words:
                                     continue
                                 ratio = difflib.SequenceMatcher(None, u_word, t_word).ratio()
                                 # 3-letter words require stricter similarity (>= 0.83), 4+ letter words use 0.80
                                 threshold = 0.83 if min(len(u_word), len(t_word)) == 3 else 0.80
                                 if ratio >= threshold:
-                                    score += 3
+                                    fuzzy_matches += 1
+                                    matched_t_words.add(t_word)
+                                    break
+                        if fuzzy_matches > 0:
+                            coverage = fuzzy_matches / max(len(substantive_trigger_words), 1)
+                            t_score = fuzzy_matches * 5 + int(coverage * 5)
 
+                if t_score > max_trigger_score:
+                    max_trigger_score = t_score
+
+            score = max_trigger_score
             # Give non-greeting templates priority over generic greeting if substantive product keywords are present
             if tmpl_id != "greeting" and score > 0:
                 score += 2
@@ -272,11 +285,13 @@ class DeterministicResponder:
         today_weekday = datetime.datetime.now(tz=ist).weekday()
         current_weekly_img = img_from_friday if today_weekday in [4, 5, 6] else img_till_thursday
 
-        if any(w in lowered for w in ["product", "all products", "what do you have", "what do you sell", "overview", "know more"]):
+        if any(w in lowered for w in ["collection 1", "collection1", "1st collection", "first collection", "aamar mishti", "col 1", "option 1"]):
+            return [img_aamar_mishti]
+        elif any(w in lowered for w in ["collection 2", "collection2", "2nd collection", "second collection", "signature", "desi a2", "col 2", "option 2", "mahua"]):
+            return [img_signature_sondesh]
+        elif any(w in lowered for w in ["product", "all products", "what do you have", "what do you sell", "overview", "know more", "full menu", "both collections"]):
             return [img_aamar_mishti, img_signature_sondesh, current_weekly_img]
-        elif any(w in lowered for w in ["sondesh", "mishti", "sweet", "sweets", "kanchagolla", "jolbhora", "nolen gur", "250g", "500g", "1kg"]):
-            if "signature" in lowered or "mahua" in lowered:
-                return [img_signature_sondesh]
+        elif any(w in lowered for w in ["sondesh", "mishti", "sweet", "sweets", "kanchagolla", "jolbhora", "nolen gur", "250g", "500g", "1kg", "rose", "classic", "mango", "kesar", "price"]):
             return [img_aamar_mishti, img_signature_sondesh]
         elif any(w in lowered for w in ["menu", "veg", "non veg", "non-veg", "bento", "combo", "meal", "meals", "lunch", "dinner"]):
             return current_weekly_img
@@ -302,21 +317,68 @@ class DeterministicResponder:
 
         target_images = None
         formatted_text = default_response
+        lowered_msg = (user_message or "").lower().strip()
 
         # "I want to know more" & Product Overview -> both collection cards + this week's meal menu
         if template_id in ["know_more", "product_overview"]:
             target_images = [img_aamar_mishti, img_signature_sondesh, current_weekly_img]
 
-        # Sondesh photo card queries
-        elif template_id in [
-            "sondesh_price_general", "nolen_gur_aamar", "aamar_mishti_collection",
-            "sondesh_classic_rose", "sondesh_mango_kesar", "sondesh_nolen_gur",
-            "jolbhora", "kanchagolla", "pack_size_250g", "pack_size_500g", "pack_size_1kg"
-        ]:
-            target_images = [img_aamar_mishti, img_signature_sondesh]
+        # Collection 1 specific queries — send ONLY Collection 1 photo card
+        elif template_id in ["aamar_mishti_collection", "nolen_gur_aamar"]:
+            target_images = [img_aamar_mishti]
 
+        # Collection 2 specific queries — send ONLY Collection 2 photo card
         elif template_id in ["signature_collection", "mahua_signature_special"]:
             target_images = [img_signature_sondesh]
+
+        # Classic & Rose Sondesh — dedicated formatting based on query specificity
+        elif template_id == "sondesh_classic_rose":
+            has_rose = "rose" in lowered_msg
+            has_classic = "classic" in lowered_msg
+            has_col1 = any(w in lowered_msg for w in ["collection 1", "collection1", "aamar mishti", "1st collection", "first collection", "col 1", "option 1"])
+            has_col2 = any(w in lowered_msg for w in ["collection 2", "collection2", "signature", "desi a2", "2nd collection", "second collection", "col 2", "option 2"])
+
+            if has_col1 and not has_col2:
+                target_images = [img_aamar_mishti]
+                if has_rose and not has_classic:
+                    formatted_text = "*Collection 1 — Aamar Mishti (Rose Sondesh)* 🌸\nFresh artisanal chhana infused with fragrant organic rose petals, made with pure dairy milk in our kitchen:\n\n```\n+-----------------------+-------+-------+-------+\n| Pack Size             | 250g  | 500g  |  1kg  |\n+-----------------------+-------+-------+-------+\n| Piece Count           | 9 pcs | 18 pcs| 36 pcs|\n| Price (INR)           | ₹450  | ₹800  | ₹1500 |\n+-----------------------+-------+-------+-------+\n```\n\nWhich pack size (250g, 500g, or 1kg) would you like to order?"
+                elif has_classic and not has_rose:
+                    formatted_text = "*Collection 1 — Aamar Mishti (Classic Sondesh)* 🌸\nFresh artisanal chhana and delicate aromatic cardamom, made with pure dairy milk in our kitchen:\n\n```\n+-----------------------+-------+-------+-------+\n| Pack Size             | 250g  | 500g  |  1kg  |\n+-----------------------+-------+-------+-------+\n| Piece Count           | 9 pcs | 18 pcs| 36 pcs|\n| Price (INR)           | ₹450  | ₹800  | ₹1500 |\n+-----------------------+-------+-------+-------+\n```\n\nWhich pack size (250g, 500g, or 1kg) would you like to order?"
+                else:
+                    formatted_text = "*Collection 1 — Aamar Mishti (Classic & Rose Sondesh)* 🌸\nMade with pure dairy milk in our kitchen:\n\n```\n+-----------------------+-------+-------+-------+\n| Item / Flavour        | 250g  | 500g  |  1kg  |\n+-----------------------+-------+-------+-------+\n| Classic / Rose        | ₹450  | ₹800  | ₹1500 |\n+-----------------------+-------+-------+-------+\n* Box count: 9 pcs (250g) | 18 pcs (500g) | 36 pcs (1kg)\n```\n\nWhich flavour and pack size would you like to order?"
+
+            elif has_col2 and not has_col1:
+                target_images = [img_signature_sondesh]
+                if has_rose and not has_classic:
+                    formatted_text = "*Collection 2 — Signature A2 (Rose Sondesh)* 🌸\n100% handcrafted with pure desi A2 cow milk and fragrant organic rose petals:\n\n```\n+-----------------------+-------+-------+-------+\n| Pack Size             | 250g  | 500g  |  1kg  |\n+-----------------------+-------+-------+-------+\n| Piece Count           | 9 pcs | 18 pcs| 36 pcs|\n| Price (INR)           | ₹600  | ₹1100 | ₹2000 |\n+-----------------------+-------+-------+-------+\n```\n\nWhich pack size (250g, 500g, or 1kg) would you like to order?"
+                elif has_classic and not has_rose:
+                    formatted_text = "*Collection 2 — Signature A2 (Classic Sondesh)* 🌸\n100% handcrafted with pure desi A2 cow milk and delicate aromatic cardamom:\n\n```\n+-----------------------+-------+-------+-------+\n| Pack Size             | 250g  | 500g  |  1kg  |\n+-----------------------+-------+-------+-------+\n| Piece Count           | 9 pcs | 18 pcs| 36 pcs|\n| Price (INR)           | ₹600  | ₹1100 | ₹2000 |\n+-----------------------+-------+-------+-------+\n```\n\nWhich pack size (250g, 500g, or 1kg) would you like to order?"
+                else:
+                    formatted_text = "*Collection 2 — Signature A2 (Classic & Rose Sondesh)* 🌸\n100% handcrafted with pure desi A2 cow milk:\n\n```\n+-----------------------+-------+-------+-------+\n| Item / Flavour        | 250g  | 500g  |  1kg  |\n+-----------------------+-------+-------+-------+\n| Classic / Rose        | ₹600  | ₹1100 | ₹2000 |\n+-----------------------+-------+-------+-------+\n* Box count: 9 pcs (250g) | 18 pcs (500g) | 36 pcs (1kg)\n```\n\nWhich flavour and pack size would you like to order?"
+
+            elif has_rose and not has_classic:
+                target_images = [img_aamar_mishti, img_signature_sondesh]
+                formatted_text = "Our handcrafted *Rose Sondesh* 🌸 is made with fresh artisanal chhana infused with fragrant organic rose petals. Available in both collections:\n\n*Rose Sondesh Price Breakdown:*\n```\n+-------------------------------------+-------+-------+-------+\n| Collection                          | 250g  | 500g  |  1kg  |\n+-------------------------------------+-------+-------+-------+\n| Collection 1 — Aamar Mishti (Dairy) | ₹450  | ₹800  | ₹1500 |\n| Collection 2 — Signature (Desi A2)  | ₹600  | ₹1100 | ₹2000 |\n+-------------------------------------+-------+-------+-------+\n* Box count: 9 pcs (250g) | 18 pcs (500g) | 36 pcs (1kg)\n```\n\n• *Collection 1 (Aamar Mishti)*: Daily indulgence made with pure dairy milk in our kitchen.\n• *Collection 2 (Signature A2)*: 100% hand-kneaded with unadulterated desi A2 cow milk — exceptionally rich & melt-in-the-mouth.\n\nWhich collection and pack size would you like to order (250g, 500g, or 1kg)?"
+
+            elif has_classic and not has_rose:
+                target_images = [img_aamar_mishti, img_signature_sondesh]
+                formatted_text = "Our traditional *Classic Sondesh* 🌸 is made with fresh artisanal chhana and delicate aromatic cardamom. Available in both collections:\n\n*Classic Sondesh Price Breakdown:*\n```\n+-------------------------------------+-------+-------+-------+\n| Collection                          | 250g  | 500g  |  1kg  |\n+-------------------------------------+-------+-------+-------+\n| Collection 1 — Aamar Mishti (Dairy) | ₹450  | ₹800  | ₹1500 |\n| Collection 2 — Signature (Desi A2)  | ₹600  | ₹1100 | ₹2000 |\n+-------------------------------------+-------+-------+-------+\n* Box count: 9 pcs (250g) | 18 pcs (500g) | 36 pcs (1kg)\n```\n\n• *Collection 1 (Aamar Mishti)*: Daily indulgence made with pure dairy milk in our kitchen.\n• *Collection 2 (Signature A2)*: 100% hand-kneaded with unadulterated desi A2 cow milk — exceptionally rich & melt-in-the-mouth.\n\nWhich collection and pack size would you like to order (250g, 500g, or 1kg)?"
+
+            else:
+                target_images = [img_aamar_mishti, img_signature_sondesh]
+
+        # Other Sondesh price / flavour queries
+        elif template_id in [
+            "sondesh_price_general",
+            "sondesh_mango_kesar", "sondesh_nolen_gur",
+            "jolbhora", "kanchagolla", "pack_size_250g", "pack_size_500g", "pack_size_1kg"
+        ]:
+            if any(w in lowered_msg for w in ["collection 1", "collection1", "aamar mishti", "1st collection", "first collection", "col 1", "option 1"]):
+                target_images = [img_aamar_mishti]
+            elif any(w in lowered_msg for w in ["collection 2", "collection2", "signature", "desi a2", "2nd collection", "second collection", "col 2", "option 2"]):
+                target_images = [img_signature_sondesh]
+            else:
+                target_images = [img_aamar_mishti, img_signature_sondesh]
 
         # Weekly menu & bento photo card queries
         elif template_id in ["weekly_menu_veg", "weekly_menu_nonveg", "combo_bento"]:
