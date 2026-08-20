@@ -29,9 +29,11 @@ class DeterministicResponder:
     conversational session memory, and Google Gemini Flash AI RAG fallback.
     """
 
-    def __init__(self, qa_path: str = None):
+    def __init__(self, qa_path: str = None, menu_path: str = None):
         self.qa_path = qa_path or config.QA_TEMPLATES_PATH
+        self.menu_path = menu_path or config.MENU_JSON_PATH
         self.qa_data = self._load_json(self.qa_path)
+        self.menu_data = self._load_json(self.menu_path)
 
     def _load_json(self, path: str) -> Dict[str, Any]:
         try:
@@ -44,6 +46,7 @@ class DeterministicResponder:
     def reload_data(self):
         """Reload JSON files to support live menu updates."""
         self.qa_data = self._load_json(self.qa_path)
+        self.menu_data = self._load_json(self.menu_path)
         gemini_responder.reload_data()
 
     def reload_templates(self):
@@ -383,11 +386,84 @@ class DeterministicResponder:
         # Weekly menu & bento photo card queries
         elif template_id in ["weekly_menu_veg", "weekly_menu_nonveg", "combo_bento"]:
             target_images = current_weekly_img
-            if today_weekday in [4, 5, 6]:
-                menu_title = "From Friday (Weekend) Menu Card"
+            weekly_menus = self.menu_data.get("weekly_menus", [])
+            # Select appropriate rotation based on day of week if multiple rotations exist
+            if today_weekday in [4, 5, 6] and len(weekly_menus) > 1:
+                current_week = weekly_menus[-1]
+            elif weekly_menus:
+                current_week = weekly_menus[0]
             else:
-                menu_title = "Till Thursday (Weekday) Menu Card"
-            formatted_text = f"🌸 *Camellia Artisanal — {menu_title}*\n\nHere is our fresh menu card! Delivery across Delhi NCR. Reply to place an order! 📦"
+                current_week = {}
+
+            week_name = current_week.get("week_of", "Current Rotation")
+            service_window = current_week.get("service_window", "Friday Lunch – Thursday Dinner")
+
+            if template_id == "weekly_menu_veg":
+                veg_list = current_week.get("vegetarian", [])
+                if veg_list:
+                    lines = [
+                        f"🌸 *Camellia Artisanal — This Week's Vegetarian Menu* 🌿",
+                        f"_{week_name} ({service_window})_\n"
+                    ]
+                    for itm in veg_list:
+                        name = itm.get("item", "")
+                        desc = itm.get("description", "")
+                        qty = itm.get("quantity", "")
+                        price = itm.get("price_inr", "")
+                        desc_str = f" • _{desc}_" if desc else ""
+                        qty_str = f" ({qty})" if qty else ""
+                        lines.append(f"• *{name}*{qty_str} — *₹{price}*{desc_str}")
+                    
+                    lines.append("\n📦 *Packaging*: 100% plastic-free, eco-friendly cornstarch boxes.")
+                    lines.append("🚚 *Delivery*: Across Delhi NCR from Sushant Arcade, Gurgaon (Courier on actuals).")
+                    lines.append("\nWhich vegetarian dishes would you like to order? 🙏")
+                    formatted_text = "\n".join(lines)
+                else:
+                    formatted_text = default_response
+
+            elif template_id == "weekly_menu_nonveg":
+                nonveg_list = current_week.get("non_vegetarian", [])
+                if nonveg_list:
+                    lines = [
+                        f"🌸 *Camellia Artisanal — This Week's Non-Vegetarian Menu* 🍗",
+                        f"_{week_name} ({service_window})_\n"
+                    ]
+                    for itm in nonveg_list:
+                        name = itm.get("item", "")
+                        desc = itm.get("description", "")
+                        qty = itm.get("quantity", "")
+                        price = itm.get("price_inr", "")
+                        desc_str = f" • _{desc}_" if desc else ""
+                        qty_str = f" ({qty})" if qty else ""
+                        lines.append(f"• *{name}*{qty_str} — *₹{price}*{desc_str}")
+                    
+                    lines.append("\n📦 *Packaging*: 100% plastic-free, eco-friendly cornstarch boxes.")
+                    lines.append("🚚 *Delivery*: Across Delhi NCR from Sushant Arcade, Gurgaon (Courier on actuals).")
+                    lines.append("\nWhich non-vegetarian dishes would you like to order? 🙏")
+                    formatted_text = "\n".join(lines)
+                else:
+                    formatted_text = default_response
+
+            elif template_id == "combo_bento":
+                bento_list = current_week.get("bengali_bento", []) or current_week.get("combos", [])
+                if bento_list:
+                    lines = [
+                        f"🌸 *Camellia Artisanal — Bengali Bento Meals & Combos* 🍱",
+                        f"_{week_name} ({service_window})_\n"
+                    ]
+                    for b in bento_list:
+                        name = b.get("name", "")
+                        price = b.get("price_inr", "")
+                        includes = ", ".join(b.get("includes", []))
+                        inc_str = f" (Includes: {includes})" if includes else ""
+                        lines.append(f"• *{name}* — *₹{price}*{inc_str}")
+                    
+                    lines.append("\n📦 *Packaging*: 100% plastic-free, eco-friendly cornstarch boxes.")
+                    lines.append("🚚 *Delivery*: Across Delhi NCR from Sushant Arcade, Gurgaon.")
+                    lines.append("\nWhich Bento meal would you like to order? 🌸")
+                    formatted_text = "\n".join(lines)
+                else:
+                    formatted_text = default_response
 
         if target_images:
             return formatted_text, target_images

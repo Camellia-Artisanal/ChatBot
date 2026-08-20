@@ -405,7 +405,7 @@ class TestCamelliaBot(unittest.TestCase):
         mock_post.return_value = mock_response
 
         with patch.object(config, "GEMINI_ENABLED", True), patch.object(config, "GEMINI_API_KEY", "test_key"):
-            resp_text, was_matched, tmpl_id, img_url = responder.match_and_respond("What lentil cakes are used in Dhokar Dalna?")
+            resp_text, was_matched, tmpl_id, img_url = responder.match_and_respond("Can you provide a historical overview of traditional dairy techniques in ancient India?")
         self.assertTrue(was_matched)
         self.assertEqual(tmpl_id, "gemini_rag")
         self.assertIn("Nolen Gur Sondesh", resp_text)

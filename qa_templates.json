@@ -277,7 +277,7 @@
 
     {
       "id": "weekly_menu_veg",
-      "triggers": ["veg menu", "vegetarian menu", "this week veg", "veg dishes", "current veg menu", "show veg menu"],
+      "triggers": ["veg menu", "vegetarian menu", "veg dishes", "vegetarian dishes", "veg items", "vegetarian items", "this week veg", "current veg menu", "show veg menu", "niramish", "aloor dom", "chhoto aloor dom", "dhokar dalna", "dhhokar dalna", "chhanar kofta", "chaal potol", "basonti polao", "basanti polao", "potoler dolma v"],
       "response": "This week's Vegetarian menu (Friday Lunch–Thursday Dinner): 🌿\n\n```\n+-----------------------+------------------------------------+-------+\n| Dish Name             | Description                        | Price |\n+-----------------------+------------------------------------+-------+\n| Aloor Dom             | Spiced baby potato delicacy        | ₹300  |\n| Dhokar Dalna          | Lentil cake curry in rich gravy    | ₹300  |\n| Chhanar Kofta         | Homemade chhana dumplings in gravy | ₹300  |\n| Shorshey Diye Dhyarosh| Okra in mustard gravy              | ₹300  |\n| Potoler Dolma (Veg)   | Pointed gourd stuffed with chhana  | ₹300  |\n| Basanti Polao         | Fragrant sweet yellow festive rice | ₹300  |\n+-----------------------+------------------------------------+-------+\n```\n\nWould you like to add any of these to your order?",
       "escalate": false,
       "note": "Response provides current rotation dishes and prices.",
@@ -286,7 +286,7 @@
 
     {
       "id": "weekly_menu_nonveg",
-      "triggers": ["non veg menu", "nonveg menu", "chicken", "mutton", "fish", "prawn", "bhetki", "chingri", "bhetki paturi", "golda chingri", "robibarer mangsho", "contai chicken", "mutton curry", "potoler dolma nv"],
+      "triggers": ["non veg menu", "nonveg menu", "non veg", "nonveg", "non-veg", "non-veg menu", "nin veg menu", "nin veg", "non veg dishes", "nonveg dishes", "non veg items", "nonveg items", "chicken", "mutton", "fish", "prawn", "bhetki", "chingri", "bhetki paturi", "golda chingri", "robibarer mangsho", "contai chicken", "mutton curry", "potoler dolma nv", "chicken kosha", "mutton kosha"],
       "response": "This week's Non-Vegetarian menu (Friday Lunch–Thursday Dinner): 🍖\n\n```\n+-----------------------+------------------------------------+-------+\n| Dish Name             | Description                        | Price |\n+-----------------------+------------------------------------+-------+\n| Contai Dhaba Chicken  | Countryside Bengali chicken curry  | ₹400  |\n| Robibarer Mangsho     | Slow-cooked Sunday mutton curry    | ₹600  |\n| Bhetki Paturi         | Fresh Bhetki wrapped in banana leaf| ₹700  |\n| Golda Chingri Malai   | Jumbo prawn in spiced coconut gravy| ₹900  |\n| Potoler Dolma (NV)    | Gourd stuffed with mutton/prawn    | ₹400  |\n+-----------------------+------------------------------------+-------+\n```\n\nWhich dishes would you like to order?",
       "escalate": false,
       "note": "Response provides current rotation non-veg dishes and prices.",

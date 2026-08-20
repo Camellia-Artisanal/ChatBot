@@ -56,6 +56,15 @@ MEAL_PRICING_TABLE = {
     "chingri malai curry": { "name": "Golda Chingri Malai Curry (180g / 1 pc)", "price": 900 },
     "robibarer mangsho": { "name": "Robibarer Mangsho / Mutton Curry (200g / 4 pcs)", "price": 600 },
     "mutton curry": { "name": "Robibarer Mangsho / Mutton Curry (200g / 4 pcs)", "price": 600 },
+    "mutton kosha": { "name": "Mutton Kosha (200g / 4 pcs)", "price": 600 },
+    "kosha mangsho": { "name": "Mutton Kosha / Kosha Mangsho (200g / 4 pcs)", "price": 600 },
+    "chicken kosha": { "name": "Chicken Kosha (150g / 1 pc)", "price": 400 },
+    "chhoto aloor dom": { "name": "Chhoto Aloor Dom (150g)", "price": 300 },
+    "chaal potol": { "name": "Chaal Potol (150g)", "price": 300 },
+    "dhhokar dalna": { "name": "Dhhokar Dalna (150g / 4 pcs)", "price": 300 },
+    "chhanar kofta malay curry": { "name": "Chhanar Kofta Malay Curry (120g / 6 pcs)", "price": 300 },
+    "golda chingri malay curry": { "name": "Golda Chingri Malay Curry (150g / 1 pc)", "price": 900 },
+    "aamra chatni": { "name": "Aamra Chatni (100g)", "price": 100 },
 }
 
 class OrderCalculator:
