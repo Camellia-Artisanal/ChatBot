@@ -46,6 +46,10 @@ class DeterministicResponder:
         self.qa_data = self._load_json(self.qa_path)
         gemini_responder.reload_data()
 
+    def reload_templates(self):
+        """Alias for reload_data."""
+        self.reload_data()
+
     def check_explicit_escalation_triggers(self, text: str) -> Optional[str]:
         """Checks if text contains explicit escalation keywords."""
         triggers = self.qa_data.get("escalation_triggers", {}).get("keywords", [])
@@ -73,6 +77,17 @@ class DeterministicResponder:
         user_id = user_id or "default_user"
         channel = channel or "default_channel"
         facts = session_memory.extract_and_update_facts(user_id, channel, user_message)
+
+        # Check if user just provided their name
+        if facts.get("just_introduced_name"):
+            facts["just_introduced_name"] = False
+            user_name = facts.get("name")
+            if user_name:
+                response_text = f"Nice to meet you, {user_name}! 👋 Welcome to Camellia Artisanal. Ask us about our Sondesh flavours & prices, weekly menu, or delivery — happy to help!"
+            else:
+                response_text = "Nice to meet you! 👋 Welcome to Camellia Artisanal. Ask us about our Sondesh flavours & prices, weekly menu, or delivery — happy to help!"
+            session_memory.add_turn(user_id, channel, user_message, response_text)
+            return response_text, True, "name_introduction", None
 
         # 2. Check explicit escalation triggers first (refund, complaint, etc.)
         escalation_reason = self.check_explicit_escalation_triggers(user_message)
@@ -180,6 +195,7 @@ class DeterministicResponder:
             
             # Dynamic Name Personalization & Order Draft reset on order confirmation
             if tmpl_id == "name_introduction":
+                facts["awaiting_name"] = False
                 if facts.get("name"):
                     response_text = f"Nice to meet you, {facts['name']}! 👋 Welcome to Camellia Artisanal. Ask us about our Sondesh flavours & prices, weekly menu, or delivery — happy to help!"
                 else:
@@ -187,8 +203,10 @@ class DeterministicResponder:
             elif tmpl_id == "recall_name":
                 if facts.get("name"):
                     response_text = f"Yes! Your name is {facts['name']}. 😊 How can I assist you today with our Sondesh or weekly menu?"
+                    facts["awaiting_name"] = False
                 else:
                     response_text = "You haven't told me your name yet! What should I call you?"
+                    facts["awaiting_name"] = True
             elif tmpl_id == "order_next_steps":
                 session_memory.clear_order_draft(user_id, channel)
             elif config.is_ai_enabled:

@@ -61,19 +61,19 @@ class Config:
     # Google Sheet CSV URL for Menu Updates (Option A in PRD)
     GOOGLE_SHEET_CSV_URL: str = os.getenv("GOOGLE_SHEET_CSV_URL", "")
 
-    # AI Engine & Multi-Provider Config (OpenAI / Gemini)
-    AI_PROVIDER: str = os.getenv("AI_PROVIDER", "auto").lower()  # "openai", "gemini", or "auto"
+    # AI Engine Config (Google Gemini Flash)
+    AI_PROVIDER: str = os.getenv("AI_PROVIDER", "gemini").lower()  # "gemini" (primary), "openai", or "auto"
 
-    # OpenAI API Config (supports o3-mini, o1, gpt-4o, gpt-4o-mini)
+    # OpenAI API Config (optional fallback)
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "o3-mini")
     OPENAI_REASONING_EFFORT: str = os.getenv("OPENAI_REASONING_EFFORT", "low")  # "low", "medium", "high"
     OPENAI_TIMEOUT: float = float(os.getenv("OPENAI_TIMEOUT", "15.0"))
 
-    # Gemini Cloud API Config
+    # Gemini Cloud API Config (Google Gemini Flash)
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
-    GEMINI_TIMEOUT: float = float(os.getenv("GEMINI_TIMEOUT", "10.0"))
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+    GEMINI_TIMEOUT: float = float(os.getenv("GEMINI_TIMEOUT", "20.0"))
     GEMINI_ENABLED: bool = os.getenv("GEMINI_ENABLED", "true").lower() in ("true", "1", "t", "yes")
 
     @property
@@ -84,7 +84,7 @@ class Config:
             return bool(self.OPENAI_API_KEY)
         elif self.AI_PROVIDER == "gemini":
             return bool(self.GEMINI_API_KEY)
-        return bool(self.OPENAI_API_KEY or self.GEMINI_API_KEY)
+        return bool(self.GEMINI_API_KEY or self.OPENAI_API_KEY)
 
 config = Config()
 

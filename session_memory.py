@@ -65,17 +65,67 @@ class SessionMemoryManager:
         text_lower = clean_text.lower()
 
         # 1. Extract Name
+        extracted_name = None
+
         name_patterns = [
-            r"(?:my\s+name\s+is|i\s+am|i'm|call\s+me|name\s*[:=])\s+([A-Z][a-z]+|[a-z]+)",
+            r"^(?:my\s+name\s+(?:is|'s)|my\s+names|i\s+am|i'm|im|call\s+me|myself|this\s+is|it's|its|name\s*[:=])\s+([A-Za-z\s'\.\-]+)$",
+            r"(?:my\s+name\s+(?:is|'s)|my\s+names|call\s+me|name\s*[:=])\s+([A-Za-z\s'\.\-]+)",
         ]
+
+        ignored_name_words = {
+            "a", "an", "the", "asking", "looking", "ordering", "wanting", "having",
+            "here", "there", "interested", "trying", "planning", "searching", "buying",
+            "ready", "going", "wondering", "thinking", "sure", "ok", "okay", "fine",
+            "good", "menu", "sondesh", "sandesh", "mishti", "price", "prices", "cost",
+            "veg", "nonveg", "non-veg", "food", "delhi", "gurgaon", "noida", "order",
+            "delivery", "cancel", "refund", "hi", "hello", "hey", "namaste", "yes", "no",
+            "human", "manager", "agent", "bot", "help", "please", "thanks", "thank",
+            "what", "whats", "what's", "who", "where", "how", "when", "why"
+        }
+
         for pattern in name_patterns:
             match = re.search(pattern, clean_text, re.IGNORECASE)
             if match:
-                extracted_name = match.group(1).capitalize()
-                ignored_words = {"a", "an", "the", "asking", "looking", "ordering", "wanting", "having", "here", "there"}
-                if extracted_name.lower() not in ignored_words and len(extracted_name) >= 2:
-                    facts["name"] = extracted_name
+                raw_name = match.group(1).strip().strip(".,!?:;\"'")
+                first_word = raw_name.split()[0].lower() if raw_name else ""
+                if (
+                    raw_name
+                    and first_word not in ignored_name_words
+                    and 2 <= len(raw_name) <= 40
+                    and not any(char.isdigit() for char in raw_name)
+                    and not any(term in raw_name.lower() for term in ["sondesh", "mishti", "menu", "price", "delivery", "bento", "box"])
+                ):
+                    extracted_name = raw_name.title()
                     break
+
+        # Check conversational context: Was the bot just asking for the user's name?
+        # (e.g. from recall_name 'What should I call you?' or awaiting_name flag)
+        turns = session.get("turns", [])
+        last_bot_turn = turns[-1]["content"] if (turns and turns[-1].get("role") == "assistant") else ""
+        was_asked_name = (
+            facts.get("awaiting_name", False)
+            or "what should i call you" in last_bot_turn.lower()
+            or "what's your name" in last_bot_turn.lower()
+            or "what is your name" in last_bot_turn.lower()
+        )
+
+        if not extracted_name and was_asked_name:
+            words = clean_text.split()
+            if (
+                1 <= len(words) <= 3
+                and 2 <= len(clean_text) <= 35
+                and not any(char.isdigit() for char in clean_text)
+                and "?" not in clean_text
+                and clean_text.lower() not in ignored_name_words
+                and words[0].lower() not in ignored_name_words
+                and not any(term in text_lower for term in ["sondesh", "sandesh", "mishti", "menu", "price", "bento", "1kg", "500g", "250g", "box", "delivery", "order", "cancel", "refund"])
+            ):
+                extracted_name = clean_text.strip(".,!?:;\"'").title()
+
+        if extracted_name:
+            facts["name"] = extracted_name
+            facts["awaiting_name"] = False
+            facts["just_introduced_name"] = True
 
         # 2. Extract Order Attributes into Slots
         # Flavour

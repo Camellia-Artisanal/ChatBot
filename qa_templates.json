@@ -15,15 +15,71 @@
     },
 
     {
+      "id": "bot_identity",
+      "triggers": [
+        "who are you",
+        "who are u",
+        "who r you",
+        "who r u",
+        "who you are",
+        "what are you",
+        "who is this",
+        "who is speaking",
+        "who am i talking to",
+        "who am i speaking to",
+        "who am i chatting with",
+        "are you a bot",
+        "are you a real person",
+        "are you human",
+        "are you robot",
+        "are you a robot",
+        "are you ai",
+        "are you an ai",
+        "tell me about yourself",
+        "about yourself",
+        "introduce yourself",
+        "what is camellia",
+        "what is camellia artisanal"
+      ],
+      "response": "Hi! I'm the Camellia Artisanal virtual assistant 🌸.\n\nWe are a Bengal-rooted artisanal kitchen in Sushant Lok, Gurgaon. We craft fresh traditional Sondesh (using pure dairy & desi A2 cow milk) and authentic Bengali Bento meals delivered across Delhi NCR.\n\nHow can I help you today? Feel free to ask about our Sondesh flavours, weekly menu, prices, or delivery!",
+      "escalate": false,
+      "source_ref": "brand identity & assistant introduction"
+    },
+
+    {
       "id": "name_introduction",
-      "triggers": ["my name is", "call me", "my name's"],
+      "triggers": [
+        "my name is",
+        "my name's",
+        "my names",
+        "call me",
+        "i am",
+        "i'm",
+        "im",
+        "myself",
+        "this is",
+        "it's",
+        "its"
+      ],
       "response": "Nice to meet you! 👋 Welcome to Camellia Artisanal. Ask us about our Sondesh flavours & prices, weekly menu, or delivery — happy to help!",
       "escalate": false
     },
 
     {
       "id": "recall_name",
-      "triggers": ["what is my name", "what's my name", "do you know my name", "remember my name"],
+      "triggers": [
+        "what is my name",
+        "what's my name",
+        "whats my name",
+        "do you know my name",
+        "remember my name",
+        "do you remember my name",
+        "tell me my name",
+        "who am i",
+        "do you remember me",
+        "do you know who i am",
+        "my name?"
+      ],
       "response": "Yes! You introduced yourself earlier. How can I assist you today with our Sondesh or weekly menu?",
       "escalate": false
     },

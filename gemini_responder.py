@@ -46,22 +46,22 @@ class GeminiResponder:
         self._openai_cooldown_until = 0.0
 
     def get_active_provider(self) -> str:
-        """Determines active AI provider: 'openai', 'gemini', or 'none'."""
+        """Determines active AI provider: 'gemini', 'openai', or 'none'."""
         if not config.is_ai_enabled:
             return "none"
         now = time.time()
-        openai_available = bool(config.OPENAI_API_KEY) and (now > self._openai_cooldown_until)
         gemini_available = bool(config.GEMINI_API_KEY) and (now > self._gemini_cooldown_until)
+        openai_available = bool(config.OPENAI_API_KEY) and (now > self._openai_cooldown_until)
 
         if config.AI_PROVIDER == "openai" and openai_available:
             return "openai"
         if config.AI_PROVIDER == "gemini" and gemini_available:
             return "gemini"
-        # Auto mode: prioritize OpenAI if available, else Gemini
-        if openai_available:
-            return "openai"
+        # Auto / default mode: prioritize Gemini Flash
         if gemini_available:
             return "gemini"
+        if openai_available:
+            return "openai"
         return "none"
 
     def _build_context_string(self) -> str:

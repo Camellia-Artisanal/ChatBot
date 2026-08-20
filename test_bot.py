@@ -369,6 +369,71 @@ class TestCamelliaBot(unittest.TestCase):
         )
         self.assertEqual(facts["name"], "Shoaib")
 
+    def test_conversational_name_flow_and_recall(self):
+        """Test full multi-turn conversational name flow: ask name -> reply with single word -> recall name."""
+        from session_memory import session_memory
+        user_id = "test_conv_user"
+        channel = "whatsapp"
+        session_memory.clear_session(user_id, channel)
+        responder.reload_templates()
+
+        # Step 1: User asks name before introducing
+        resp1, matched1, tmpl1, _ = responder.match_and_respond("whats my name", user_id=user_id, channel=channel)
+        self.assertTrue(matched1)
+        self.assertEqual(tmpl1, "recall_name")
+        self.assertIn("What should I call you", resp1)
+
+        # Step 2: User responds with just their name (e.g. 'bhadwa')
+        resp2, matched2, tmpl2, _ = responder.match_and_respond("bhadwa", user_id=user_id, channel=channel)
+        self.assertTrue(matched2)
+        self.assertEqual(tmpl2, "name_introduction")
+        self.assertIn("Bhadwa", resp2)
+
+        # Step 3: User asks 'whats my name' again
+        resp3, matched3, tmpl3, _ = responder.match_and_respond("whats my name", user_id=user_id, channel=channel)
+        self.assertTrue(matched3)
+        self.assertEqual(tmpl3, "recall_name")
+        self.assertIn("Your name is Bhadwa", resp3)
+
+    def test_direct_name_introduction_patterns(self):
+        """Test various direct name introduction phrases."""
+        from session_memory import session_memory
+        patterns = [
+            ("My name is Shoaib", "Shoaib"),
+            ("Call me Rahul", "Rahul"),
+            ("I am Alex", "Alex"),
+            ("Myself Priya Sen", "Priya Sen"),
+            ("It's Ananya", "Ananya"),
+        ]
+        responder.reload_templates()
+        for idx, (phrase, expected_name) in enumerate(patterns):
+            uid = f"user_pat_{idx}"
+            session_memory.clear_session(uid, "whatsapp")
+            resp, matched, tmpl, _ = responder.match_and_respond(phrase, user_id=uid, channel="whatsapp")
+            self.assertTrue(matched, f"Failed for {phrase}")
+            self.assertEqual(tmpl, "name_introduction", f"Failed for {phrase}")
+            self.assertIn(expected_name, resp)
+
+    def test_bot_identity_queries(self):
+        """Test queries asking about bot identity ('who are you', 'are you a bot', etc.)."""
+        queries = [
+            "who are you",
+            "who are you?",
+            "who r u",
+            "what are you",
+            "who is this",
+            "are you a bot",
+            "are you human",
+            "what is camellia artisanal",
+            "tell me about yourself",
+        ]
+        responder.reload_templates()
+        for q in queries:
+            resp, matched, tmpl, _ = responder.match_and_respond(q, user_id="test_bot_id_user", channel="whatsapp")
+            self.assertTrue(matched, f"Failed for '{q}'")
+            self.assertEqual(tmpl, "bot_identity", f"Failed for '{q}'")
+            self.assertIn("Camellia Artisanal", resp)
+
     def test_escalation_handoff_brief_generation(self):
         """Test escalation handoff brief includes customer name and recent chat history."""
         from session_memory import session_memory
@@ -985,16 +1050,16 @@ class TestCamelliaBot(unittest.TestCase):
         try:
             config.GEMINI_ENABLED = True
 
-            # 1. Auto mode with OpenAI key present
+            # 1. Auto mode with Gemini key present (prioritizes Gemini Flash)
             config.AI_PROVIDER = "auto"
             config.OPENAI_API_KEY = "sk-test-openai"
             config.GEMINI_API_KEY = "test-gemini"
-            self.assertEqual(gr.get_active_provider(), "openai")
-
-            # 2. Auto mode with only Gemini key present
-            config.OPENAI_API_KEY = ""
-            config.GEMINI_API_KEY = "test-gemini"
             self.assertEqual(gr.get_active_provider(), "gemini")
+
+            # 2. Auto mode with only OpenAI key present
+            config.OPENAI_API_KEY = "sk-test-openai"
+            config.GEMINI_API_KEY = ""
+            self.assertEqual(gr.get_active_provider(), "openai")
 
             # 3. Explicit openai provider
             config.AI_PROVIDER = "openai"

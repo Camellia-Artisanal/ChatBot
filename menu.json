@@ -379,60 +379,18 @@
       "service_window": "Friday Lunch - Thursday Dinner",
       "vegetarian": [
         {
-          "item": "Chholar Daal",
-          "description": "Authentic Bengali gram dal with coconut chips",
+          "item": "Rose Sondesh G Rs",
+          "description": "Freshly handcrafted (250g)",
           "price_inr": 250,
           "quantity": "250g"
-        },
-        {
-          "item": "Dhokar Dalna",
-          "description": "Lentil cakes in rich ginger-cumin gravy",
-          "price_inr": 300,
-          "quantity": "250g"
-        },
-        {
-          "item": "Shukto",
-          "description": "Traditional bitter-sweet medley with bodi & milk gravy",
-          "price_inr": 280,
-          "quantity": "250g"
-        },
-        {
-          "item": "Chanar Dalna",
-          "description": "Fresh handmade cottage cheese koftas in spiced curry",
-          "price_inr": 350,
-          "quantity": "250g"
-        },
-        {
-          "item": "Tomato Aamsottwo Chatni",
-          "description": "Sweet tangy tomato chutney with sun-dried mango pulp",
-          "price_inr": 180,
-          "quantity": "150g"
         }
       ],
       "non_vegetarian": [
         {
-          "item": "Mangsho (Mutton Kosha)",
-          "description": "Slow-cooked artisanal Bengali goat meat curry",
+          "item": "Kosha Mangsho Bento ₹(Non Veg)",
+          "description": "Freshly handcrafted (250g)",
           "price_inr": 650,
-          "quantity": "350g"
-        },
-        {
-          "item": "Rui Machher Kalia",
-          "description": "Fresh river carp in robust onion-raisin gravy",
-          "price_inr": 450,
-          "quantity": "2 pcs"
-        },
-        {
-          "item": "Chingri Malaikari",
-          "description": "Gold tiger prawns in creamy coconut milk sauce",
-          "price_inr": 550,
-          "quantity": "4 pcs"
-        },
-        {
-          "item": "Chicken Kosha",
-          "description": "Tender chicken braised with mustard oil & spices",
-          "price_inr": 420,
-          "quantity": "350g"
+          "quantity": "250g"
         }
       ],
       "bengali_bento": [
