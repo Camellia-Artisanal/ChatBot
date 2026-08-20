@@ -47,6 +47,68 @@
     },
 
     {
+      "id": "bot_capabilities",
+      "triggers": [
+        "how can you assist me",
+        "how can you assist",
+        "how can you help me",
+        "how can you help",
+        "how do you assist me",
+        "how do you help me",
+        "how can u help me",
+        "how can u assist me",
+        "how can u help",
+        "how can u assist",
+        "what can you do",
+        "what can u do",
+        "what can you help me with",
+        "what can you assist with",
+        "what are your capabilities",
+        "help me",
+        "assist me",
+        "can you help me",
+        "can you assist me",
+        "what can you assist me with"
+      ],
+      "response": "I'm here to make your experience with Camellia Artisanal effortless! 🌸 Here is how I can assist you:\n\n• 🍫 *Explore Handcrafted Sondesh*: Browse flavours and prices across our *Aamar Mishti* (pure dairy) and *Signature A2* (desi cow milk) collections.\n• 🍱 *View Fresh Bengali Meals*: Check out this week's fresh lunch/dinner bento menu and daily specials.\n• 📦 *Check Delivery & Timings*: Get dispatch timelines, kitchen hours (10:00 AM – 7:30 PM), and Porter delivery details across Delhi NCR.\n• 🛍️ *Calculate & Place Orders*: Choose your items, pack sizes (250g, 500g, 1kg), and I'll calculate your total and connect you directly with our kitchen manager to confirm!\n\nHow would you like to get started today? Feel free to ask for our menu or prices!",
+      "escalate": false,
+      "source_ref": "brand identity & assistant capabilities"
+    },
+
+    {
+      "id": "product_overview",
+      "triggers": [
+        "tell me about your product",
+        "tell me about your products",
+        "tell me about products",
+        "about your product",
+        "about your products",
+        "about products",
+        "what products do you have",
+        "what are your products",
+        "what products do you sell",
+        "what products",
+        "your products",
+        "your product",
+        "our products",
+        "what do you sell",
+        "what items do you have",
+        "what items do you sell",
+        "what food do you sell",
+        "what sweets do you have",
+        "what is your product",
+        "product details",
+        "products list",
+        "list of products",
+        "tell me about the products"
+      ],
+      "response": "Hi! Thanks for asking about our products. 🌸\n\nAt Camellia Artisanal, we craft authentic, Bengal-rooted culinary delicacies made fresh to order from our kitchen in Sushant Lok, Gurgaon:\n\n1. *Handcrafted Sondesh Collections*:\n• *Collection 1 — Aamar Mishti (আমার মিষ্টি)*: Made with pure dairy milk for daily sweet cravings — Classic, Rose, Mango, Kesar, Aam Ada, Kanchagolla, and our signature Nolen Gur & Liquid Jolbhora Sondesh.\n• *Collection 2 — Signature A2 Collection*: Hand-kneaded end-to-end with pure desi A2 cow milk & forest Mahua — exceptionally pure, rich, and perfect for special celebrations.\n\n2. *Fresh Bengali Bento Meals & Curries*:\n• Freshly cooked homestyle Bengali lunch & dinner meals delivered across Delhi NCR (including Aloor Dom, Dhokar Dalna, Bhetki Paturi, Chingri Malaikari, Robibarer Mangsho, and Daily Bento boxes).\n\nSharing our full Sondesh and fresh weekly meal cards below! Would you like to check out our flavours, prices, or place an order?",
+      "escalate": false,
+      "note": "Sends 3 cards: Aamar Mishti, Signature Sondesh, and current weekly menu.",
+      "source_ref": "client Q&A script > PRODUCTS"
+    },
+
+    {
       "id": "name_introduction",
       "triggers": [
         "my name is",

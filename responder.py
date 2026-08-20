@@ -105,7 +105,9 @@ class DeterministicResponder:
         existing_cart = facts.get("cart", [])
         is_general_menu_query = any(phrase in lowered_text for phrase in [
             "full menu", "send menu", "price list", "show menu", "what is your menu",
-            "how much is sondesh", "sondesh price", "how much sondesh", "sondesh cost", "cost of sondesh", "price of sondesh"
+            "how much is sondesh", "sondesh price", "how much sondesh", "sondesh cost", "cost of sondesh", "price of sondesh",
+            "tell me about your product", "about your product", "about your products", "what products", "your products", "product", "products",
+            "how can you assist", "how can you help", "what can you do", "help me", "assist me"
         ])
         if not is_general_menu_query:
             calc_result = order_calculator.parse_and_calculate(user_message, existing_draft=order_draft, existing_cart=existing_cart)
@@ -118,7 +120,13 @@ class DeterministicResponder:
 
         user_words = set(re.findall(r'\b\w+\b', lowered_text))
         
-        STOP_WORDS = {"i", "am", "im", "my", "is", "are", "do", "you", "a", "an", "the", "to", "for", "of", "in", "on", "have", "has", "with", "and", "or", "we", "can", "your", "this", "what", "how", "when", "where", "why", "who", "which", "many", "much", "me", "show", "tell", "it", "more", "want", "send", "share"}
+        STOP_WORDS = {
+            "i", "am", "im", "my", "is", "are", "do", "you", "u", "r", "a", "an", "the", "to", "for",
+            "of", "in", "on", "have", "has", "with", "and", "or", "we", "can", "your", "this",
+            "what", "how", "when", "where", "why", "who", "which", "many", "much", "me",
+            "show", "tell", "it", "more", "want", "send", "share", "about", "some", "any",
+            "please", "pls", "give", "know", "let", "sell", "use"
+        }
         
         # Check Self-Healing Learned Knowledge Base (Saved from Staff Escalation Resolutions)
         try:
@@ -269,8 +277,8 @@ class DeterministicResponder:
         target_images = None
         formatted_text = default_response
 
-        # "I want to know more" -> both collection cards + this week's meal menu
-        if template_id == "know_more":
+        # "I want to know more" & Product Overview -> both collection cards + this week's meal menu
+        if template_id in ["know_more", "product_overview"]:
             target_images = [img_aamar_mishti, img_signature_sondesh, current_weekly_img]
 
         # Sondesh photo card queries

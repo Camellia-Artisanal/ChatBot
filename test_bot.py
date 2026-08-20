@@ -207,6 +207,87 @@ class TestCamelliaBot(unittest.TestCase):
             self.assertIsNone(tmpl_id)
             self.assertTrue("notified our team" in response or "connect you with our team" in response)
 
+    def test_product_overview_queries(self):
+        """Product inquiries must match product_overview and return 3 menu cards."""
+        test_queries = [
+            "tell me about your product",
+            "tell me about your products",
+            "what products do you have",
+            "what are your products",
+            "what do you sell",
+            "what items do you have",
+            "about your products"
+        ]
+        for query in test_queries:
+            resp, matched, tmpl_id, img_urls = responder.match_and_respond(query)
+            self.assertTrue(matched, f"Query '{query}' should match product_overview")
+            self.assertEqual(tmpl_id, "product_overview", f"Query '{query}' should map to product_overview")
+            self.assertIn("Aamar Mishti", resp)
+            self.assertIn("Signature A2", resp)
+            self.assertIn("Bengali Bento Meals", resp)
+            self.assertIsInstance(img_urls, list)
+            self.assertEqual(len(img_urls), 3)
+
+    def test_bot_capabilities_queries(self):
+        """Assistance inquiries must match bot_capabilities with was_matched=True (zero escalation)."""
+        test_queries = [
+            "how can you assist me",
+            "how can you help me",
+            "how do you assist me",
+            "what can you do",
+            "what can u do",
+            "how can you help",
+            "how can you assist",
+            "help me",
+            "can you assist me",
+            "what can you help me with"
+        ]
+        for query in test_queries:
+            resp, matched, tmpl_id, _ = responder.match_and_respond(query)
+            self.assertTrue(matched, f"Query '{query}' should match bot_capabilities")
+            self.assertEqual(tmpl_id, "bot_capabilities", f"Query '{query}' should map to bot_capabilities")
+            self.assertIn("Handcrafted Sondesh", resp)
+            self.assertIn("Fresh Bengali Meals", resp)
+            self.assertIn("Check Delivery & Timings", resp)
+            self.assertIn("Calculate & Place Orders", resp)
+
+    def test_bot_identity_queries(self):
+        """Brand/bot introduction questions must map cleanly to bot_identity."""
+        test_queries = [
+            "who are you",
+            "who are u",
+            "are you a bot",
+            "are you human",
+            "tell me about yourself",
+            "what is camellia"
+        ]
+        for query in test_queries:
+            resp, matched, tmpl_id, _ = responder.match_and_respond(query)
+            self.assertTrue(matched, f"Query '{query}' should match bot_identity")
+            self.assertEqual(tmpl_id, "bot_identity", f"Query '{query}' should map to bot_identity")
+            self.assertIn("Camellia Artisanal virtual assistant", resp)
+
+    def test_strict_out_of_context_and_escalation(self):
+        """In-domain queries are answered directly; out-of-domain and explicit triggers escalate."""
+        # 1. In-domain product queries -> NOT escalated
+        _, matched1, _, _ = responder.match_and_respond("tell me about your product")
+        self.assertTrue(matched1)
+
+        # 2. In-domain capability queries -> NOT escalated
+        _, matched2, _, _ = responder.match_and_respond("how can you assist me")
+        self.assertTrue(matched2)
+
+        # 3. Explicit escalation triggers -> Escalated
+        _, matched3, tmpl3, _ = responder.match_and_respond("I want to speak with a human agent")
+        self.assertFalse(matched3)
+        self.assertEqual(tmpl3, "explicit_escalation")
+
+        # 4. Out-of-context query with AI disabled -> Escalated
+        with patch.object(config, "GEMINI_ENABLED", False):
+            _, matched4, tmpl4, _ = responder.match_and_respond("What is the capital of France?")
+            self.assertFalse(matched4)
+            self.assertIsNone(tmpl4)
+
     def test_whatsapp_adapter_flow(self):
         """PRD Requirement #2: WhatsApp integration handling."""
         payload = {
