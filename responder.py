@@ -256,6 +256,32 @@ class DeterministicResponder:
         session_memory.add_turn(user_id, channel, user_message, fallback)
         return fallback, False, None, None
 
+    def _detect_relevant_images(self, user_message: str) -> Optional[Any]:
+        """Attaches relevant menu photo cards when user inquires about products or menus in AI-First mode."""
+        lowered = user_message.lower().strip()
+        img_till_thursday = "/images/Till%20Thursday.jpeg"
+        img_from_friday = "/images/From%20Friday.jpeg"
+        img_signature_sondesh = "/images/Signature%20Sondesh.jpeg"
+        img_aamar_mishti = "/images/AAMAR%20MISHTI.jpeg"
+
+        import datetime, zoneinfo
+        try:
+            ist = zoneinfo.ZoneInfo("Asia/Kolkata")
+        except Exception:
+            ist = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+        today_weekday = datetime.datetime.now(tz=ist).weekday()
+        current_weekly_img = img_from_friday if today_weekday in [4, 5, 6] else img_till_thursday
+
+        if any(w in lowered for w in ["product", "all products", "what do you have", "what do you sell", "overview", "know more"]):
+            return [img_aamar_mishti, img_signature_sondesh, current_weekly_img]
+        elif any(w in lowered for w in ["sondesh", "mishti", "sweet", "sweets", "kanchagolla", "jolbhora", "nolen gur", "250g", "500g", "1kg"]):
+            if "signature" in lowered or "mahua" in lowered:
+                return [img_signature_sondesh]
+            return [img_aamar_mishti, img_signature_sondesh]
+        elif any(w in lowered for w in ["menu", "veg", "non veg", "non-veg", "bento", "combo", "meal", "meals", "lunch", "dinner"]):
+            return current_weekly_img
+        return None
+
     def _format_dynamic_response(
         self, template_id: str, default_response: str, user_id: str = None, channel: str = None, user_message: str = ""
     ) -> Tuple[str, Optional[Any]]:

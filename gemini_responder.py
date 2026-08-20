@@ -133,11 +133,11 @@ class GeminiResponder:
         }
 
         if is_reasoning_model:
-            payload["max_completion_tokens"] = 2048
+            payload["max_completion_tokens"] = 1024
             if config.OPENAI_REASONING_EFFORT:
                 payload["reasoning_effort"] = config.OPENAI_REASONING_EFFORT
         else:
-            payload["max_tokens"] = 2048
+            payload["max_tokens"] = 1024
             payload["temperature"] = 0.2 if is_refinement else 0.1
 
         headers = {
