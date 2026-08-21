@@ -150,7 +150,7 @@ class TestCamelliaBot(unittest.TestCase):
         """Test pricing query returns correct predefined template and photo card."""
         response, was_matched, tmpl_id, img_url = responder.match_and_respond("How much is Sondesh?")
         self.assertTrue(was_matched)
-        self.assertEqual(tmpl_id, "sondesh_price_general")
+        self.assertEqual(tmpl_id, "sondesh_price_detailed")
         self.assertIn("₹450", response)
         self.assertIsNotNone(img_url)
 
@@ -316,7 +316,7 @@ class TestCamelliaBot(unittest.TestCase):
             result = whatsapp_adapter.process_incoming_message(sender, body)
         self.assertEqual(result["status"], "processed")
         self.assertTrue(result["was_matched"])
-        self.assertEqual(result["template_id"], "sondesh_price_general")
+        self.assertEqual(result["template_id"], "sondesh_price_detailed")
 
     def test_analytics_tracking(self):
         """Verify analytics DB updates match rates correctly."""
@@ -325,7 +325,7 @@ class TestCamelliaBot(unittest.TestCase):
         self.assertIn("match_rate_percent", analytics)
 
         # Log 1 matched and 1 escalated
-        db.log_conversation("user_test_1", "instagram", "sondesh price", "response", True, "sondesh_price_general")
+        db.log_conversation("user_test_1", "instagram", "sondesh price", "response", True, "sondesh_price_detailed")
         db.log_conversation("user_test_2", "instagram", "random question", "fallback", False, None)
 
         analytics = db.get_analytics()
@@ -384,11 +384,9 @@ class TestCamelliaBot(unittest.TestCase):
 
     def test_webhook_rejects_unsigned_payload(self):
         """An unsigned POST must be refused whenever META_APP_SECRET is configured."""
-        if not config.META_APP_SECRET:
-            self.skipTest("META_APP_SECRET not configured; signature guard is intentionally off")
-
-        res = self.client.post("/webhook/instagram", json={"object": "instagram", "entry": []})
-        self.assertEqual(res.status_code, 403)
+        with patch.object(config, "META_APP_SECRET", "mock_meta_app_secret_123"):
+            res = self.client.post("/webhook/instagram", json={"object": "instagram", "entry": []})
+            self.assertEqual(res.status_code, 403)
 
     @patch("httpx.Client.post")
     def test_gemini_in_context_query(self, mock_post):
@@ -835,13 +833,21 @@ class TestCamelliaBot(unittest.TestCase):
 
     def test_parse_menu_card_endpoint(self):
         """Test POST /admin/parse-menu-card endpoint."""
-        headers = {"X-Admin-Key": config.ADMIN_API_KEY} if config.ADMIN_API_KEY else {}
-        raw_text = "Rose Sondesh 250g - Rs 450\nKosha Mangsho Bento ₹650 (non veg)"
-        response = self.client.post("/admin/parse-menu-card", json={"raw_text": raw_text}, headers=headers)
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertEqual(data["status"], "success")
-        self.assertTrue(data["updated_items_count"] >= 2)
+        with open(config.MENU_JSON_PATH, "r", encoding="utf-8") as f:
+            original_menu = f.read()
+
+        try:
+            headers = {"X-Admin-Key": config.ADMIN_API_KEY} if config.ADMIN_API_KEY else {}
+            raw_text = "Rose Sondesh 250g - Rs 450\nKosha Mangsho Bento ₹650 (non veg)"
+            response = self.client.post("/admin/parse-menu-card", json={"raw_text": raw_text}, headers=headers)
+            self.assertEqual(response.status_code, 200)
+            data = response.json()
+            self.assertEqual(data["status"], "success")
+            self.assertTrue(data["updated_items_count"] >= 2)
+        finally:
+            with open(config.MENU_JSON_PATH, "w", encoding="utf-8") as f:
+                f.write(original_menu)
+            responder.reload_templates()
 
     def test_collection_1_and_2_matching(self):
         """Verify that typing 'collection 1' or 'collection 2' matches specific collection templates and delivers only their respective menu card."""
@@ -888,6 +894,7 @@ class TestCamelliaBot(unittest.TestCase):
         }
         mock_httpx_cls.return_value.__enter__.return_value.post.return_value = mock_response
 
+        gemini_responder._gemini_cooldown_until = 0.0
         with patch.object(config, "GEMINI_ENABLED", True), patch.object(config, "GEMINI_API_KEY", "fake_key"):
             resp, match, tmpl, _ = responder.match_and_respond("collection 2", user_id="test_ai_refine", channel="whatsapp")
             self.assertTrue(match)
@@ -901,21 +908,29 @@ class TestCamelliaBot(unittest.TestCase):
         resp, match, tmpl, _ = responder.match_and_respond("How much is Sondesh?", user_id="test_price_inquiry", channel="whatsapp")
         self.assertTrue(match)
         self.assertNotEqual(tmpl, "order_draft_receipt")
-        self.assertEqual(tmpl, "sondesh_price_general")
+        self.assertEqual(tmpl, "sondesh_price_detailed")
 
     def test_admin_update_menu_endpoint(self):
         """Verify POST /admin/update-menu updates menu rotation and reloads responder."""
-        headers = {"X-Admin-Key": config.ADMIN_API_KEY} if config.ADMIN_API_KEY else {}
-        res = self.client.post(
-            "/admin/update-menu",
-            headers=headers,
-            json={
-                "week": "Test Rotation Week",
-                "vegetarian": [{"item": "Test Sondesh Special", "price_inr": 499}]
-            }
-        )
-        self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.json()["status"], "success")
+        with open(config.MENU_JSON_PATH, "r", encoding="utf-8") as f:
+            original_menu = f.read()
+
+        try:
+            headers = {"X-Admin-Key": config.ADMIN_API_KEY} if config.ADMIN_API_KEY else {}
+            res = self.client.post(
+                "/admin/update-menu",
+                headers=headers,
+                json={
+                    "week": "Test Rotation Week",
+                    "vegetarian": [{"item": "Test Sondesh Special", "price_inr": 499}]
+                }
+            )
+            self.assertEqual(res.status_code, 200)
+            self.assertEqual(res.json()["status"], "success")
+        finally:
+            with open(config.MENU_JSON_PATH, "w", encoding="utf-8") as f:
+                f.write(original_menu)
+            responder.reload_templates()
 
     def test_collection_2_and_collection_1_full_precision_menu_details(self):
         """Verify Collection 2, Collection 1, and Kanchagolla responses list all flavours, items, Kanchagolla & Jolbhora explicitly."""
@@ -1341,44 +1356,46 @@ class TestCamelliaBot(unittest.TestCase):
         from session_memory import session_memory
         responder.reload_templates()
 
-        # Scenario 1: Compound name introduction with gifting/difference inquiry (Guarded until client confirms difference)
+        # Scenario 1: Compound name introduction with gifting/difference inquiry (Confirmed collection difference)
         uid1 = "sim_user_priya_1"
         session_memory.clear_session(uid1, "whatsapp")
         msg1 = "Hi! I'm Priya. I want to gift sweet boxes for my parents' anniversary. What is the difference between Collection 1 and Collection 2?"
         resp1, matched1, tmpl1, imgs1 = responder.match_and_respond(msg1, user_id=uid1, channel="whatsapp")
-        self.assertFalse(matched1)
-        self.assertEqual(tmpl1, "GUARD_collection_customization")
-        self.assertIn("Priya", resp1)
-        self.assertIn("Guru Dayal Singh", resp1)
+        self.assertTrue(matched1)
+        self.assertEqual(tmpl1, "GUARD_collection_differentiation")
+        self.assertIn("Aamar Mishti", resp1)
+        self.assertIn("Signature Sondesh", resp1)
         facts1 = session_memory.get_facts(uid1, "whatsapp")
         self.assertEqual(facts1.get("name"), "Priya")
 
-        # Scenario 2: Customization and assorted box inquiries (Guarded until client confirms customization rules)
+        # Scenario 2: Customization and assorted box inquiries (Escalated per custom box policy)
         uid2 = "sim_user_custom_2"
         session_memory.clear_session(uid2, "whatsapp")
         msg2 = "Can I customize the box with a mix of rose and classic norom pak sondesh?"
         resp2, matched2, tmpl2, imgs2 = responder.match_and_respond(msg2, user_id=uid2, channel="whatsapp")
         self.assertFalse(matched2)
-        self.assertEqual(tmpl2, "GUARD_collection_customization")
-        self.assertIn("Guru Dayal Singh", resp2)
+        self.assertEqual(tmpl2, "GUARD_customization_flavour_mixing")
+        self.assertIn("+91 87965 51990", resp2)
 
-        # Scenario 3: Dietary, Halal & Cooking oil inquiries (Guarded until client confirms dietary certifications)
+        # Scenario 3: Dietary, Halal & Cooking oil inquiries (Confirmed: Mutton is Halal, Mustard oil from farmer)
         uid3 = "sim_user_dietary_3"
         session_memory.clear_session(uid3, "whatsapp")
         msg3 = "Is your food halal certified and what oil do you cook your curries in?"
         resp3, matched3, tmpl3, imgs3 = responder.match_and_respond(msg3, user_id=uid3, channel="whatsapp")
-        self.assertFalse(matched3)
-        self.assertEqual(tmpl3, "GUARD_dietary_halal_oil")
-        self.assertIn("Guru Dayal Singh", resp3)
+        self.assertTrue(matched3)
+        self.assertEqual(tmpl3, "GUARD_halal_ingredients_oil")
+        self.assertIn("Halal", resp3)
+        self.assertIn("mustard oil", resp3)
 
-        # Scenario 4: Payment methods and COD clarification (Guarded until client confirms payment channels)
+        # Scenario 4: Payment methods and COD clarification (Confirmed: UPI/bank transfer only, No COD)
         uid4 = "sim_user_payment_4"
         session_memory.clear_session(uid4, "whatsapp")
         msg4 = "What payment methods do you accept, do you take COD?"
         resp4, matched4, tmpl4, imgs4 = responder.match_and_respond(msg4, user_id=uid4, channel="whatsapp")
-        self.assertFalse(matched4)
-        self.assertEqual(tmpl4, "GUARD_payment_methods")
-        self.assertIn("Guru Dayal Singh", resp4)
+        self.assertTrue(matched4)
+        self.assertEqual(tmpl4, "GUARD_payment_method")
+        self.assertIn("UPI / bank transfer only", resp4)
+        self.assertIn("No COD", resp4)
 
         # Scenario 5: Transaction failure escalation
         uid5 = "sim_user_failed_tx_5"
@@ -1387,7 +1404,196 @@ class TestCamelliaBot(unittest.TestCase):
         resp5, matched5, tmpl5, imgs5 = responder.match_and_respond(msg5, user_id=uid5, channel="whatsapp")
         self.assertFalse(matched5)
         self.assertEqual(tmpl5, "explicit_escalation")
-        self.assertIn("Guru Dayal Singh", resp5)
+        self.assertIn("+91 87965 51990", resp5)
+
+    def test_phase_b_savoury_food_intro_and_image(self):
+        """Phase B: Test savoury_food_intro returns 3 ways to order with Gurgaon only restriction, No minimum order, and attaches weekly menu image."""
+        from session_memory import session_memory
+        session_memory.clear_session("test_savoury_intro_user", "whatsapp")
+        msg = "What is your lunch menu and savoury food options?"
+        resp, matched, tmpl, imgs = responder.match_and_respond(msg, user_id="test_savoury_intro_user", channel="whatsapp")
+        self.assertTrue(matched)
+        self.assertEqual(tmpl, "savoury_food_intro")
+        self.assertIn("3 ways to order", resp)
+        self.assertIn("No minimum order", resp)
+        self.assertIn("Bengali Bento", resp)
+        self.assertIn("Everyday Meal Subscription (Gurgaon only)", resp)
+        self.assertIn("All prices include GST, packaging, and portal charges", resp)
+        self.assertIn("Porter", resp)
+        # Image attachment must be weekly menu card
+        self.assertIsNotNone(imgs)
+        self.assertTrue("Thursday" in imgs or "Friday" in imgs)
+        # First savoury message gets savoury cross-sell nudge
+        self.assertIn("We also make & send Bengali mishti - norom pak Sondesh", resp)
+        self.assertIn("subtle natural flavours", resp)
+
+    def test_phase_b_bento_details_escalates_safely(self):
+        """Phase B: Test bento_details has response: null and escalate: true and safely escalates to human team."""
+        from session_memory import session_memory
+        session_memory.clear_session("test_bento_user", "whatsapp")
+        msg = "What are the bento meal box details and prices?"
+        resp, matched, tmpl, imgs = responder.match_and_respond(msg, user_id="test_bento_user", channel="whatsapp")
+        self.assertFalse(matched)
+        self.assertEqual(tmpl, "bento_details")
+        self.assertIn("+91 87965 51990", resp)
+
+    def test_phase_b_subscription_details_and_booking_steps_sequencing(self):
+        """Phase B: Test subscription_details (Gurgaon only) followed by 'how do I book' sequences to 4-step subscription_booking_steps."""
+        from session_memory import session_memory
+        uid = "test_sub_seq_user"
+        session_memory.clear_session(uid, "whatsapp")
+
+        # Step 1: Inquire about subscription
+        msg1 = "Tell me about your everyday meal subscription plans"
+        resp1, matched1, tmpl1, _ = responder.match_and_respond(msg1, user_id=uid, channel="whatsapp")
+        self.assertTrue(matched1)
+        self.assertEqual(tmpl1, "subscription_details")
+        self.assertIn("Gurgaon only", resp1)
+        self.assertIn("₹1,500", resp1)
+        self.assertIn("₹1,750", resp1)
+        self.assertIn("₹2,000", resp1)
+        self.assertIn("Polao / Luchi", resp1)
+        self.assertIn("11th meal is completely FREE", resp1)
+        # Verify state flag set
+        facts1 = session_memory.get_facts(uid, "whatsapp")
+        self.assertTrue(facts1.get("awaiting_subscription_booking"))
+
+        # Step 2: Follow-up asking how to book
+        msg2 = "How do I book this subscription?"
+        resp2, matched2, tmpl2, _ = responder.match_and_respond(msg2, user_id=uid, channel="whatsapp")
+        self.assertTrue(matched2)
+        self.assertEqual(tmpl2, "subscription_booking_steps")
+        self.assertIn("Next Steps", resp2)
+        self.assertIn("Choose your plan", resp2)
+        self.assertIn("Pay", resp2)
+        self.assertIn("Tell us your preferred dates", resp2)
+        self.assertIn("Done — we deliver on those dates without you following up", resp2)
+        self.assertIn("5 hours advance notice", resp2)
+        # Verify state flag cleared
+        facts2 = session_memory.get_facts(uid, "whatsapp")
+        self.assertFalse(facts2.get("awaiting_subscription_booking"))
+
+    def test_phase_b_alacarte_prebooking_steps(self):
+        """Phase B: Test alacarte_prebooking_steps returns 5-point capture list."""
+        from session_memory import session_memory
+        session_memory.clear_session("test_alacarte_user", "whatsapp")
+        msg = "How to order item from menu and pre-book savoury dishes?"
+        resp, matched, tmpl, _ = responder.match_and_respond(msg, user_id="test_alacarte_user", channel="whatsapp")
+        self.assertTrue(matched)
+        self.assertEqual(tmpl, "alacarte_prebooking_steps")
+        self.assertIn("Items & Quantity", resp)
+        self.assertIn("Delivery Address", resp)
+        self.assertIn("Receiver's Phone Number", resp)
+        self.assertIn("Preferred Delivery Slot / Day", resp)
+        self.assertIn("Google Location Pin", resp)
+        self.assertIn("8796551990", resp)
+
+    def test_phase_b_sondesh_dispatch_time(self):
+        """Phase B: Test sondesh_dispatch_time returns standard dispatch timings."""
+        from session_memory import session_memory
+        session_memory.clear_session("test_dispatch_user", "whatsapp")
+        msg = "How long to dispatch Sondesh and what is your prep time?"
+        resp, matched, tmpl, _ = responder.match_and_respond(msg, user_id="test_dispatch_user", channel="whatsapp")
+        self.assertTrue(matched)
+        self.assertEqual(tmpl, "sondesh_dispatch_time")
+        self.assertIn("15 minutes", resp)
+        self.assertIn("30 minutes", resp)
+        self.assertIn("an hour", resp)
+        self.assertIn("time of day", resp)
+        self.assertIn("10:00 AM – 7:30 PM", resp)
+
+    def test_phase_b_sondesh_price_detailed_sourcing_and_images(self):
+        """Phase B: Test sondesh_price_detailed returns client artisanal paragraph and images."""
+        from session_memory import session_memory
+        session_memory.clear_session("test_price_det_user", "whatsapp")
+        msg = "What is the price of Sondesh?"
+        resp, matched, tmpl, imgs = responder.match_and_respond(msg, user_id="test_price_det_user", channel="whatsapp")
+        self.assertTrue(matched)
+        self.assertEqual(tmpl, "sondesh_price_detailed")
+        self.assertIn("₹450", resp)
+        self.assertIn("₹900", resp)
+        self.assertIn("An all-women team", resp)
+        self.assertIn("partially mechanised, made in-house", resp)
+        self.assertIn("pure desi A2 cow milk", resp)
+        self.assertIsNotNone(imgs)
+
+    def test_phase_b_savoury_crosssell_nudge_fires_once_per_session(self):
+        """Phase B: Test savoury cross-sell nudge fires on first savoury query and not on subsequent queries."""
+        from session_memory import session_memory
+        uid = "test_crosssell_user"
+        session_memory.clear_session(uid, "whatsapp")
+
+        # Turn 1: Savoury query -> cross-sell nudge attached
+        msg1 = "Show me the lunch options"
+        resp1, matched1, tmpl1, _ = responder.match_and_respond(msg1, user_id=uid, channel="whatsapp")
+        self.assertTrue(matched1)
+        self.assertIn("We also make & send Bengali mishti - norom pak Sondesh", resp1)
+        self.assertIn("subtle natural flavours", resp1)
+        self.assertTrue(session_memory.get_facts(uid, "whatsapp").get("savoury_crosssell_sent"))
+
+        # Turn 2: Second savoury query -> NO duplicate cross-sell nudge
+        msg2 = "How to order item from menu?"
+        resp2, matched2, tmpl2, _ = responder.match_and_respond(msg2, user_id=uid, channel="whatsapp")
+        self.assertTrue(matched2)
+        self.assertEqual(tmpl2, "alacarte_prebooking_steps")
+        self.assertNotIn("P.S.", resp2)
+        self.assertNotIn("We also make & send Bengali mishti", resp2)
+
+        # Direct inquiry for cross-sell template
+        msg3 = "Do you have sweets along with meal?"
+        resp3, matched3, tmpl3, _ = responder.match_and_respond(msg3, user_id=uid, channel="whatsapp")
+        self.assertTrue(matched3)
+        self.assertEqual(tmpl3, "savoury_crosssell_sondesh")
+        self.assertIn("We also make & send Bengali mishti - norom pak Sondesh", resp3)
+        self.assertIn("subtle natural flavours", resp3)
+
+    def test_phase_c_subscription_booking_nudge(self):
+        """Phase C: Test subscription_details response explicitly ends with 'Would you like to book?'."""
+        from session_memory import session_memory
+        session_memory.clear_session("test_sub_nudge_user", "whatsapp")
+        msg = "Tell me about your everyday meal subscription"
+        resp, matched, tmpl, _ = responder.match_and_respond(msg, user_id="test_sub_nudge_user", channel="whatsapp")
+        self.assertTrue(matched)
+        self.assertEqual(tmpl, "subscription_details")
+        self.assertIn("Would you like to book?", resp)
+        # Verify it's at the end of the subscription response body
+        self.assertTrue(resp.strip().endswith("Would you like to book?") or "*P.S.*" in resp)
+
+    def test_phase_c_first_time_vs_returning_customer_detection(self):
+        """Phase C: Test first-time vs returning customer detection on savoury_food_intro."""
+        from session_memory import session_memory
+        from database import db
+
+        first_time_uid = "test_phase_c_first_time_user"
+        session_memory.clear_session(first_time_uid, "whatsapp")
+
+        # Path 1: First-time customer (No turns in session memory, No records in DB)
+        msg1 = "What is your lunch menu and savoury food options?"
+        resp1, matched1, tmpl1, _ = responder.match_and_respond(msg1, user_id=first_time_uid, channel="whatsapp")
+        self.assertTrue(matched1)
+        self.assertEqual(tmpl1, "savoury_food_intro")
+        self.assertIn("If this is your first Camellia meal and the menu feels unfamiliar, I'll be happy to help you choose!", resp1)
+
+        # Path 2: Same user in subsequent turn (prior turns exist in session memory)
+        msg2 = "Show me the savoury food options again"
+        resp2, matched2, tmpl2, _ = responder.match_and_respond(msg2, user_id=first_time_uid, channel="whatsapp")
+        self.assertTrue(matched2)
+        self.assertEqual(tmpl2, "savoury_food_intro")
+        self.assertNotIn("If this is your first Camellia meal and the menu feels unfamiliar, I'll be happy to help you choose!", resp2)
+
+        # Path 3: Returning customer from a previous session (in-memory cleared, but record exists in DB)
+        returning_db_uid = "test_phase_c_returning_db_user"
+        session_memory.clear_session(returning_db_uid, "whatsapp")
+        # Log a prior conversation into DB
+        db.log_conversation(returning_db_uid, "whatsapp", "Hello yesterday", "Hi there", True, "greeting")
+        self.assertTrue(session_memory.has_prior_history(returning_db_uid, "whatsapp"))
+
+        msg3 = "What is your savoury lunch menu and food options?"
+        resp3, matched3, tmpl3, _ = responder.match_and_respond(msg3, user_id=returning_db_uid, channel="whatsapp")
+        self.assertTrue(matched3)
+        self.assertEqual(tmpl3, "savoury_food_intro")
+        # Since history exists in DB, first-time greeting must NOT appear
+        self.assertNotIn("If this is your first Camellia meal and the menu feels unfamiliar, I'll be happy to help you choose!", resp3)
 
 if __name__ == "__main__":
     unittest.main()

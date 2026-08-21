@@ -38,9 +38,9 @@ Built specifically to solve Meta Ad lead conversion bottlenecks, filter non-ad n
 - **Owner Notification**: Logged into `camellia.db` with customer ID, channel, and message snippet, then alerts human staff via SMS/Email.
 
 ### 5. 🔐 Kitchen & Menu Admin Portal (`/admin` / `/admin/dashboard`)
-- **PIN Authentication**: Secure 5-digit PIN lock for kitchen staff and managers (Default: `51990` or custom `ADMIN_PIN`).
+- **PIN Authentication**: Secure PIN lock for kitchen staff and managers (configured via `ADMIN_PIN` in `.env`; blocks access if unconfigured).
 - **📋 Paste Menu Card Parser**: Paste raw WhatsApp text, flyer notes, or dish lists; regex & Gemini AI automatically extract dish names, descriptions, weights, prices, and categorize into Veg / Non-Veg.
-- **📸 Flyer Photo & Graphic OCR**: Drag-and-drop printed menu photos or Instagram flyers; Gemini Vision extracts items and syncs with the live bot.
+- **📸 Flyer Photo & Graphic OCR**: Optional drag-and-drop printed menu photos or Instagram flyers; scans items using Gemini Vision when configured (OFF by default, uses client's own key under their billing).
 - **📊 Google Sheets Live Sync**: One-click sync from Google Sheets CSV without touching server files.
 - **🍱 Active Menu Viewer**: Visual inspection of live dishes with instant **Reset to Authentic Bengali Culinary Baseline**.
 - **📈 Analytics & Escalations**: Real-time match rates, total queries, and unresolved human escalation tracking.
@@ -54,7 +54,8 @@ Built specifically to solve Meta Ad lead conversion bottlenecks, filter non-ad n
 ## 🛠️ Technology Stack
 
 - **Backend Framework**: Python 3.11+, FastAPI, Uvicorn
-- **Multimodal AI / OCR**: Google Gemini Vision (`gemini-flash-latest` / `gemini-pro`)
+- **Deterministic Matcher & Parser**: Python Regex & Rule-Based Matchers ($0 Operating Cost)
+- **Optional Multimodal AI / OCR**: Google Gemini Vision (OFF by default; uses client's own key under their own billing)
 - **HTTP Client**: `httpx` (Async Meta Graph API & WhatsApp Cloud API calls)
 - **Database**: SQLite3 (`camellia.db`)
 - **API Standards**: Meta Graph API v19.0 (Instagram Messaging API & WhatsApp Business Cloud API)

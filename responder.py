@@ -111,11 +111,11 @@ class DeterministicResponder:
         user_words = set(re.findall(r'\b\w+\b', lowered_text))
         
         STOP_WORDS = {
-            "i", "am", "im", "my", "is", "are", "do", "you", "u", "r", "a", "an", "the", "to", "for",
-            "of", "in", "on", "have", "has", "with", "and", "or", "we", "can", "your", "this",
-            "what", "how", "when", "where", "why", "who", "which", "many", "much", "me",
-            "show", "tell", "it", "more", "want", "send", "share", "about", "some", "any",
-            "please", "pls", "give", "know", "let", "sell", "use"
+            "i", "am", "im", "my", "is", "are", "do", "does", "did", "you", "u", "r", "a", "an", "the", "to", "for",
+            "of", "in", "on", "at", "by", "from", "with", "and", "or", "we", "can", "your", "this", "that", "these", "those",
+            "what", "how", "when", "where", "why", "who", "which", "many", "much", "me", "us", "it", "its",
+            "show", "tell", "more", "want", "send", "share", "about", "some", "any", "all", "than", "other",
+            "please", "pls", "give", "know", "let", "sell", "use", "be", "have", "has", "had"
         }
 
         # 1. Update & Extract Session Memory Facts (Name, Order Draft)
@@ -180,11 +180,19 @@ class DeterministicResponder:
             "courier to", "deliver to bangalore", "deliver to mumbai", "deliver to pune", "deliver to kolkata", "out of ncr", "outside ncr",
             "allergy", "allergies", "allergic", "nut allergy", "nut-free", "nut free",
             "order status", "track my order", "where is my order", "paid but no confirmation", "paid 2 hours ago", "paid 1 hour ago", "order tracking",
-            "kitchen address", "pickup address", "self pickup", "pick it up from kitchen", "kitchen timings"
+            "kitchen address", "pickup address", "self pickup", "pick it up from kitchen", "kitchen timings",
+            "how to pay", "pay", "payment", "upi", "qr", "qr code", "gpay", "paytm", "phonepe", "cod", "cash on delivery",
+            "shelf life", "how long", "storage", "refrigeration", "refrigerate", "fridge", "spoil", "expiry"
         ])
         if not is_general_menu_query:
             calc_result = order_calculator.parse_and_calculate(user_message, existing_draft=order_draft, existing_cart=existing_cart)
-            if calc_result and calc_result.get("formatted_receipt"):
+            is_order_intent = (
+                calc_result and (
+                    calc_result.get("has_new_items") or
+                    any(kw in lowered_text for kw in ["confirm", "bill", "receipt", "total", "cart", "summary", "place order", "place this order", "finalize", "checkout"])
+                )
+            )
+            if is_order_intent and calc_result.get("formatted_receipt"):
                 if calc_result.get("items"):
                     facts["cart"] = calc_result["items"]
                 response_text = calc_result["formatted_receipt"]
@@ -215,11 +223,14 @@ class DeterministicResponder:
 
         templates = self.qa_data.get("templates", [])
         
-        best_template = None
-        best_score = 0
+        best_guard_template = None
+        best_guard_score = 0
+        best_normal_template = None
+        best_normal_score = 0
 
         for tmpl in templates:
-            tmpl_id = tmpl.get("id")
+            tmpl_id = tmpl.get("id", "")
+            is_guard = tmpl_id.startswith("GUARD_")
             triggers = tmpl.get("triggers", [])
             max_trigger_score = 0
             
@@ -240,7 +251,8 @@ class DeterministicResponder:
                     
                     if matching_substantive:
                         coverage = len(matching_substantive) / max(len(substantive_trigger_words), 1)
-                        t_score = len(matching_substantive) * 6 + int(coverage * 6)
+                        if len(substantive_trigger_words) == 1 or len(matching_substantive) >= 2 or coverage >= 0.6:
+                            t_score = len(matching_substantive) * 6 + int(coverage * 6)
                     else:
                         # Check 3: Fuzzy word similarity match (Tiered: len >= 3 allowed with stricter threshold)
                         fuzzy_matches = 0
@@ -260,12 +272,30 @@ class DeterministicResponder:
                                     break
                         if fuzzy_matches > 0:
                             coverage = fuzzy_matches / max(len(substantive_trigger_words), 1)
-                            t_score = fuzzy_matches * 5 + int(coverage * 5)
+                            if len(substantive_trigger_words) == 1 or fuzzy_matches >= 2 or coverage >= 0.6:
+                                t_score = fuzzy_matches * 5 + int(coverage * 5)
 
                 if t_score > max_trigger_score:
                     max_trigger_score = t_score
 
             score = max_trigger_score
+
+            # If it is a GUARD template, require at least one guard-specific anchor keyword in user text
+            if is_guard:
+                guard_anchors = {
+                    "GUARD_collection_differentiation": {"difference", "differ", "differs", "compare"},
+                    "GUARD_customization_flavour_mixing": {"mix", "mixing", "custom", "customize", "customise", "customized", "customised", "assorted"},
+                    "GUARD_halal_ingredients_oil": {"halal", "jhatka", "oil", "medium", "mustard", "ghee"},
+                    "GUARD_payment_method": {"pay", "payment", "paying", "cod", "upi", "qr", "gpay", "paytm", "phonepe", "banking", "card", "cash"},
+                    "GUARD_allergen_nutfree_glutenfree": {"allergy", "allergies", "allergic", "allergen", "allergens", "peanut", "peanuts", "cashew", "cashews", "pistachio", "pistachios", "gluten", "contamination", "nut", "nuts"},
+                    "GUARD_pickup_address_hours": {"pickup", "pick", "collect", "kitchen"},
+                    "GUARD_shelf_life_storage": {"shelf", "storage", "refrigeration", "refrigerate", "fridge", "expiry", "spoil", "heat", "store", "last"},
+                    "GUARD_staff_names_manager_contact": {"owner", "founder", "chef", "cook", "somdeb", "manager", "staff", "guru"}
+                }
+                anchors = guard_anchors.get(tmpl_id, set())
+                if anchors and not any(a in lowered_text for a in anchors):
+                    score = 0
+
             # Suppress name_introduction template when we already captured name as prefix for compound inquiries
             if intro_greeting_prefix and tmpl_id == "name_introduction":
                 score = 0
@@ -276,40 +306,81 @@ class DeterministicResponder:
 
             # Priority boosts for specialized intent categories
             if score > 0:
-                if tmpl_id == "GUARD_dietary_halal_oil" and any(k in lowered_text for k in ["halal", "jhatka", "cooking oil", "mustard oil", "which oil", "what oil", "oil do you cook", "cooking medium", "what medium"]):
+                if tmpl_id == "GUARD_halal_ingredients_oil" and re.search(r'\b(halal|jhatka|cooking oil|mustard oil|what oil|which oil|which cooking oil|what cooking oil|oil do you cook|cooking medium|what cooking medium)\b', lowered_text):
                     score += 100
-                elif tmpl_id == "GUARD_allergen_nut_safety" and any(k in lowered_text for k in ["allergy", "allergies", "allergic", "nut", "nuts", "gluten", "allergen", "allergens"]):
+                elif tmpl_id == "GUARD_allergen_nutfree_glutenfree" and (re.search(r'\b(nut allergy|nuts allergy|severe allergy|allergic to nuts|peanut allergy|cashew allergy|pistachio allergy|gluten allergy|cross contamination|allergen|allergens|nut allergen)\b', lowered_text) or (re.search(r'\b(allergy|allergic|allergies)\b', lowered_text) and re.search(r'\b(nut|nuts|severe|peanut|cashew|pistachio|gluten)\b', lowered_text))):
                     score += 100
-                elif tmpl_id == "GUARD_payment_methods" and any(k in lowered_text for k in ["payment", "how to pay", "how do i pay", "cod", "cash on delivery", "upi", "gpay", "paytm", "phonepe", "qr code", "qr", "net banking", "credit card", "debit card"]):
+                elif tmpl_id == "GUARD_payment_method" and re.search(r'\b(how to pay|how do i pay|how can i pay|payment method|payment methods|payment options|pay via|pay with|pay by|cod|cash on delivery|upi qr|qr code|gpay|paytm|phonepe|net banking|credit card|debit card)\b', lowered_text):
                     score += 100
-                elif tmpl_id == "GUARD_shelf_life_storage" and any(k in lowered_text for k in ["shelf life", "store", "storage", "refrigerat", "fridge", "expiry", "how long"]):
+                elif tmpl_id == "GUARD_shelf_life_storage" and re.search(r'\b(shelf life|how long (can i store|does it last|will it last|to keep)|how many days will it last|refrigeration|refrigerate|fridge|storage guidelines|how to store)\b', lowered_text):
                     score += 100
-                elif tmpl_id == "GUARD_kitchen_pickup_address" and any(k in lowered_text for k in ["pickup", "pick up", "kitchen address", "self pickup", "collect from", "collect order", "collect in person", "where is your kitchen", "kitchen location", "sushant arcade"]):
+                elif tmpl_id == "GUARD_pickup_address_hours" and re.search(r'\b(pickup address|kitchen address|self pickup|pick it up from kitchen|pick up from (your )?kitchen|pickup from (your )?kitchen|where is your kitchen|kitchen location|pickup timings|kitchen pickup timings)\b', lowered_text):
                     score += 100
-                elif tmpl_id == "GUARD_staff_identity" and any(k in lowered_text for k in ["who is the owner", "owner name", "who is the chef", "who is the cook", "who runs the kitchen", "chef name", "cook name", "who is somdeb", "founder", "head chef"]):
+                elif tmpl_id == "GUARD_staff_names_manager_contact" and re.search(r'\b(who is the owner|who is the founder|who is the chef|who is the cook|who runs the kitchen|who is somdeb|chef name|owner name|founder name|staff names|manager|manager name)\b', lowered_text):
                     score += 100
-                elif tmpl_id == "GUARD_collection_customization" and any(k in lowered_text for k in ["difference between collection", "difference between the collection", "collection 1 vs collection 2", "compare collection", "how do the collections differ", "customize", "customise", "custom box", "mix", "assorted"]):
+                elif tmpl_id == "GUARD_collection_differentiation" and re.search(r'\b(difference between collection|collection 1 vs collection 2|collection 1 and collection 2 difference|how do the collections differ|compare collection|how are the collections different)\b', lowered_text):
                     score += 100
-                elif tmpl_id == "delivery_out_of_area" and any(c in lowered_text for c in [
-                    "bangalore", "bengaluru", "mumbai", "kolkata", "pune", "hyderabad", "chennai", "jaipur", "ahmedabad", "chandigarh", "lucknow", "outside delhi", "outside ncr", "other cities", "out of delhi"
-                ]):
+                elif tmpl_id == "GUARD_customization_flavour_mixing" and re.search(r'\b(mix (rose and classic|classic and rose|flavours|flavors|two flavours|two flavors|different flavours|different flavors)|custom assorted box|customize the (box|flavours|flavors)|customise the (box|flavours|flavors)|customize flavours|customise flavours|customize flavors|customise flavors|mix flavours in|mix flavors in|mix flavours|mix flavors)\b', lowered_text):
+                    score += 100
+                elif tmpl_id == "delivery_out_of_area" and (
+                    re.search(r'\b(deliver(y|ing)?|courier|ship(ping)?|send|order|to|in)\b.*\b(bangalore|bengaluru|mumbai|kolkata|pune|hyderabad|chennai|jaipur|ahmedabad|chandigarh|lucknow)\b', lowered_text) or
+                    re.search(r'\b(bangalore|bengaluru|mumbai|kolkata|pune|hyderabad|chennai|jaipur|ahmedabad|chandigarh|lucknow)\b.*\b(deliver(y|ing)?|courier|ship(ping)?|send|order)\b', lowered_text) or
+                    any(c in lowered_text for c in ["bangalore", "bengaluru", "outside delhi", "outside ncr", "other cities", "other city", "out of delhi", "out of ncr", "out of state", "interstate"])
+                ):
                     score += 50
                 elif tmpl_id == "combo_bento" and any(b in lowered_text for b in ["bento", "combo"]):
                     score += 50
+                elif tmpl_id == "subscription_booking_steps" and facts.get("awaiting_subscription_booking") and re.search(r'\b(how (do i|to|can i) (order|book)|how to get started|book|booking steps|next steps|how do i start)\b', lowered_text):
+                    score += 120
+                elif tmpl_id == "subscription_booking_steps" and re.search(r'\b(how to book subscription|book subscription|start subscription|subscribe|how do i book subscription|booking steps for subscription|next steps for subscription)\b', lowered_text):
+                    score += 100
+                elif tmpl_id == "subscription_details" and re.search(r'\b(subscription|meal plan|everyday meal|meal subscription|5 meals package|5 meals)\b', lowered_text):
+                    score += 80
+                elif tmpl_id == "bento_details" and re.search(r'\b(bento|bengali bento|bento box|bento details|bento tiers|bento prices|bento pricing|bento meal)\b', lowered_text):
+                    score += 80
+                elif tmpl_id == "savoury_food_intro" and re.search(r'\b(lunch menu|dinner options|savoury food|bengali meals|lunch options|dinner menu|savoury menu|bengali lunch|bengali dinner|3 ways to order|savoury dishes|savoury ordering)\b', lowered_text):
+                    score += 80
+                elif tmpl_id == "alacarte_prebooking_steps" and re.search(r'\b(how to order from menu|how to order item from menu|pre-book|prebook|pre book|pre-order savoury|preorder savoury|how to order alacarte|order alacarte|order à la carte)\b', lowered_text):
+                    score += 80
+                elif tmpl_id == "sondesh_dispatch_time" and re.search(r'\b(how long to deliver|dispatch time|how fast can you deliver|dispatch timing|prep time|how long to dispatch|sondesh dispatch time)\b', lowered_text):
+                    score += 80
+                elif tmpl_id == "sondesh_price_detailed" and re.search(r'\b(sondesh price|price of sondesh|cost of sondesh|how much is sondesh|price list|sondesh cost|sondesh rate|how many pieces)\b', lowered_text):
+                    score += 70
 
-            if score > best_score:
-                best_score = score
-                best_template = tmpl
+            if is_guard:
+                if score > best_guard_score:
+                    best_guard_score = score
+                    best_guard_template = tmpl
+            else:
+                if score > best_normal_score:
+                    best_normal_score = score
+                    best_normal_template = tmpl
+
+        # Rule 3: Any template whose ID starts with GUARD_ takes absolute priority over every other matching template, regardless of keyword-match count.
+        if best_guard_template and best_guard_score >= 4:
+            best_template = best_guard_template
+            best_score = best_guard_score
+        elif best_normal_template and best_normal_score >= 4:
+            best_template = best_normal_template
+            best_score = best_normal_score
+        else:
+            best_template = None
+            best_score = 0
 
         # Require a minimum matching threshold (score >= 4) in hybrid/deterministic mode
         if best_template and best_score >= 4:
-            tmpl_id = best_template.get("id")
+            tmpl_id = best_template.get("id", "")
+            raw_response = best_template.get("response")
 
-            # Hard Escalation Guard: If matched a GUARD_ template or escalate=True with response=None
-            is_guard_escalate = (tmpl_id and tmpl_id.startswith("GUARD_")) or (best_template.get("escalate") is True and best_template.get("response") is None)
-            if is_guard_escalate:
+            # Hard Code-Level Safety Checks (Rules 3 & 4):
+            # 1. Any template marked escalate: true triggers escalation.
+            # 2. If a template has response: null (or empty string), it must NEVER be auto-sent — force escalation.
+            is_null_or_empty_response = (raw_response is None) or (isinstance(raw_response, str) and not raw_response.strip())
+            force_escalate = (best_template.get("escalate") is True) or is_null_or_empty_response
+
+            if force_escalate:
                 fallback = self.qa_data.get("escalation_triggers", {}).get(
-                    "fallback_response", "Thank you for getting in touch! 🌸 I've notified our team and Kitchen Manager, Mr. Guru Dayal Singh (+91 87965 51990), regarding your request and they'll connect you with our team directly on WhatsApp/call shortly.\n\nIn the meantime, feel free to ask me about:\n• 🌸 Our fresh Sondesh, Kanchagolla & Jolbhora (Aamar Mishti & Signature Collections)\n• 🍱 This week's fresh Bengali Lunch & Dinner Bento menu\n• 🚚 Delivery details across Delhi NCR\n\nOr reply 'menu' to see our complete price list!"
+                    "fallback_response", "Thank you for getting in touch! 🌸 I've notified our team (+91 87965 51990) regarding your request and they'll connect with you directly on WhatsApp/call shortly.\n\nIn the meantime, feel free to ask me about:\n• 🌸 Our fresh Sondesh, Kanchagolla & Jolbhora (Aamar Mishti & Signature Collections)\n• 🍱 This week's fresh Bengali Lunch & Dinner Bento menu\n• 🚚 Delivery details across Delhi NCR\n\nOr reply 'menu' to see our complete price list!"
                 )
                 if intro_greeting_prefix:
                     fallback = intro_greeting_prefix + fallback
@@ -334,6 +405,10 @@ class DeterministicResponder:
                 else:
                     response_text = "You haven't told me your name yet! What should I call you?"
                     facts["awaiting_name"] = True
+            elif tmpl_id == "subscription_details":
+                facts["awaiting_subscription_booking"] = True
+            elif tmpl_id == "subscription_booking_steps":
+                facts["awaiting_subscription_booking"] = False
             elif tmpl_id == "order_next_steps":
                 session_memory.clear_order_draft(user_id, channel)
             elif config.is_ai_enabled:
@@ -348,6 +423,24 @@ class DeterministicResponder:
                 )
                 if used_ai and refined_text:
                     response_text = refined_text
+
+            # First-time customer welcoming line for savoury food intro
+            if tmpl_id == "savoury_food_intro" and not session_memory.has_prior_history(user_id, channel):
+                first_time_nudge = "\n\nIf this is your first Camellia meal and the menu feels unfamiliar, I'll be happy to help you choose!"
+                response_text = response_text.rstrip() + first_time_nudge
+
+            # One-time savoury cross-sell nudge logic
+            savoury_templates = {
+                "savoury_food_intro", "weekly_menu_veg", "weekly_menu_nonveg",
+                "combo_bento", "alacarte_prebooking_steps",
+                "subscription_details", "subscription_booking_steps"
+            }
+            if tmpl_id in savoury_templates and not facts.get("savoury_crosssell_sent"):
+                facts["savoury_crosssell_sent"] = True
+                crosssell_nudge = "\n\n*P.S.* We also make & send Bengali mishti - norom pak Sondesh. All milk protein, no gluten, mild sweet, no added fat - subtle natural flavours…. Handcrafted."
+                response_text = response_text.rstrip() + crosssell_nudge
+            elif tmpl_id == "savoury_crosssell_sondesh":
+                facts["savoury_crosssell_sent"] = True
 
             if intro_greeting_prefix and not response_text.startswith("Nice to meet you"):
                 if response_text.startswith("Hi! "):
@@ -410,7 +503,7 @@ class DeterministicResponder:
             return [img_aamar_mishti, img_signature_sondesh, current_weekly_img]
         elif any(w in lowered for w in ["sondesh", "mishti", "sweet", "sweets", "kanchagolla", "jolbhora", "nolen gur", "250g", "500g", "1kg", "rose", "classic", "mango", "kesar", "price"]):
             return [img_aamar_mishti, img_signature_sondesh]
-        elif any(w in lowered for w in ["menu", "veg", "non veg", "non-veg", "bento", "combo", "meal", "meals", "lunch", "dinner", "halal", "oil", "ghee"]):
+        elif any(w in lowered for w in ["menu", "veg", "non veg", "non-veg", "bento", "combo", "meal", "meals", "lunch", "dinner", "halal", "oil", "ghee", "savoury"]):
             return current_weekly_img
         return None
 
@@ -475,18 +568,18 @@ class DeterministicResponder:
 
             elif has_rose and not has_classic:
                 target_images = [img_aamar_mishti, img_signature_sondesh]
-                formatted_text = "Our handcrafted *Rose Sondesh* 🌸 is made with fresh artisanal chhana infused with fragrant organic rose petals. Available in both collections:\n\n*Rose Sondesh Price Breakdown:*\n```\n+-------------------------------------+-------+-------+-------+\n| Collection                          | 250g  | 500g  |  1kg  |\n+-------------------------------------+-------+-------+-------+\n| Collection 1 — Aamar Mishti (Dairy) | ₹450  | ₹800  | ₹1500 |\n| Collection 2 — Signature (Desi A2)  | ₹600  | ₹1100 | ₹2000 |\n+-------------------------------------+-------+-------+-------+\n* Box count: 9 pcs (250g) | 18 pcs (500g) | 36 pcs (1kg)\n```\n\n• *Collection 1 (Aamar Mishti)*: Daily indulgence made with pure dairy milk in our kitchen.\n• *Collection 2 (Signature A2)*: 100% hand-kneaded with unadulterated desi A2 cow milk — exceptionally rich & melt-in-the-mouth.\n\nWhich collection and pack size would you like to order (250g, 500g, or 1kg)?"
+                formatted_text = "Our handcrafted *Rose Sondesh* 🌸 is made with fresh artisanal chhana infused with fragrant organic rose petals. Available in both collections:\n\n*Rose Sondesh Price Breakdown:*\n```\n+-------------------------------------+-------+-------+-------+\n| Collection                          | 250g  | 500g  |  1kg  |\n+-------------------------------------+-------+-------+-------+\n| Collection 1 — Aamar Mishti (Dairy) | ₹450  | ₹800  | ₹1500 |\n| Collection 2 — Signature (Desi A2)  | ₹600  | ₹1100 | ₹2000 |\n+-------------------------------------+-------+-------+-------+\n* Box count: 9 pcs (250g) | 18 pcs (500g) | 36 pcs (1kg)\n```\n\n• *Collection 1 (Aamar Mishti)*: Daily indulgence, good dairy milk, partially mechanised, made in-house at our kitchen.\n• *Collection 2 (Signature A2)*: Special occasions & gifting — made with pure desi A2 cow milk (not industrially processed), completely handcrafted end to end.\n\nWhich collection and pack size would you like to order (250g, 500g, or 1kg)?"
 
             elif has_classic and not has_rose:
                 target_images = [img_aamar_mishti, img_signature_sondesh]
-                formatted_text = "Our traditional *Classic Sondesh* 🌸 is made with fresh artisanal chhana and delicate aromatic cardamom. Available in both collections:\n\n*Classic Sondesh Price Breakdown:*\n```\n+-------------------------------------+-------+-------+-------+\n| Collection                          | 250g  | 500g  |  1kg  |\n+-------------------------------------+-------+-------+-------+\n| Collection 1 — Aamar Mishti (Dairy) | ₹450  | ₹800  | ₹1500 |\n| Collection 2 — Signature (Desi A2)  | ₹600  | ₹1100 | ₹2000 |\n+-------------------------------------+-------+-------+-------+\n* Box count: 9 pcs (250g) | 18 pcs (500g) | 36 pcs (1kg)\n```\n\n• *Collection 1 (Aamar Mishti)*: Daily indulgence made with pure dairy milk in our kitchen.\n• *Collection 2 (Signature A2)*: 100% hand-kneaded with unadulterated desi A2 cow milk — exceptionally rich & melt-in-the-mouth.\n\nWhich collection and pack size would you like to order (250g, 500g, or 1kg)?"
+                formatted_text = "Our traditional *Classic Sondesh* 🌸 is made with fresh artisanal chhana and delicate aromatic cardamom. Available in both collections:\n\n*Classic Sondesh Price Breakdown:*\n```\n+-------------------------------------+-------+-------+-------+\n| Collection                          | 250g  | 500g  |  1kg  |\n+-------------------------------------+-------+-------+-------+\n| Collection 1 — Aamar Mishti (Dairy) | ₹450  | ₹800  | ₹1500 |\n| Collection 2 — Signature (Desi A2)  | ₹600  | ₹1100 | ₹2000 |\n+-------------------------------------+-------+-------+-------+\n* Box count: 9 pcs (250g) | 18 pcs (500g) | 36 pcs (1kg)\n```\n\n• *Collection 1 (Aamar Mishti)*: Daily indulgence, good dairy milk, partially mechanised, made in-house at our kitchen.\n• *Collection 2 (Signature A2)*: Special occasions & gifting — made with pure desi A2 cow milk (not industrially processed), completely handcrafted end to end.\n\nWhich collection and pack size would you like to order (250g, 500g, or 1kg)?"
 
             else:
                 target_images = [img_aamar_mishti, img_signature_sondesh]
 
         # Other Sondesh price / flavour queries
         elif template_id in [
-            "sondesh_price_general",
+            "sondesh_price_general", "sondesh_price_detailed",
             "sondesh_mango_kesar", "sondesh_nolen_gur",
             "jolbhora", "kanchagolla", "pack_size_250g", "pack_size_500g", "pack_size_1kg",
             "jolbhora_talgash_details", "sugar_free_options", "allergen_nut_safety"
@@ -497,6 +590,11 @@ class DeterministicResponder:
                 target_images = [img_signature_sondesh]
             else:
                 target_images = [img_aamar_mishti, img_signature_sondesh]
+
+        # Savoury food intro — attach current weekly menu image card alongside text
+        elif template_id == "savoury_food_intro":
+            target_images = current_weekly_img
+            formatted_text = default_response
 
         # Weekly menu & bento photo card queries
         elif template_id in ["weekly_menu_veg", "weekly_menu_nonveg", "combo_bento"]:

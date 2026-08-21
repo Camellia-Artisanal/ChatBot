@@ -24,7 +24,7 @@ class Config:
 
     # Protects /admin/* endpoints (customer logs & menu overwrite). Unset = open.
     ADMIN_API_KEY: str = os.getenv("ADMIN_API_KEY", "")
-    ADMIN_PIN: str = os.getenv("ADMIN_PIN", "51990")  # Default PIN matches kitchen manager contact suffix (51990)
+    ADMIN_PIN: str = os.getenv("ADMIN_PIN", "")  # Must be explicitly configured via ADMIN_PIN env; unconfigured blocks admin access
 
     # The browser chat tester writes real rows and fires real escalation alerts,
     # so it can be explicitly disabled in production with ENABLE_WEB_TESTER=false.
@@ -38,7 +38,7 @@ class Config:
 
     # Shown on /privacy and /terms.
     BUSINESS_LEGAL_NAME: str = os.getenv("BUSINESS_LEGAL_NAME", "Camellia Artisanal")
-    PRIVACY_CONTACT_EMAIL: str = os.getenv("PRIVACY_CONTACT_EMAIL", "owner@camelliaartisanal.com")
+    PRIVACY_CONTACT_EMAIL: str = os.getenv("PRIVACY_CONTACT_EMAIL", "")
     
     # WhatsApp Cloud API Config
     WHATSAPP_ACCESS_TOKEN: str = os.getenv("WHATSAPP_ACCESS_TOKEN", "")
@@ -51,7 +51,7 @@ class Config:
     
     # Human Escalation Contact
     HUMAN_ESCALATION_PHONE: str = os.getenv("HUMAN_ESCALATION_PHONE", "+918796551990")
-    HUMAN_ESCALATION_EMAIL: str = os.getenv("HUMAN_ESCALATION_EMAIL", "owner@camelliaartisanal.com")
+    HUMAN_ESCALATION_EMAIL: str = os.getenv("HUMAN_ESCALATION_EMAIL", "")
     
     # Data Storage
     DB_PATH: str = os.getenv("DB_PATH", str(BASE_DIR / "camellia.db"))

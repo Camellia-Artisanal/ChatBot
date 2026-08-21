@@ -29,6 +29,11 @@ Because your weekly menu rotates (Friday Lunch to Thursday Dinner), you have two
 2. Make your edits to prices, dish names, or descriptions.
 3. The bot reads from the published CSV link automatically — **no developer needed!**
 
+### Option C: Admin Kitchen Portal (`/admin`)
+1. Log into your private admin portal at `/admin` using your `ADMIN_PIN`.
+2. Paste your raw weekly menu text — the built-in deterministic regex engine parses and syncs the dishes instantly at **$0 operating cost**.
+3. **Note on Vision OCR & AI Keys:** The photo flyer Vision OCR feature is **OFF by default** ($0 cost). If you ever wish to activate AI-powered flyer image scanning or cloud RAG, you must provide your own `GEMINI_API_KEY` or `OPENAI_API_KEY` under your own billing account — never the developer's key.
+
 ---
 
 ## 3. Webhook Setup on Meta Developer Portal

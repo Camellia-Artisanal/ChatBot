@@ -370,7 +370,7 @@
       "logistics_note": "Courier charges at actuals from Sushant Arcade, Gurgaon. Porter charges at actuals."
     },
     {
-      "week_of": "31st July - 6th August, 2026",
+      "week_of": "Current Week (Friday Lunch - Thursday Dinner)",
       "menu_image_till_thursday": "/images/Till%20Thursday.jpeg",
       "menu_image_from_friday": "/images/From%20Friday.jpeg",
       "signature_sondesh_image": "/images/Signature%20Sondesh.jpeg",
@@ -379,18 +379,54 @@
       "service_window": "Friday Lunch - Thursday Dinner",
       "vegetarian": [
         {
-          "item": "Rose Sondesh G Rs",
-          "description": "Freshly handcrafted (250g)",
-          "price_inr": 250,
+          "item": "Aloor Dom",
+          "description": "Bengali style slow cooked spiced baby potatoes",
+          "price_inr": 280,
+          "quantity": "250g"
+        },
+        {
+          "item": "Chaal Potol",
+          "description": "Pointed gourd delicately cooked with aromatic Gobindobhog rice",
+          "price_inr": 340,
+          "quantity": "250g"
+        },
+        {
+          "item": "Chholar Daal",
+          "description": "Traditional Bengal gram dal with coconut slivers & mild spices",
+          "price_inr": 260,
+          "quantity": "250g"
+        },
+        {
+          "item": "Chanar Kofta / Dalna",
+          "description": "Fresh handmade cottage cheese dumplings in rich ginger-tomato gravy",
+          "price_inr": 360,
           "quantity": "250g"
         }
       ],
       "non_vegetarian": [
         {
-          "item": "Kosha Mangsho Bento ₹(Non Veg)",
-          "description": "Freshly handcrafted (150g)",
+          "item": "Mangsho (Mutton Kosha)",
+          "description": "Slow-cooked rich and velvety Kolkata style tender mutton curry",
           "price_inr": 650,
-          "quantity": "150g"
+          "quantity": "350g"
+        },
+        {
+          "item": "Bhetki Paturi",
+          "description": "Fresh Kolkata Bhetki fillet marinated in freshly ground mustard & coconut paste, wrapped in banana leaf and gently steamed",
+          "price_inr": 550,
+          "quantity": "2 pcs"
+        },
+        {
+          "item": "Chingri Malaikari",
+          "description": "Succulent jumbo prawns gently simmered in creamy coconut milk gravy",
+          "price_inr": 580,
+          "quantity": "2 pcs"
+        },
+        {
+          "item": "Kolkata Chicken Chaap",
+          "description": "Slow-braised chicken leg in aromatic poppy seed and cashew nut gravy",
+          "price_inr": 420,
+          "quantity": "1 portion"
         }
       ],
       "bengali_bento": [
@@ -451,6 +487,78 @@
       "week": "Test Rotation Week"
     }
   ],
+  "order_types": {
+    "alacarte": {
+      "type_name": "À La Carte",
+      "description": "Individual portions of curries, polao, and rice from the weekly rotating menu.",
+      "reference_section": "weekly_menus[]"
+    },
+    "bengali_bento": {
+      "type_name": "Bengali Bento Meals",
+      "pricing_note": "Includes GST, packaging, and portal charges; Porter delivery on actuals.",
+      "status": "pending_client_price_confirmation",
+      "tiers": [
+        {
+          "tier_name": "Vegetarian Bento",
+          "price_inr": 350,
+          "includes": [
+            "6 Luchi or Steamed Rice",
+            "Chholar Daal / Niramish Curry of the day (Aloor Dom / Dhokar Dalna / Chhanar Kofta)",
+            "1 Artisanal Sondesh"
+          ]
+        },
+        {
+          "tier_name": "Chicken Bento",
+          "price_inr": 400,
+          "includes": [
+            "6 Luchi or Steamed Rice",
+            "Contai Dhaba Chicken Curry (2 pcs)",
+            "1 Artisanal Sondesh"
+          ]
+        },
+        {
+          "tier_name": "Mangsho Bento",
+          "price_inr": 600,
+          "includes": [
+            "6 Luchi or Steamed Rice",
+            "Robibarer Mangsho / Kosha Mangsho (2 pcs tender mutton)",
+            "1 Artisanal Sondesh"
+          ]
+        }
+      ]
+    },
+    "everyday_meal_subscription": {
+      "type_name": "Everyday Meal Subscription",
+      "package_meals_count": 5,
+      "pricing_note": "Includes GST, packaging, and portal charges; Porter delivery on actuals.",
+      "rules": [
+        "Basanti Polao or Luchi once during the 5-meal cycle at no extra charge",
+        "No fixed consecutive schedule — order meals flexibly as needed",
+        "Every 10 meals completed, the 11th meal is FREE",
+        "5 hours advance notice required for date or schedule changes"
+      ],
+      "plans": [
+        {
+          "plan_name": "Vegetarian Plan",
+          "price_inr": 1500,
+          "meals_count": 5,
+          "effective_per_meal_inr": 300
+        },
+        {
+          "plan_name": "Veg + Chicken Plan",
+          "price_inr": 1750,
+          "meals_count": 5,
+          "description": "Combination of Vegetarian & Chicken meals"
+        },
+        {
+          "plan_name": "Chicken Plan",
+          "price_inr": 2000,
+          "meals_count": 5,
+          "effective_per_meal_inr": 400
+        }
+      ]
+    }
+  },
   "meta": {
     "menu_rotation": "Weekly menu changes Friday Lunch to Thursday Dinner; sweets collections (Aamar Mishti, Signature) are standing/evergreen catalog, not weekly",
     "known_gaps_to_confirm_with_client": [

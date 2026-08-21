@@ -110,7 +110,13 @@ HUMAN_ESCALATION_EMAIL=owner@camelliaartisanal.com
 DB_PATH=camellia.db
 MENU_JSON_PATH=menu.json
 QA_TEMPLATES_PATH=qa_templates.json
+
+# Optional: Gemini API Key for Flyer Vision OCR & Cloud RAG Fallback
+# OFF by default ($0 operating cost). If enabled, MUST be the client's own key under their own Google Cloud billing.
+GEMINI_API_KEY=
 ```
+
+> 💡 **Note on Vision OCR & AI Features:** AI Vision OCR is **OFF by default** ($0 cost, using the deterministic regex parser or Google Sheet sync). If the client ever wants to turn it on, it must use the client's own `GEMINI_API_KEY` or `OPENAI_API_KEY` under their own billing — never the developer's key.
 
 ---
 

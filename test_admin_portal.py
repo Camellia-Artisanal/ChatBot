@@ -6,18 +6,21 @@ from fastapi.testclient import TestClient
 from config import config
 import database as db_module
 from app import app
+from responder import responder
 
 # Ensure database is initialized for test client
 db_module.db.init_db()
 
 client = TestClient(app)
 
-ADMIN_PIN = config.ADMIN_PIN or "51990"
-ADMIN_HEADERS = {"x-admin-pin": ADMIN_PIN}
+TEST_ADMIN_PIN = "test_pin_98765"
+config.ADMIN_PIN = TEST_ADMIN_PIN
+ADMIN_HEADERS = {"x-admin-pin": TEST_ADMIN_PIN}
 
 @pytest.fixture(autouse=True)
 def ensure_db():
     db_module.db.init_db()
+    config.ADMIN_PIN = TEST_ADMIN_PIN
 
 
 def test_admin_dashboard_page():
@@ -35,15 +38,36 @@ def test_admin_dashboard_page():
 def test_verify_pin_endpoint():
     """Tests the PIN validation API endpoint."""
     # Correct PIN
-    resp = client.post("/admin/verify-pin", json={"pin": ADMIN_PIN})
+    resp = client.post("/admin/verify-pin", json={"pin": TEST_ADMIN_PIN})
     assert resp.status_code == 200
     data = resp.json()
     assert data.get("valid") is True
 
     # Incorrect PIN
-    resp_bad = client.post("/admin/verify-pin", json={"pin": "99999"})
+    resp_bad = client.post("/admin/verify-pin", json={"pin": "wrong_pin_00000"})
     assert resp_bad.status_code == 401
     assert "detail" in resp_bad.json()
+
+def test_admin_auth_fails_closed_when_unconfigured():
+    """Ensures /admin endpoints return 503 Service Unavailable if no ADMIN_PIN or ADMIN_API_KEY is configured in env."""
+    orig_pin = config.ADMIN_PIN
+    orig_key = config.ADMIN_API_KEY
+    try:
+        config.ADMIN_PIN = ""
+        config.ADMIN_API_KEY = ""
+        
+        # Protected route fails closed with 503
+        resp = client.get("/admin/menu/active", headers={"x-admin-pin": "any_pin"})
+        assert resp.status_code == 503
+        assert "disabled" in resp.json().get("detail", "").lower()
+        
+        # Verify PIN endpoint also fails closed with 503
+        resp_pin = client.post("/admin/verify-pin", json={"pin": "any_pin"})
+        assert resp_pin.status_code == 503
+        assert "disabled" in resp_pin.json().get("detail", "").lower()
+    finally:
+        config.ADMIN_PIN = orig_pin
+        config.ADMIN_API_KEY = orig_key
 
 def test_admin_auth_protection():
     """Ensures protected endpoints reject unauthenticated requests with 403 Forbidden."""
@@ -62,34 +86,50 @@ def test_admin_auth_protection():
 
 def test_parse_menu_card_text():
     """Tests raw text parsing and hot-reloading through the admin API."""
-    test_text = """
-    Weekend Special:
-    * Ilish Machher Jhol - ₹520 (350g)
-    * Lau Ghonto with Bori - ₹260 (250g)
-    """
-    resp = client.post("/admin/parse-menu-card", json={"raw_text": test_text}, headers=ADMIN_HEADERS)
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data.get("status") == "success"
-    assert data.get("updated_items_count", 0) >= 2
+    with open(config.MENU_JSON_PATH, "r", encoding="utf-8") as f:
+        original_menu = f.read()
+
+    try:
+        test_text = """
+        Weekend Special:
+        * Ilish Machher Jhol - ₹520 (350g)
+        * Lau Ghonto with Bori - ₹260 (250g)
+        """
+        resp = client.post("/admin/parse-menu-card", json={"raw_text": test_text}, headers=ADMIN_HEADERS)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data.get("status") == "success"
+        assert data.get("updated_items_count", 0) >= 2
+    finally:
+        with open(config.MENU_JSON_PATH, "w", encoding="utf-8") as f:
+            f.write(original_menu)
+        responder.reload_templates()
 
 def test_reset_menu_defaults():
     """Tests resetting menu items back to default Bengal cuisine baseline."""
-    resp = client.post("/admin/menu/reset-defaults", headers=ADMIN_HEADERS)
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data.get("status") == "success"
+    with open(config.MENU_JSON_PATH, "r", encoding="utf-8") as f:
+        original_menu = f.read()
 
-    # Verify active menu shows defaults
-    resp_active = client.get("/admin/menu/active", headers=ADMIN_HEADERS)
-    assert resp_active.status_code == 200
-    menu = resp_active.json().get("menu", {})
-    last_week = menu.get("weekly_menus", [])[-1]
-    veg_names = [item["item"] for item in last_week.get("vegetarian", [])]
-    nonveg_names = [item["item"] for item in last_week.get("non_vegetarian", [])]
+    try:
+        resp = client.post("/admin/menu/reset-defaults", headers=ADMIN_HEADERS)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data.get("status") == "success"
 
-    assert "Chholar Daal" in veg_names
-    assert "Mangsho (Mutton Kosha)" in nonveg_names
+        # Verify active menu shows defaults
+        resp_active = client.get("/admin/menu/active", headers=ADMIN_HEADERS)
+        assert resp_active.status_code == 200
+        menu = resp_active.json().get("menu", {})
+        last_week = menu.get("weekly_menus", [])[-1]
+        veg_names = [item["item"] for item in last_week.get("vegetarian", [])]
+        nonveg_names = [item["item"] for item in last_week.get("non_vegetarian", [])]
+
+        assert "Chholar Daal" in veg_names
+        assert "Mangsho (Mutton Kosha)" in nonveg_names
+    finally:
+        with open(config.MENU_JSON_PATH, "w", encoding="utf-8") as f:
+            f.write(original_menu)
+        responder.reload_templates()
 
 def test_admin_analytics_and_escalations():
     """Tests the analytics summary and escalations list endpoints."""

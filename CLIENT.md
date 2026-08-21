@@ -187,15 +187,18 @@ know which keys are expected.
 | `WHATSAPP_PHONE_NUMBER_ID` | Meta App Dashboard → **WhatsApp → API Setup** | A numeric ID, *not* the phone number itself. |
 | `INSTAGRAM_PAGE_ID` | Meta App Dashboard → **Instagram → API Setup** | The Instagram Business account linked to your Facebook Page. |
 | `ADMIN_API_KEY` | **You invent it.** Use `openssl rand -hex 32`. | Protects `/admin/*`, which exposes customer conversations. If blank, those pages are **open to the internet** — always set it. |
-| `HUMAN_ESCALATION_PHONE` | Your own number | Where the bot sends "a customer needs you" alerts. Currently `+918796551990` (Mr. Guru Dayal Singh). |
+| `HUMAN_ESCALATION_PHONE` | Your own number | Where the bot sends "a customer needs you" alerts. Currently `+918796551990` (Camellia Kitchen Team). |
 | `HUMAN_ESCALATION_EMAIL` | Your own email | Recorded on escalations. |
-| `GEMINI_API_KEY` | https://aistudio.google.com/app/apikey | **Optional.** Used for Gemini RAG fallback responses. Free tier is enough. |
+| `GEMINI_API_KEY` | https://aistudio.google.com/app/apikey | **Optional.** OFF by default ($0 operating cost, deterministic regex & Google Sheet sync used). If enabled for RAG fallback or image flyer OCR, it must use the client's own key under their own Google Cloud billing — never the developer's key. |
 | `GOOGLE_SHEET_CSV_URL` | Google Sheets → File → Share → Publish to web → CSV | **Optional.** Self-service menu sync: lets you update prices & items from a spreadsheet without editing code. |
 | `ENABLE_WEB_TESTER` | **You choose.** Leave it `false`. | Controls the browser chat tester at `/chat`. It writes real conversation rows and pages your phone, so on a public domain anyone who finds the URL can abuse it. When `false` the page returns 404. |
 | `DATA_RETENTION_DAYS` | **You choose.** Default `90`. | Conversations, escalations and sessions older than this are deleted every time the bot starts. This number is the promise printed on your `/privacy` page — change one, change the other. `0` disables deletion entirely (not recommended). |
 | `BUSINESS_LEGAL_NAME` | Your registered business name | Printed on `/privacy` and `/terms`. |
 | `PRIVACY_CONTACT_EMAIL` | Your own email | The address customers write to for a data copy or deletion. Must be one you actually monitor — it is a legal obligation under the DPDP Act. |
 | `LOG_LEVEL` | `INFO` is right for production | Set `DEBUG` only while diagnosing a problem; it is noisy. |
+
+> [!IMPORTANT]
+> **Vision OCR & AI Fallback API Key Policy:** AI Vision OCR and RAG fallback are **OFF by default** ($0 operating cost with deterministic regex parsing and Google Sheet sync). If the client ever wishes to enable AI-powered photo flyer OCR or cloud RAG in the admin portal, it must be configured using the client's own `GEMINI_API_KEY` or `OPENAI_API_KEY` under the client's own billing account — never the developer's key.
 
 ### 3.2 Rules for keeping the keys safe
 
@@ -577,6 +580,6 @@ same setting, so the promise and the behaviour cannot drift apart.
 
 ## 10. Who to Contact
 
-- **Orders and customer escalations:** Mr. Guru Dayal Singh — +91 87965 51990
+- **Orders and customer escalations:** Camellia Kitchen Team — +91 87965 51990
 - **Kitchen hours:** 10:00 AM – 7:30 PM, daily
 - **Delivery area:** Delhi NCR only, dispatched from Sushant Lok, Gurgaon

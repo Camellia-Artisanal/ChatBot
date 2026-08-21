@@ -903,7 +903,7 @@ def get_admin_dashboard():
     """
     Dedicated PIN-Protected Kitchen & Menu Management Portal for Camellia Artisanal.
     Features:
-    - PIN Authentication (5-digit PIN / Guru Dayal Singh's PIN)
+    - PIN Authentication (Configured ADMIN_PIN or ADMIN_API_KEY from environment)
     - 📋 Paste Menu Card Text Parser
     - 📸 Drag-and-Drop Image Flyer Upload with Gemini Vision OCR
     - 📊 Google Sheets Live Sync
@@ -1148,7 +1148,7 @@ def get_admin_dashboard():
             </button>
             
             <p class="auth-hint">
-                💡 <b>Kitchen Staff PIN:</b> Enter manager PIN (e.g. <code>51990</code>) or API Key to manage dishes & live bot responses.
+                💡 <b>Kitchen Staff PIN:</b> Enter configured staff PIN or API Key (from server environment) to manage dishes & live bot responses.
             </p>
         </div>
     </div>
@@ -1176,7 +1176,7 @@ def get_admin_dashboard():
             <span class="status-pill">Active Menu Items: <b id="activeCountBadge">Loading...</b></span>
         </div>
         <div>
-            <span>Kitchen Manager: <b>Mr. Guru Dayal Singh</b> (+91 87965 51990)</span>
+            <span>Escalation Contact: <b>Camellia Kitchen Team</b> (+91 87965 51990)</span>
         </div>
     </div>
 
@@ -1487,7 +1487,7 @@ def get_admin_dashboard():
                     const card = document.getElementById('authCard');
                     card.classList.add('shake');
                     setTimeout(() => card.classList.remove('shake'), 400);
-                    alert('Incorrect PIN. Please enter Guru Dayal Singh’s PIN (51990) or configured admin key.');
+                    alert('Incorrect PIN. Please enter your configured admin PIN or admin key.');
                 }
             } catch (err) {
                 alert('Connection error verifying PIN.');

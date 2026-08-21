@@ -22,6 +22,8 @@ class SessionMemoryManager:
                 "facts": {
                     "name": None,
                     "image_card_sent": False,
+                    "awaiting_subscription_booking": False,
+                    "savoury_crosssell_sent": False,
                     "cart": [],
                     "order_draft": {
                         "flavour": None,
@@ -168,6 +170,25 @@ class SessionMemoryManager:
                 pass
 
         return facts
+
+    def has_prior_history(self, user_id: str, channel: str) -> bool:
+        """
+        Determines whether this user has any prior conversation history.
+        Checks both in-memory session turns and the persistent SQLite database.
+        Returns True if prior history exists, False for brand new / first-time users.
+        """
+        if not user_id:
+            return False
+        key = (str(user_id), str(channel))
+        if key in self._sessions:
+            turns = self._sessions[key].get("turns", [])
+            if turns and len(turns) > 0:
+                return True
+        try:
+            from database import db
+            return db.get_conversations_count(user_id=str(user_id), channel=str(channel)) > 0
+        except Exception:
+            return False
 
     def add_turn(self, user_id: str, channel: str, user_message: str, assistant_response: str) -> None:
         """Appends user input and bot response to session history."""

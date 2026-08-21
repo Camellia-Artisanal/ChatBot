@@ -7,13 +7,15 @@
         {
           "turn": 1,
           "user_msg": "Hi, I'm Ananya from DLF CyberCity. We have an office Diwali high-tea tomorrow afternoon. Can we order 25 boxes of Signature Sondesh (500g each)?",
-          "bot_resp": "Nice to meet you, Ananya! 👋\n\n💐 *CAMELLIA ARTISANAL — ORDER DRAFT RECEIPT*\n─────────────────────────────\n• *Collection:* Signature A2 Collection\n• *Item:* Classic Sondesh\n• *Quantity / Pack:* 500g (25 boxes)\n• *Unit Price:* ₹1100\n• *Subtotal:* ₹27500\n• *Packaging:* ₹0 (Eco-Friendly Cornstarch Box)\n• *Courier (Porter):* Actuals at dispatch (from Sushant Arcade, Gurgaon)\n─────────────────────────────\n💰 *Total Estimated Item Price:* ₹27,500\n\n📞 *Next Steps:* Our Manager of Kitchens, Mr. Guru Dayal Singh (+91 87965 51990), will verify your delivery address & share the official invoice via WhatsApp!",
+          "bot_resp": "Nice to meet you, Ananya! 👋\n\n💐 *CAMELLIA ARTISANAL — ORDER DRAFT RECEIPT*\n─────────────────────────────\n• *Collection:* Signature A2 Collection\n• *Item:* Classic Sondesh\n• *Quantity / Pack:* 500g (25 boxes)\n• *Unit Price:* ₹1100\n• *Subtotal:* ₹27500\n• *Packaging:* ₹0 (Eco-Friendly Cornstarch Box)\n• *Courier (Porter):* Actuals at dispatch (from Sushant Arcade, Gurgaon)\n─────────────────────────────\n💰 *Total Estimated Item Price:* ₹27,500\n\n📞 *Next Steps:* Our team (+91 87965 51990) will verify your delivery address & share the official invoice via WhatsApp!",
           "was_matched": true,
           "tmpl_id": "order_draft_receipt",
           "img_url": null,
           "session_facts": {
             "name": "Ananya",
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [
               {
                 "type": "sweet",
@@ -38,13 +40,15 @@
         {
           "turn": 2,
           "user_msg": "Can you do custom branding or ribbons on the boxes, and what discount for bulk orders?",
-          "bot_resp": "Thank you for getting in touch! 🌸 I've notified our team and Kitchen Manager, Mr. Guru Dayal Singh (+91 87965 51990), regarding your request and they'll connect you with our team directly on WhatsApp/call shortly.\n\nIn the meantime, feel free to ask me about:\n• 🌸 Our fresh Sondesh, Kanchagolla & Jolbhora (Aamar Mishti & Signature Collections)\n• 🍱 This week's fresh Bengali Lunch & Dinner Bento menu\n• 🚚 Delivery details across Delhi NCR\n\nOr reply 'menu' to see our complete price list!",
+          "bot_resp": "Thank you for getting in touch! 🌸 I've notified our team (+91 87965 51990) regarding your request and they'll connect with you directly on WhatsApp/call shortly.\n\nIn the meantime, feel free to ask me about:\n• 🌸 Our fresh Sondesh, Kanchagolla & Jolbhora (Aamar Mishti & Signature Collections)\n• 🍱 This week's fresh Bengali Lunch & Dinner Bento menu\n• 🚚 Delivery details across Delhi NCR\n\nOr reply 'menu' to see our complete price list!",
           "was_matched": false,
           "tmpl_id": "explicit_escalation",
           "img_url": null,
           "session_facts": {
             "name": "Ananya",
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [
               {
                 "type": "sweet",
@@ -69,13 +73,15 @@
         {
           "turn": 3,
           "user_msg": "How will delivery work for 25 boxes to CyberHub DLF Phase 2?",
-          "bot_resp": "💐 *CAMELLIA ARTISANAL — ORDER DRAFT RECEIPT*\n─────────────────────────────\n• *Collection:* Signature A2 Collection\n• *Item:* Classic Sondesh\n• *Quantity / Pack:* 500g (25 boxes)\n• *Unit Price:* ₹1100\n• *Subtotal:* ₹27500\n• *Packaging:* ₹0 (Eco-Friendly Cornstarch Box)\n• *Courier (Porter):* Actuals at dispatch (from Sushant Arcade, Gurgaon)\n─────────────────────────────\n💰 *Total Estimated Item Price:* ₹27,500\n\n📞 *Next Steps:* Our Manager of Kitchens, Mr. Guru Dayal Singh (+91 87965 51990), will verify your delivery address & share the official invoice via WhatsApp!",
+          "bot_resp": "We deliver across Delhi NCR (Delhi, Gurgaon, Noida, Ghaziabad & Faridabad). Courier charges are on actuals (added above listed prices) and shipped from Sushant Arcade, Gurgaon. Which area are you in?",
           "was_matched": true,
-          "tmpl_id": "order_draft_receipt",
+          "tmpl_id": "delivery_area",
           "img_url": null,
           "session_facts": {
             "name": "Ananya",
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [
               {
                 "type": "sweet",
@@ -106,13 +112,18 @@
         {
           "turn": 1,
           "user_msg": "Nomoshkar! I am Debasish. Is the Jolbhora sondesh made with real liquid nolen gur inside like Kolkata, or is it dry?",
-          "bot_resp": "Nice to meet you, Debasish! 👋\n\nHi, thank you for getting in touch.\n\nI would have loved to. However, the Norom Pak Sondesh that we make can be transported from one city to another only through a reliable cold-chain courier service. Unfortunately, we haven't yet found a partner who can offer this at a reasonable cost.\n\nSo for now, we're unable to ship our sondesh outside Delhi NCR — we do not deliver to Bangalore or other cities at this time. We'd love to, though, and will certainly start as soon as we find a dependable cold-chain delivery option.\n\nThat said, many of our regular customers who live in different parts of India and the world do buy our sondesh by asking friends or family travelling from Delhi NCR to carry a few boxes for them. We're happy to deliver the order to their home, office, hotel, or any other convenient location before they travel.\n\nThank you for thinking of camellia.artisanal! 🌸",
+          "bot_resp": "Nice to meet you, Debasish! 👋\n\nYes, absolutely! 🌸 Our traditional Jolbhora Sondesh is crafted the authentic Kolkata way — featuring a delicate outer shell of artisanal Norom Pak Sondesh filled with pure, luscious liquid Nolen Gur (date palm jaggery) right in the center! When you bite into it, the liquid gur bursts with rich festive aroma.\n\n• Collection 1 (Aamar Mishti): 250g (6 pcs) - ₹750 | 500g (12 pcs) - ₹1,400 | 1kg (24 pcs) - ₹2,500\n• Collection 2 (Signature A2 Cow Milk): 250g (6 pcs) - ₹900 | 500g (12 pcs) - ₹1,600 | 1kg (24 pcs) - ₹2,900\n\nWe also craft our iconic palm-tree shaped Talgash Sondesh in our Signature Collection! Would you like to order a fresh box of Jolbhora or Talgash for delivery across Delhi NCR? 🌸",
           "was_matched": true,
-          "tmpl_id": "delivery_out_of_area",
-          "img_url": null,
+          "tmpl_id": "jolbhora_talgash_details",
+          "img_url": [
+            "/images/AAMAR%20MISHTI.jpeg",
+            "/images/Signature%20Sondesh.jpeg"
+          ],
           "session_facts": {
             "name": "Debasish",
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [],
             "order_draft": {
               "flavour": "jolbhora",
@@ -127,15 +138,17 @@
         {
           "turn": 2,
           "user_msg": "What is the price of Jolbhora Talgash and Kanchagolla in Collection 2?",
-          "bot_resp": "Hi, thanks for connecting! 🌸\n\nHere is our complete price breakdown table for both handcrafted collections:\n\n*Collection 1 — Aamar Mishti*\n```\n+-----------------------+-------+-------+-------+\n| Item / Flavour        | 250g  | 500g  |  1kg  |\n+-----------------------+-------+-------+-------+\n| Classic / Rose        | ₹450  | ₹800  | ₹1500 |\n| Mango / Kesar / Ada   | ₹550  | ₹1000 | ₹1800 |\n| Nolen Gur             | ₹600  | ₹1100 | ₹2000 |\n| Jolbhora (Liquid)*    | ₹750  | ₹1400 | ₹2500 |\n| Kanchagolla           | ₹450  | ₹800  | ₹1500 |\n+-----------------------+-------+-------+-------+\n* 250g(9pc) | 500g(18pc) | 1kg(36pc)\n* Jolbhora: 6pc | 12pc | 24pc\n```\n\n*Collection 2 — Signature A2 Collection (Pure Desi A2 Milk)*\n```\n+-----------------------+-------+-------+-------+\n| Item / Flavour        | 250g  | 500g  |  1kg  |\n+-----------------------+-------+-------+-------+\n| Classic / Rose        | ₹600  | ₹1100 | ₹2000 |\n| Mango/Kesar/Vanilla.. | ₹650  | ₹1200 | ₹2200 |\n| NolenGur/Thandai/Date | ₹700  | ₹1300 | ₹2500 |\n| Mahua Sondesh         | ₹900  | ₹1600 | ₹2900 |\n| Jolbhora (Liquid)*    | ₹900  | ₹1600 | ₹2900 |\n| Kanchagolla (Classic) | ₹600  | ₹1100 | ₹2000 |\n| Kanchagolla (NolenGur)| ₹700  | ₹1300 | ₹2500 |\n+-----------------------+-------+-------+-------+\n* Real Vanilla, Cinnamon, Thandai, Dates, Chocolate\n* 250g(9pc) | 500g(18pc) | 1kg(36pc)\n* Jolbhora: 6pc | 12pc | 24pc\n```\n\nPorter delivery charges on actuals from Sushant Lok, Gurgaon. Which collection, item, and flavour would you like?",
+          "bot_resp": "Hi! Thanks for getting in touch. 🌸\n\nAt Camellia.artisanal, every Sondesh is made from scratch using time-tested traditional recipes. We work with small-batch artisanal farmers, trusted dairies, and carefully selected partners — never general retail sourcing. An all-women team makes the sondesh for you.\n\nOur box price starts from ₹450 (for a 250g box of 9 pieces) and goes up to ₹900 depending on the collection and flavour.\n\nWe offer two distinct collections:\n\n• *Collection 1 — Aamar Mishti (আমার মিষ্টি)*:\nIndulgence for sweet cravings at home or work — good dairy milk, partially mechanised, made in-house at our kitchen.\n(250g: ₹450–₹750 | 500g: ₹800–₹1,400 | 1kg: ₹1,500–₹2,500)\n\n• *Collection 2 — Signature Collection*:\nMishti for special occasions, gifting & when you are in the mood to give yourself a treat — made using pure desi A2 cow milk that has not been industrially processed. Completely handcrafted end to end.\n(250g: ₹600–₹900 | 500g: ₹1,100–₹1,600 | 1kg: ₹2,000–₹2,900)\n\nPorter delivery charges are on actuals from Sushant Lok, Gurgaon.\n\nPlease feel free to ask anything before confirming! 🙏",
           "was_matched": true,
-          "tmpl_id": "sondesh_price_general",
+          "tmpl_id": "sondesh_price_detailed",
           "img_url": [
             "/images/Signature%20Sondesh.jpeg"
           ],
           "session_facts": {
             "name": "Debasish",
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [],
             "order_draft": {
               "flavour": "jolbhora",
@@ -157,6 +170,8 @@
           "session_facts": {
             "name": "Debasish",
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [],
             "order_draft": {
               "flavour": "jolbhora",
@@ -187,6 +202,8 @@
           "session_facts": {
             "name": "Dr",
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [],
             "order_draft": {
               "flavour": null,
@@ -208,6 +225,8 @@
           "session_facts": {
             "name": "Dr",
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [],
             "order_draft": {
               "flavour": null,
@@ -222,13 +241,15 @@
         {
           "turn": 3,
           "user_msg": "How many calories roughly per piece and what is the shelf life in fridge?",
-          "bot_resp": "Thank you for getting in touch! 🌸 I've notified our team and Kitchen Manager, Mr. Guru Dayal Singh (+91 87965 51990), regarding your request and they'll connect you with our team directly on WhatsApp/call shortly.\n\nIn the meantime, feel free to ask me about:\n• 🌸 Our fresh Sondesh, Kanchagolla & Jolbhora (Aamar Mishti & Signature Collections)\n• 🍱 This week's fresh Bengali Lunch & Dinner Bento menu\n• 🚚 Delivery details across Delhi NCR\n\nOr reply 'menu' to see our complete price list!",
-          "was_matched": false,
+          "bot_resp": "Stays well for a week refrigerated. For best texture, heat for 12 seconds after taking it out of the fridge.",
+          "was_matched": true,
           "tmpl_id": "GUARD_shelf_life_storage",
           "img_url": null,
           "session_facts": {
             "name": "Dr",
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [],
             "order_draft": {
               "flavour": null,
@@ -249,13 +270,15 @@
         {
           "turn": 1,
           "user_msg": "Hey! What is on the Bengali lunch menu for this Saturday?",
-          "bot_resp": "Hi! 👋 Welcome to Camellia Artisanal — Bengal-rooted, artisanal food. Ask us about our Sondesh flavours & prices, weekly menu, or delivery — happy to help!",
+          "bot_resp": "We offer 3 ways to order our freshly cooked Bengali meals: 🍱\n\n1. **À La Carte**: Choose individual dishes from our weekly rotating menu (Vegetarian & Non-Vegetarian curries, Basanti Polao & rice).\n2. **Bengali Bento**: Complete curated meal boxes with Mains, Luchi/Rice & Sondesh.\n3. **Everyday Meal Subscription**: Convenient multi-meal plans with flexible scheduling.\n\nAll prices include GST, packaging, and portal charges; only Porter delivery is additional.\n\nEverything is cooked fresh in small batches, so pre-ordering is recommended as some dishes may run out! 🌸\n\n*P.S.* We also offer handcrafted Sondesh! 🌸 Made with pure milk protein, naturally gluten-free, mild sweet, zero added fat, and handcrafted with care. Would you like to add a box of fresh Sondesh to your meal?",
           "was_matched": true,
-          "tmpl_id": "greeting",
-          "img_url": null,
+          "tmpl_id": "savoury_food_intro",
+          "img_url": "/images/From%20Friday.jpeg",
           "session_facts": {
             "name": null,
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": true,
             "cart": [],
             "order_draft": {
               "flavour": null,
@@ -268,9 +291,9 @@
         {
           "turn": 2,
           "user_msg": "What is the price of the Mutton Kasha & Basonti Polao meal box?",
-          "bot_resp": "Hi, thanks for connecting! 🌸\n\nHere is our complete price breakdown table for both handcrafted collections:\n\n*Collection 1 — Aamar Mishti*\n```\n+-----------------------+-------+-------+-------+\n| Item / Flavour        | 250g  | 500g  |  1kg  |\n+-----------------------+-------+-------+-------+\n| Classic / Rose        | ₹450  | ₹800  | ₹1500 |\n| Mango / Kesar / Ada   | ₹550  | ₹1000 | ₹1800 |\n| Nolen Gur             | ₹600  | ₹1100 | ₹2000 |\n| Jolbhora (Liquid)*    | ₹750  | ₹1400 | ₹2500 |\n| Kanchagolla           | ₹450  | ₹800  | ₹1500 |\n+-----------------------+-------+-------+-------+\n* 250g(9pc) | 500g(18pc) | 1kg(36pc)\n* Jolbhora: 6pc | 12pc | 24pc\n```\n\n*Collection 2 — Signature A2 Collection (Pure Desi A2 Milk)*\n```\n+-----------------------+-------+-------+-------+\n| Item / Flavour        | 250g  | 500g  |  1kg  |\n+-----------------------+-------+-------+-------+\n| Classic / Rose        | ₹600  | ₹1100 | ₹2000 |\n| Mango/Kesar/Vanilla.. | ₹650  | ₹1200 | ₹2200 |\n| NolenGur/Thandai/Date | ₹700  | ₹1300 | ₹2500 |\n| Mahua Sondesh         | ₹900  | ₹1600 | ₹2900 |\n| Jolbhora (Liquid)*    | ₹900  | ₹1600 | ₹2900 |\n| Kanchagolla (Classic) | ₹600  | ₹1100 | ₹2000 |\n| Kanchagolla (NolenGur)| ₹700  | ₹1300 | ₹2500 |\n+-----------------------+-------+-------+-------+\n* Real Vanilla, Cinnamon, Thandai, Dates, Chocolate\n* 250g(9pc) | 500g(18pc) | 1kg(36pc)\n* Jolbhora: 6pc | 12pc | 24pc\n```\n\nPorter delivery charges on actuals from Sushant Lok, Gurgaon. Which collection, item, and flavour would you like?",
+          "bot_resp": "Hi! Thanks for getting in touch. 🌸\n\nAt Camellia.artisanal, every Sondesh is made from scratch using time-tested traditional recipes. We work with small-batch artisanal farmers, trusted dairies, and carefully selected partners — never general retail sourcing. An all-women team makes the sondesh for you.\n\nOur box price starts from ₹450 (for a 250g box of 9 pieces) and goes up to ₹900 depending on the collection and flavour.\n\nWe offer two distinct collections:\n\n• *Collection 1 — Aamar Mishti (আমার মিষ্টি)*:\nIndulgence for sweet cravings at home or work — good dairy milk, partially mechanised, made in-house at our kitchen.\n(250g: ₹450–₹750 | 500g: ₹800–₹1,400 | 1kg: ₹1,500–₹2,500)\n\n• *Collection 2 — Signature Collection*:\nMishti for special occasions, gifting & when you are in the mood to give yourself a treat — made using pure desi A2 cow milk that has not been industrially processed. Completely handcrafted end to end.\n(250g: ₹600–₹900 | 500g: ₹1,100–₹1,600 | 1kg: ₹2,000–₹2,900)\n\nPorter delivery charges are on actuals from Sushant Lok, Gurgaon.\n\nPlease feel free to ask anything before confirming! 🙏",
           "was_matched": true,
-          "tmpl_id": "sondesh_price_general",
+          "tmpl_id": "sondesh_price_detailed",
           "img_url": [
             "/images/AAMAR%20MISHTI.jpeg",
             "/images/Signature%20Sondesh.jpeg"
@@ -278,6 +301,8 @@
           "session_facts": {
             "name": null,
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": true,
             "cart": [],
             "order_draft": {
               "flavour": null,
@@ -290,13 +315,15 @@
         {
           "turn": 3,
           "user_msg": "I want to order 2 Mutton meals and 1 Rui Macher Kalia meal to Indirapuram Ghaziabad. How do I place this order?",
-          "bot_resp": "Great! To place an order, please share:\n1. Item & Flavour (e.g. Nolen Gur Sondesh)\n2. Collection (Aamar Mishti / Signature)\n3. Pack Size (250g, 500g, or 1kg)\n4. Delivery Address & Phone Number\n\nOnce shared, our Manager of Kitchens, Mr. Guru Dayal Singh (+91 87965 51990), will verify your details with you on WhatsApp/Call and share your invoice for payment before dispatch! 🌸",
+          "bot_resp": "Great! To place an order, please share:\n1. Item & Flavour (e.g. Nolen Gur Sondesh)\n2. Collection (Aamar Mishti / Signature)\n3. Pack Size (250g, 500g, or 1kg)\n4. Delivery Address & Phone Number\n\nOnce shared, our team (+91 87965 51990) will verify your details with you on WhatsApp/Call and share your invoice for payment before dispatch! 🌸",
           "was_matched": true,
           "tmpl_id": "how_to_order",
           "img_url": null,
           "session_facts": {
             "name": null,
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": true,
             "cart": [],
             "order_draft": {
               "flavour": null,
@@ -315,9 +342,9 @@
         {
           "turn": 1,
           "user_msg": "Hi! How many pieces of sondesh do we get in a 250g box vs 500g box?",
-          "bot_resp": "All 250g Box Options (9 pcs / 6 pcs for Jolbhora): 🌸\n\n```\n+------------------------------+-------+-------+\n| Flavour / Variety (250g Box) | Aamar | SigA2 |\n+------------------------------+-------+-------+\n| Classic / Rose Sondesh       | ₹450  | ₹600  |\n| Mango / Kesar / Vanilla..    | ₹550  | ₹650  |\n| Nolen Gur / Thandai / Dates  | ₹600  | ₹700  |\n| Mahua Special                | —     | ₹900  |\n| Jolbhora (6 pcs liquid fill) | ₹750  | ₹900  |\n| Kanchagolla (Classic)        | ₹450  | ₹600  |\n| Kanchagolla (Nolen Gur)      | ₹600  | ₹700  |\n+------------------------------+-------+-------+\n```\n\nWhich 250g pack would you like to order?",
+          "bot_resp": "Hi! Thanks for getting in touch. 🌸\n\nAt Camellia.artisanal, every Sondesh is made from scratch using time-tested traditional recipes. We work with small-batch artisanal farmers, trusted dairies, and carefully selected partners — never general retail sourcing. An all-women team makes the sondesh for you.\n\nOur box price starts from ₹450 (for a 250g box of 9 pieces) and goes up to ₹900 depending on the collection and flavour.\n\nWe offer two distinct collections:\n\n• *Collection 1 — Aamar Mishti (আমার মিষ্টি)*:\nIndulgence for sweet cravings at home or work — good dairy milk, partially mechanised, made in-house at our kitchen.\n(250g: ₹450–₹750 | 500g: ₹800–₹1,400 | 1kg: ₹1,500–₹2,500)\n\n• *Collection 2 — Signature Collection*:\nMishti for special occasions, gifting & when you are in the mood to give yourself a treat — made using pure desi A2 cow milk that has not been industrially processed. Completely handcrafted end to end.\n(250g: ₹600–₹900 | 500g: ₹1,100–₹1,600 | 1kg: ₹2,000–₹2,900)\n\nPorter delivery charges are on actuals from Sushant Lok, Gurgaon.\n\nPlease feel free to ask anything before confirming! 🙏",
           "was_matched": true,
-          "tmpl_id": "pack_size_250g",
+          "tmpl_id": "sondesh_price_detailed",
           "img_url": [
             "/images/AAMAR%20MISHTI.jpeg",
             "/images/Signature%20Sondesh.jpeg"
@@ -325,6 +352,8 @@
           "session_facts": {
             "name": null,
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [],
             "order_draft": {
               "flavour": null,
@@ -346,6 +375,8 @@
           "session_facts": {
             "name": null,
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [],
             "order_draft": {
               "flavour": null,
@@ -358,13 +389,15 @@
         {
           "turn": 3,
           "user_msg": "What is your best seller flavour among both collections?",
-          "bot_resp": "Thank you for getting in touch! 🌸 I've notified our team and Kitchen Manager, Mr. Guru Dayal Singh (+91 87965 51990), regarding your request and they'll connect you with our team directly on WhatsApp/call shortly.\n\nIn the meantime, feel free to ask me about:\n• 🌸 Our fresh Sondesh, Kanchagolla & Jolbhora (Aamar Mishti & Signature Collections)\n• 🍱 This week's fresh Bengali Lunch & Dinner Bento menu\n• 🚚 Delivery details across Delhi NCR\n\nOr reply 'menu' to see our complete price list!",
+          "bot_resp": "Thank you for getting in touch! 🌸 I've notified our team (+91 87965 51990) regarding your request and they'll connect with you directly on WhatsApp/call shortly.\n\nIn the meantime, feel free to ask me about:\n• 🌸 Our fresh Sondesh, Kanchagolla & Jolbhora (Aamar Mishti & Signature Collections)\n• 🍱 This week's fresh Bengali Lunch & Dinner Bento menu\n• 🚚 Delivery details across Delhi NCR\n\nOr reply 'menu' to see our complete price list!",
           "was_matched": false,
           "tmpl_id": "explicit_escalation",
           "img_url": null,
           "session_facts": {
             "name": null,
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [],
             "order_draft": {
               "flavour": null,
@@ -383,17 +416,19 @@
         {
           "turn": 1,
           "user_msg": "Bhai sondesh ka menu bhejo jaldi",
-          "bot_resp": "Hi! Thanks for getting in touch. 🌸\n\nAt Camellia.artisanal, every Sondesh is made from scratch using time-tested traditional recipes. We work with small-batch artisanal farmers, trusted dairies, and carefully selected partners — never general retail sourcing. An all-women team makes the sondesh for you.\n\nWe currently offer two collections:\n\n*Collection 1 — Aamar Mishti আমার মিষ্টি*\nIndulgence for your tiny sweet cravings at home or work. Good dairy milk, partially mechanised, made in-house at our kitchen.\n\n*Collection 2 — Signature Collection*\nMishti for special occasions, gifting & when you are in the mood to give yourself a treat. Made using desi A2 cow milk that has not been industrially processed. Completely hand crafted end to end.\n\nPorter charges are on actuals.\n\n*Also —* we prepare and deliver freshly cooked Bengali meals across Delhi NCR. Sharing this week's menu too. Everything is cooked fresh in small batches, and some dishes are available only in limited quantities.\n\nIf you'd like a recommendation based on whether you prefer vegetarian, fish or meat, just let me know — happy to help. Please feel free to ask anything before confirming! 🙏",
+          "bot_resp": "Hi! Thanks for getting in touch. 🌸\n\nAt Camellia.artisanal, every Sondesh is made from scratch using time-tested traditional recipes. We work with small-batch artisanal farmers, trusted dairies, and carefully selected partners — never general retail sourcing. An all-women team makes the sondesh for you.\n\nWe currently offer two collections:\n\n*Collection 1 — Aamar Mishti আমার মিষ্টি*\nIndulgence for sweet cravings at home or work — good dairy milk, partially mechanised, made in-house at our kitchen.\n\n*Collection 2 — Signature Collection*\nMishti for special occasions, gifting & when you are in the mood to give yourself a treat — made using pure desi A2 cow milk that has not been industrially processed. Completely handcrafted end to end.\n\nPorter charges are on actuals.\n\n*Also —* we prepare and deliver freshly cooked Bengali meals across Delhi NCR. Sharing this week's menu too. Everything is cooked fresh in small batches, and some dishes are available only in limited quantities.\n\nIf you'd like a recommendation based on whether you prefer vegetarian, fish or meat, just let me know — happy to help. Please feel free to ask anything before confirming! 🙏",
           "was_matched": true,
           "tmpl_id": "know_more",
           "img_url": [
             "/images/AAMAR%20MISHTI.jpeg",
             "/images/Signature%20Sondesh.jpeg",
-            "/images/Till%20Thursday.jpeg"
+            "/images/From%20Friday.jpeg"
           ],
           "session_facts": {
             "name": null,
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [],
             "order_draft": {
               "flavour": null,
@@ -413,6 +448,8 @@
           "session_facts": {
             "name": null,
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [],
             "order_draft": {
               "flavour": null,
@@ -425,13 +462,15 @@
         {
           "turn": 3,
           "user_msg": "COD available hai ya sirf online pay?",
-          "bot_resp": "Thank you for getting in touch! 🌸 I've notified our team and Kitchen Manager, Mr. Guru Dayal Singh (+91 87965 51990), regarding your request and they'll connect you with our team directly on WhatsApp/call shortly.\n\nIn the meantime, feel free to ask me about:\n• 🌸 Our fresh Sondesh, Kanchagolla & Jolbhora (Aamar Mishti & Signature Collections)\n• 🍱 This week's fresh Bengali Lunch & Dinner Bento menu\n• 🚚 Delivery details across Delhi NCR\n\nOr reply 'menu' to see our complete price list!",
-          "was_matched": false,
-          "tmpl_id": "GUARD_payment_methods",
+          "bot_resp": "UPI / bank transfer only (shared when order is confirmed — No COD on delivery). If you are picking up your order directly from our Sushant Lok kitchen, cash on pickup is accepted.",
+          "was_matched": true,
+          "tmpl_id": "GUARD_payment_method",
           "img_url": null,
           "session_facts": {
             "name": null,
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [],
             "order_draft": {
               "flavour": null,
@@ -450,13 +489,15 @@
         {
           "turn": 1,
           "user_msg": "Hi, I have a severe nut allergy (cashew & pistachio). Are your sondesh made in a nut-free kitchen or do you have nut-free flavours?",
-          "bot_resp": "Thank you for getting in touch! 🌸 I've notified our team and Kitchen Manager, Mr. Guru Dayal Singh (+91 87965 51990), regarding your request and they'll connect you with our team directly on WhatsApp/call shortly.\n\nIn the meantime, feel free to ask me about:\n• 🌸 Our fresh Sondesh, Kanchagolla & Jolbhora (Aamar Mishti & Signature Collections)\n• 🍱 This week's fresh Bengali Lunch & Dinner Bento menu\n• 🚚 Delivery details across Delhi NCR\n\nOr reply 'menu' to see our complete price list!",
-          "was_matched": false,
-          "tmpl_id": "GUARD_allergen_nut_safety",
+          "bot_resp": "Sondesh is made from milk & sugar only — no nuts.",
+          "was_matched": true,
+          "tmpl_id": "GUARD_allergen_nutfree_glutenfree",
           "img_url": null,
           "session_facts": {
             "name": null,
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [
               {
                 "type": "sweet",
@@ -479,13 +520,15 @@
         {
           "turn": 2,
           "user_msg": "Can I get a 1kg box with purely Rose and Nolen Gur Norom Pak without any pistachio garnish?",
-          "bot_resp": "💐 *CAMELLIA ARTISANAL — ORDER DRAFT RECEIPT*\n─────────────────────────────\n• *Collection:* Aamar Mishti Collection\n• *Item:* Rose Sondesh\n• *Quantity / Pack:* 1kg (1 box)\n• *Unit Price:* ₹1500\n• *Subtotal:* ₹1500\n• *Packaging:* ₹0 (Eco-Friendly Cornstarch Box)\n• *Courier (Porter):* Actuals at dispatch (from Sushant Arcade, Gurgaon)\n─────────────────────────────\n💰 *Total Estimated Item Price:* ₹1,500\n\n📞 *Next Steps:* Our Manager of Kitchens, Mr. Guru Dayal Singh (+91 87965 51990), will verify your delivery address & share the official invoice via WhatsApp!",
+          "bot_resp": "💐 *CAMELLIA ARTISANAL — ORDER DRAFT RECEIPT*\n─────────────────────────────\n• *Collection:* Aamar Mishti Collection\n• *Item:* Rose Sondesh\n• *Quantity / Pack:* 1kg (1 box)\n• *Unit Price:* ₹1500\n• *Subtotal:* ₹1500\n• *Packaging:* ₹0 (Eco-Friendly Cornstarch Box)\n• *Courier (Porter):* Actuals at dispatch (from Sushant Arcade, Gurgaon)\n─────────────────────────────\n💰 *Total Estimated Item Price:* ₹1,500\n\n📞 *Next Steps:* Our team (+91 87965 51990) will verify your delivery address & share the official invoice via WhatsApp!",
           "was_matched": true,
           "tmpl_id": "order_draft_receipt",
           "img_url": null,
           "session_facts": {
             "name": null,
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [
               {
                 "type": "sweet",
@@ -508,13 +551,15 @@
         {
           "turn": 3,
           "user_msg": "Can you send the UPI QR code to pay?",
-          "bot_resp": "💐 *CAMELLIA ARTISANAL — ORDER DRAFT RECEIPT*\n─────────────────────────────\n• *Collection:* Aamar Mishti Collection\n• *Item:* Rose Sondesh\n• *Quantity / Pack:* 1kg (1 box)\n• *Unit Price:* ₹1500\n• *Subtotal:* ₹1500\n• *Packaging:* ₹0 (Eco-Friendly Cornstarch Box)\n• *Courier (Porter):* Actuals at dispatch (from Sushant Arcade, Gurgaon)\n─────────────────────────────\n💰 *Total Estimated Item Price:* ₹1,500\n\n📞 *Next Steps:* Our Manager of Kitchens, Mr. Guru Dayal Singh (+91 87965 51990), will verify your delivery address & share the official invoice via WhatsApp!",
+          "bot_resp": "UPI / bank transfer only (shared when order is confirmed — No COD on delivery). If you are picking up your order directly from our Sushant Lok kitchen, cash on pickup is accepted.",
           "was_matched": true,
-          "tmpl_id": "order_draft_receipt",
+          "tmpl_id": "GUARD_payment_method",
           "img_url": null,
           "session_facts": {
             "name": null,
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [
               {
                 "type": "sweet",
@@ -543,13 +588,15 @@
         {
           "turn": 1,
           "user_msg": "I placed an order 2 hours ago through WhatsApp and paid ₹1200 via GPay, but no one has confirmed or sent delivery tracking yet!",
-          "bot_resp": "Thank you for getting in touch! 🌸 I've notified our team and Kitchen Manager, Mr. Guru Dayal Singh (+91 87965 51990), regarding your request and they'll connect you with our team directly on WhatsApp/call shortly.\n\nIn the meantime, feel free to ask me about:\n• 🌸 Our fresh Sondesh, Kanchagolla & Jolbhora (Aamar Mishti & Signature Collections)\n• 🍱 This week's fresh Bengali Lunch & Dinner Bento menu\n• 🚚 Delivery details across Delhi NCR\n\nOr reply 'menu' to see our complete price list!",
-          "was_matched": false,
-          "tmpl_id": "GUARD_payment_methods",
+          "bot_resp": "UPI / bank transfer only (shared when order is confirmed — No COD on delivery). If you are picking up your order directly from our Sushant Lok kitchen, cash on pickup is accepted.",
+          "was_matched": true,
+          "tmpl_id": "GUARD_payment_method",
           "img_url": null,
           "session_facts": {
             "name": null,
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [],
             "order_draft": {
               "flavour": null,
@@ -562,13 +609,15 @@
         {
           "turn": 2,
           "user_msg": "Give me the manager's phone number right now.",
-          "bot_resp": "Thank you for getting in touch! 🌸 I've notified our team and Kitchen Manager, Mr. Guru Dayal Singh (+91 87965 51990), regarding your request and they'll connect you with our team directly on WhatsApp/call shortly.\n\nIn the meantime, feel free to ask me about:\n• 🌸 Our fresh Sondesh, Kanchagolla & Jolbhora (Aamar Mishti & Signature Collections)\n• 🍱 This week's fresh Bengali Lunch & Dinner Bento menu\n• 🚚 Delivery details across Delhi NCR\n\nOr reply 'menu' to see our complete price list!",
+          "bot_resp": "Thank you for getting in touch! 🌸 I've notified our team (+91 87965 51990) regarding your request and they'll connect with you directly on WhatsApp/call shortly.\n\nIn the meantime, feel free to ask me about:\n• 🌸 Our fresh Sondesh, Kanchagolla & Jolbhora (Aamar Mishti & Signature Collections)\n• 🍱 This week's fresh Bengali Lunch & Dinner Bento menu\n• 🚚 Delivery details across Delhi NCR\n\nOr reply 'menu' to see our complete price list!",
           "was_matched": false,
           "tmpl_id": "explicit_escalation",
           "img_url": null,
           "session_facts": {
             "name": null,
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [],
             "order_draft": {
               "flavour": null,
@@ -581,13 +630,15 @@
         {
           "turn": 3,
           "user_msg": "What is your kitchen address if I want to come pick it up?",
-          "bot_resp": "Thank you for getting in touch! 🌸 I've notified our team and Kitchen Manager, Mr. Guru Dayal Singh (+91 87965 51990), regarding your request and they'll connect you with our team directly on WhatsApp/call shortly.\n\nIn the meantime, feel free to ask me about:\n• 🌸 Our fresh Sondesh, Kanchagolla & Jolbhora (Aamar Mishti & Signature Collections)\n• 🍱 This week's fresh Bengali Lunch & Dinner Bento menu\n• 🚚 Delivery details across Delhi NCR\n\nOr reply 'menu' to see our complete price list!",
-          "was_matched": false,
-          "tmpl_id": "GUARD_kitchen_pickup_address",
+          "bot_resp": "Address: E144, ground floor, Sushant Arcade, Sushant Lok 1, Gurgaon — easily accessible from Gate No. 4. Kitchen hours: 10:00 AM – 7:30 PM daily. Please call the kitchen number (+91 8796551990) for directions if needed.",
+          "was_matched": true,
+          "tmpl_id": "GUARD_pickup_address_hours",
           "img_url": null,
           "session_facts": {
             "name": null,
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [],
             "order_draft": {
               "flavour": null,
@@ -613,6 +664,8 @@
           "session_facts": {
             "name": null,
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [],
             "order_draft": {
               "flavour": "nolen gur",
@@ -625,13 +678,15 @@
         {
           "turn": 2,
           "user_msg": "Oh, that's sad. Can my cousin in Gurgaon pick it up from your kitchen directly?",
-          "bot_resp": "Thank you for getting in touch! 🌸 I've notified our team and Kitchen Manager, Mr. Guru Dayal Singh (+91 87965 51990), regarding your request and they'll connect you with our team directly on WhatsApp/call shortly.\n\nIn the meantime, feel free to ask me about:\n• 🌸 Our fresh Sondesh, Kanchagolla & Jolbhora (Aamar Mishti & Signature Collections)\n• 🍱 This week's fresh Bengali Lunch & Dinner Bento menu\n• 🚚 Delivery details across Delhi NCR\n\nOr reply 'menu' to see our complete price list!",
-          "was_matched": false,
-          "tmpl_id": "GUARD_kitchen_pickup_address",
+          "bot_resp": "Address: E144, ground floor, Sushant Arcade, Sushant Lok 1, Gurgaon — easily accessible from Gate No. 4. Kitchen hours: 10:00 AM – 7:30 PM daily. Please call the kitchen number (+91 8796551990) for directions if needed.",
+          "was_matched": true,
+          "tmpl_id": "GUARD_pickup_address_hours",
           "img_url": null,
           "session_facts": {
             "name": null,
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [],
             "order_draft": {
               "flavour": "nolen gur",
@@ -644,13 +699,15 @@
         {
           "turn": 3,
           "user_msg": "What are your kitchen timings for self-pickup?",
-          "bot_resp": "Thank you for getting in touch! 🌸 I've notified our team and Kitchen Manager, Mr. Guru Dayal Singh (+91 87965 51990), regarding your request and they'll connect you with our team directly on WhatsApp/call shortly.\n\nIn the meantime, feel free to ask me about:\n• 🌸 Our fresh Sondesh, Kanchagolla & Jolbhora (Aamar Mishti & Signature Collections)\n• 🍱 This week's fresh Bengali Lunch & Dinner Bento menu\n• 🚚 Delivery details across Delhi NCR\n\nOr reply 'menu' to see our complete price list!",
-          "was_matched": false,
-          "tmpl_id": "GUARD_kitchen_pickup_address",
+          "bot_resp": "Address: E144, ground floor, Sushant Arcade, Sushant Lok 1, Gurgaon — easily accessible from Gate No. 4. Kitchen hours: 10:00 AM – 7:30 PM daily. Please call the kitchen number (+91 8796551990) for directions if needed.",
+          "was_matched": true,
+          "tmpl_id": "GUARD_pickup_address_hours",
           "img_url": null,
           "session_facts": {
             "name": null,
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [],
             "order_draft": {
               "flavour": "nolen gur",
@@ -676,6 +733,8 @@
           "session_facts": {
             "name": "Rohan",
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [
               {
                 "type": "sweet",
@@ -700,13 +759,15 @@
         {
           "turn": 2,
           "user_msg": "I want 2 boxes of 500g Rose Sondesh from Collection 1.",
-          "bot_resp": "💐 *CAMELLIA ARTISANAL — ORDER DRAFT RECEIPT*\n─────────────────────────────\n• *Collection:* Aamar Mishti Collection\n• *Item:* Rose Sondesh\n• *Quantity / Pack:* 500g (2 boxes)\n• *Unit Price:* ₹800\n• *Subtotal:* ₹1600\n• *Packaging:* ₹0 (Eco-Friendly Cornstarch Box)\n• *Courier (Porter):* Actuals at dispatch (from Sushant Arcade, Gurgaon)\n─────────────────────────────\n💰 *Total Estimated Item Price:* ₹1,600\n\n📞 *Next Steps:* Our Manager of Kitchens, Mr. Guru Dayal Singh (+91 87965 51990), will verify your delivery address & share the official invoice via WhatsApp!",
+          "bot_resp": "💐 *CAMELLIA ARTISANAL — ORDER DRAFT RECEIPT*\n─────────────────────────────\n• *Collection:* Aamar Mishti Collection\n• *Item:* Rose Sondesh\n• *Quantity / Pack:* 500g (2 boxes)\n• *Unit Price:* ₹800\n• *Subtotal:* ₹1600\n• *Packaging:* ₹0 (Eco-Friendly Cornstarch Box)\n• *Courier (Porter):* Actuals at dispatch (from Sushant Arcade, Gurgaon)\n─────────────────────────────\n💰 *Total Estimated Item Price:* ₹1,600\n\n📞 *Next Steps:* Our team (+91 87965 51990) will verify your delivery address & share the official invoice via WhatsApp!",
           "was_matched": true,
           "tmpl_id": "order_draft_receipt",
           "img_url": null,
           "session_facts": {
             "name": "Rohan",
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [
               {
                 "type": "sweet",
@@ -738,6 +799,8 @@
           "session_facts": {
             "name": "Rohan",
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [
               {
                 "type": "sweet",
@@ -762,13 +825,15 @@
         {
           "turn": 4,
           "user_msg": "Confirm my order please.",
-          "bot_resp": "💐 *CAMELLIA ARTISANAL — ORDER DRAFT RECEIPT*\n─────────────────────────────\n• *Collection:* Aamar Mishti Collection\n• *Item:* Rose Sondesh\n• *Quantity / Pack:* 500g (2 boxes)\n• *Unit Price:* ₹800\n• *Subtotal:* ₹1600\n• *Packaging:* ₹0 (Eco-Friendly Cornstarch Box)\n• *Courier (Porter):* Actuals at dispatch (from Sushant Arcade, Gurgaon)\n─────────────────────────────\n💰 *Total Estimated Item Price:* ₹1,600\n\n📞 *Next Steps:* Our Manager of Kitchens, Mr. Guru Dayal Singh (+91 87965 51990), will verify your delivery address & share the official invoice via WhatsApp!",
+          "bot_resp": "💐 *CAMELLIA ARTISANAL — ORDER DRAFT RECEIPT*\n─────────────────────────────\n• *Collection:* Aamar Mishti Collection\n• *Item:* Rose Sondesh\n• *Quantity / Pack:* 500g (2 boxes)\n• *Unit Price:* ₹800\n• *Subtotal:* ₹1600\n• *Packaging:* ₹0 (Eco-Friendly Cornstarch Box)\n• *Courier (Porter):* Actuals at dispatch (from Sushant Arcade, Gurgaon)\n─────────────────────────────\n💰 *Total Estimated Item Price:* ₹1,600\n\n📞 *Next Steps:* Our team (+91 87965 51990) will verify your delivery address & share the official invoice via WhatsApp!",
           "was_matched": true,
           "tmpl_id": "order_draft_receipt",
           "img_url": null,
           "session_facts": {
             "name": "Rohan",
             "image_card_sent": false,
+            "awaiting_subscription_booking": false,
+            "savoury_crosssell_sent": false,
             "cart": [
               {
                 "type": "sweet",
@@ -793,13 +858,5 @@
       ]
     }
   ],
-  "issues": [
-    "Agent Dr. Vikram Malhotra (Health/Diabetic Inquirer) Turn 3: Unmatched fallback trigger for: 'How many calories roughly per piece and what is the shelf life in fridge?'",
-    "Agent Kabir (Hinglish Casual Texter) Turn 3: Unmatched fallback trigger for: 'COD available hai ya sirf online pay?'",
-    "Agent Tanya Kapoor (Allergy & Custom Assortment) Turn 1: Unmatched fallback trigger for: 'Hi, I have a severe nut allergy (cashew & pistachio). Are your sondesh made in a nut-free kitchen or do you have nut-free flavours?'",
-    "Agent Rajesh Khanna (Frustrated Customer Escalation) Turn 1: Unmatched fallback trigger for: 'I placed an order 2 hours ago through WhatsApp and paid ₹1200 via GPay, but no one has confirmed or sent delivery tracking yet!'",
-    "Agent Rajesh Khanna (Frustrated Customer Escalation) Turn 3: Unmatched fallback trigger for: 'What is your kitchen address if I want to come pick it up?'",
-    "Agent Pooja Agarwal (Bangalore Outstation Inquirer) Turn 2: Unmatched fallback trigger for: 'Oh, that's sad. Can my cousin in Gurgaon pick it up from your kitchen directly?'",
-    "Agent Pooja Agarwal (Bangalore Outstation Inquirer) Turn 3: Unmatched fallback trigger for: 'What are your kitchen timings for self-pickup?'"
-  ]
+  "issues": []
 }

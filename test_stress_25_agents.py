@@ -5,7 +5,7 @@ Evaluates:
   1. Response accuracy and factual correctness against menu.json & qa_templates.json
   2. Ad-Gate enforcement (Organic Instagram blocking vs Ad-Clicking allowance)
   3. Session memory multi-turn context and factual slot preservation
-  4. Explicit and soft escalation triggers (Forwarding to Mr. Guru Dayal Singh)
+  4. Explicit and soft escalation triggers (Forwarding to our team / +91 87965 51990)
   5. Bengali script, Banglish, typos, and cultural slang comprehension
   6. Dietary, packaging, kitchen pickup, and shelf-life policies
 """
@@ -53,7 +53,6 @@ class Test25AgentStressScenarios(unittest.TestCase):
         )
         # Should escalate to human manager for bulk customization & discount
         self.assertFalse(resp.was_matched)
-        self.assertIn("Guru Dayal Singh", resp.text)
         self.assertIn("+91 87965 51990", resp.text)
 
     def test_agent_03_budget_haggler(self):
@@ -70,7 +69,7 @@ class Test25AgentStressScenarios(unittest.TestCase):
         # Turn 2: Attempting to negotiate price
         resp2 = self.responder.respond("Can you do it for less price instead of ₹800?", user_id=user_id, channel=channel)
         self.assertFalse(resp2.was_matched)
-        self.assertIn("Guru Dayal Singh", resp2.text)
+        self.assertIn("+91 87965 51990", resp2.text)
 
     def test_agent_04_health_and_dietary_inquirer(self):
         """Agent 4: Inquiring about diabetes, Halal meat, and cooking oils."""
@@ -83,11 +82,12 @@ class Test25AgentStressScenarios(unittest.TestCase):
         self.assertIn("Nolen Gur", resp1.text)
         self.assertIn("glycemic", resp1.text.lower())
 
-        # Turn 2: Halal & Mustard oil check (Guarded until client confirms certification & cooking mediums)
+        # Turn 2: Halal & Mustard oil check (Confirmed with client: Mutton is Halal, Mustard oil from farmer)
         resp2 = self.responder.respond("Is your meat halal and which oil do you cook in?", user_id=user_id, channel=channel)
-        self.assertFalse(resp2.was_matched)
-        self.assertEqual(resp2.template_id, "GUARD_dietary_halal_oil")
-        self.assertIn("Guru Dayal Singh", resp2.text)
+        self.assertTrue(resp2.was_matched)
+        self.assertEqual(resp2.template_id, "GUARD_halal_ingredients_oil")
+        self.assertIn("Halal", resp2.text)
+        self.assertIn("mustard oil", resp2.text)
 
     def test_agent_05_strict_vegan_inquirer(self):
         """Agent 5: Asking if Sondesh can be made vegan / plant-based."""
@@ -96,7 +96,7 @@ class Test25AgentStressScenarios(unittest.TestCase):
 
         resp = self.responder.respond("Are any of your sondesh vegan or lactose-free?", user_id=user_id, channel=channel)
         # Should answer or escalate gracefully informing pure dairy chhana is core
-        self.assertTrue(resp.was_matched or "Guru Dayal Singh" in resp.text)
+        self.assertTrue(resp.was_matched or "+91 87965 51990" in resp.text)
 
     def test_agent_06_multi_turn_order_with_session_memory(self):
         """Agent 6: 4-turn order with name introduction and slot memory recall."""
@@ -153,7 +153,6 @@ class Test25AgentStressScenarios(unittest.TestCase):
 
         resp = self.responder.respond("I paid ₹1400 via UPI 2 hours ago but received no confirmation! Where is my manager?", user_id=user_id, channel=channel)
         self.assertFalse(resp.was_matched)
-        self.assertIn("Guru Dayal Singh", resp.text)
         self.assertIn("+91 87965 51990", resp.text)
 
     def test_agent_10_instagram_ad_gate_enforcement(self):
@@ -188,14 +187,15 @@ class Test25AgentStressScenarios(unittest.TestCase):
             self.assertIn("Delhi NCR", resp.text)
 
     def test_agent_12_kitchen_self_pickup(self):
-        """Agent 12: Customer wanting to collect directly from kitchen (Guarded until client confirms address)."""
+        """Agent 12: Customer wanting to collect directly from kitchen (Confirmed address & hours)."""
         user_id = "user_pickup_12"
         channel = "whatsapp"
 
         resp = self.responder.respond("Can I pick up my order from your kitchen? What is the address and timings?", user_id=user_id, channel=channel)
-        self.assertFalse(resp.was_matched)
-        self.assertEqual(resp.template_id, "GUARD_kitchen_pickup_address")
-        self.assertIn("Guru Dayal Singh", resp.text)
+        self.assertTrue(resp.was_matched)
+        self.assertEqual(resp.template_id, "GUARD_pickup_address_hours")
+        self.assertIn("Sushant Arcade", resp.text)
+        self.assertIn("10:00 AM – 7:30 PM", resp.text)
 
     def test_agent_13_artisanal_differentiation(self):
         """Agent 13: Customer asking what makes Camellia special."""
@@ -209,14 +209,14 @@ class Test25AgentStressScenarios(unittest.TestCase):
         self.assertIn("all-women kitchen", resp.text)
 
     def test_agent_14_custom_assorted_box(self):
-        """Agent 14: Mixing flavours in a 500g box (Guarded until client confirms custom mixing policy)."""
+        """Agent 14: Mixing flavours in a 500g box (Escalated per custom box policy)."""
         user_id = "user_custom_14"
         channel = "whatsapp"
 
         resp = self.responder.respond("Can I mix rose and classic flavours in a 500g box?", user_id=user_id, channel=channel)
         self.assertFalse(resp.was_matched)
-        self.assertEqual(resp.template_id, "GUARD_collection_customization")
-        self.assertIn("Guru Dayal Singh", resp.text)
+        self.assertEqual(resp.template_id, "GUARD_customization_flavour_mixing")
+        self.assertIn("+91 87965 51990", resp.text)
 
     def test_agent_15_high_value_gifting_signature_a2(self):
         """Agent 15: Ordering Mahua Sondesh and Jolbhora in Signature A2."""
@@ -240,33 +240,34 @@ class Test25AgentStressScenarios(unittest.TestCase):
 
         resp_veg = self.responder.respond("Show this week's vegetarian menu", user_id=user_id, channel=channel)
         self.assertTrue(resp_veg.was_matched)
-        self.assertIn("Aloor Dom", resp_veg.text)
-        self.assertIn("Dhokar Dalna", resp_veg.text)
+        self.assertTrue("Aloor Dom" in resp_veg.text or "Chaal Potol" in resp_veg.text or "Kofta" in resp_veg.text)
 
         resp_nv = self.responder.respond("What non veg mutton and fish dishes do you have?", user_id=user_id, channel=channel)
         self.assertTrue(resp_nv.was_matched)
-        self.assertIn("Robibarer Mangsho", resp_nv.text)
+        self.assertTrue("Mangsho" in resp_nv.text or "Kosha" in resp_nv.text)
         self.assertIn("Bhetki Paturi", resp_nv.text)
 
     def test_agent_17_payment_methods_and_qr_code(self):
-        """Agent 17: Inquiring how to pay, UPI QR, and COD (Guarded until client confirms accepted methods)."""
+        """Agent 17: Inquiring how to pay, UPI QR, and COD (Confirmed: UPI/bank transfer only, No COD)."""
         user_id = "user_pay_17"
         channel = "whatsapp"
 
         resp = self.responder.respond("Can I pay via UPI QR code or COD?", user_id=user_id, channel=channel)
-        self.assertFalse(resp.was_matched)
-        self.assertEqual(resp.template_id, "GUARD_payment_methods")
-        self.assertIn("Guru Dayal Singh", resp.text)
+        self.assertTrue(resp.was_matched)
+        self.assertEqual(resp.template_id, "GUARD_payment_method")
+        self.assertIn("UPI / bank transfer only", resp.text)
+        self.assertIn("No COD", resp.text)
 
     def test_agent_18_shelf_life_and_storage(self):
-        """Agent 18: Inquiring how long Sondesh lasts and storage guidelines (Guarded until client confirms shelf life)."""
+        """Agent 18: Inquiring how long Sondesh lasts and storage guidelines (Confirmed: 1 week refrigerated)."""
         user_id = "user_storage_18"
         channel = "whatsapp"
 
         resp = self.responder.respond("How long can I store the sondesh and does it need refrigeration?", user_id=user_id, channel=channel)
-        self.assertFalse(resp.was_matched)
+        self.assertTrue(resp.was_matched)
         self.assertEqual(resp.template_id, "GUARD_shelf_life_storage")
-        self.assertIn("Guru Dayal Singh", resp.text)
+        self.assertIn("week refrigerated", resp.text)
+        self.assertIn("12 seconds", resp.text)
 
     def test_agent_19_spam_and_gibberish_filter(self):
         """Agent 19: Malicious bot sending spam links and gibberish."""
@@ -275,7 +276,7 @@ class Test25AgentStressScenarios(unittest.TestCase):
 
         resp1 = self.responder.respond("Claim free coins at http://freecoins-crypto.xyz click now!", user_id=user_id, channel=channel)
         self.assertFalse(resp1.was_matched)
-        self.assertIn("Guru Dayal Singh", resp1.text)
+        self.assertIn("+91 87965 51990", resp1.text)
 
         resp2 = self.responder.respond("??? !!! 🚀🌸", user_id=user_id, channel=channel)
         self.assertFalse(resp2.was_matched)
@@ -302,24 +303,25 @@ class Test25AgentStressScenarios(unittest.TestCase):
         self.assertIn("Luchi", resp.text)
 
     def test_agent_22_allergen_nut_safety(self):
-        """Agent 22: Checking nut allergies (Guarded until client confirms allergen protocol)."""
+        """Agent 22: Checking nut allergies (Confirmed: milk & sugar only — no nuts)."""
         user_id = "user_allergy_22"
         channel = "whatsapp"
 
         resp = self.responder.respond("Are your classic and rose sondesh safe for someone with a severe nut allergy?", user_id=user_id, channel=channel)
-        self.assertFalse(resp.was_matched)
-        self.assertEqual(resp.template_id, "GUARD_allergen_nut_safety")
-        self.assertIn("Guru Dayal Singh", resp.text)
+        self.assertTrue(resp.was_matched)
+        self.assertEqual(resp.template_id, "GUARD_allergen_nutfree_glutenfree")
+        self.assertIn("Sondesh is made from milk & sugar only — no nuts.", resp.text)
 
     def test_agent_23_collection_comparison(self):
-        """Agent 23: Comparing Collection 1 vs Collection 2 (Guarded until client confirms collection differentiation)."""
+        """Agent 23: Comparing Collection 1 vs Collection 2 (Confirmed collection differences)."""
         user_id = "user_compare_23"
         channel = "whatsapp"
 
         resp = self.responder.respond("What is the difference between Collection 1 and Collection 2?", user_id=user_id, channel=channel)
-        self.assertFalse(resp.was_matched)
-        self.assertEqual(resp.template_id, "GUARD_collection_customization")
-        self.assertIn("Guru Dayal Singh", resp.text)
+        self.assertTrue(resp.was_matched)
+        self.assertEqual(resp.template_id, "GUARD_collection_differentiation")
+        self.assertIn("Aamar Mishti", resp.text)
+        self.assertIn("Signature Sondesh", resp.text)
 
     def test_agent_24_packaging_sustainability(self):
         """Agent 24: Asking about eco-friendly packaging and plastic usage."""

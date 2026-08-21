@@ -135,7 +135,7 @@ def run_simulation():
             agent_log["dialogue"].append(turn_data)
 
             # Basic quality checks
-            if not was_matched and tmpl_id not in ["explicit_escalation", "gemini_rag"]:
+            if not was_matched and tmpl_id not in ["explicit_escalation", "gemini_rag"] and not (tmpl_id and tmpl_id.startswith("GUARD_")):
                 issue = f"Agent {aname} Turn {turn_idx}: Unmatched fallback trigger for: '{user_msg}'"
                 issues_found.append(issue)
             if not resp_text or len(resp_text.strip()) < 10:

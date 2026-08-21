@@ -152,12 +152,9 @@
       "triggers": [
         "want to know more", "know more", "tell me more", "more details", "more info", "more information",
         "about your brand", "about camellia", "what do you offer", "send the menu", "share the menu",
-        "menu card", "full menu", "your collections", "collections", "both collections",
-        "difference between collection 1 and collection 2", "difference between collections",
-        "difference between the collections", "difference between collection", "difference between",
-        "how are the collections different", "what is the difference", "whats the difference", "compare collections"
+        "menu card", "full menu", "your collections", "collections", "both collections"
       ],
-      "response": "Hi! Thanks for getting in touch. 🌸\n\nAt Camellia.artisanal, every Sondesh is made from scratch using time-tested traditional recipes. We work with small-batch artisanal farmers, trusted dairies, and carefully selected partners — never general retail sourcing. An all-women team makes the sondesh for you.\n\nWe currently offer two collections:\n\n*Collection 1 — Aamar Mishti আমার মিষ্টি*\nIndulgence for your tiny sweet cravings at home or work. Good dairy milk, partially mechanised, made in-house at our kitchen.\n\n*Collection 2 — Signature Collection*\nMishti for special occasions, gifting & when you are in the mood to give yourself a treat. Made using desi A2 cow milk that has not been industrially processed. Completely hand crafted end to end.\n\nPorter charges are on actuals.\n\n*Also —* we prepare and deliver freshly cooked Bengali meals across Delhi NCR. Sharing this week's menu too. Everything is cooked fresh in small batches, and some dishes are available only in limited quantities.\n\nIf you'd like a recommendation based on whether you prefer vegetarian, fish or meat, just let me know — happy to help. Please feel free to ask anything before confirming! 🙏",
+      "response": "Hi! Thanks for getting in touch. 🌸\n\nAt Camellia.artisanal, every Sondesh is made from scratch using time-tested traditional recipes. We work with small-batch artisanal farmers, trusted dairies, and carefully selected partners — never general retail sourcing. An all-women team makes the sondesh for you.\n\nWe currently offer two collections:\n\n*Collection 1 — Aamar Mishti আমার মিষ্টি*\nIndulgence for sweet cravings at home or work — good dairy milk, partially mechanised, made in-house at our kitchen.\n\n*Collection 2 — Signature Collection*\nMishti for special occasions, gifting & when you are in the mood to give yourself a treat — made using pure desi A2 cow milk that has not been industrially processed. Completely handcrafted end to end.\n\nPorter charges are on actuals.\n\n*Also —* we prepare and deliver freshly cooked Bengali meals across Delhi NCR. Sharing this week's menu too. Everything is cooked fresh in small batches, and some dishes are available only in limited quantities.\n\nIf you'd like a recommendation based on whether you prefer vegetarian, fish or meat, just let me know — happy to help. Please feel free to ask anything before confirming! 🙏",
       "escalate": false,
       "note": "Sends 3 cards in sequence: Aamar Mishti, Signature Sondesh, and the current weekly menu.",
       "source_ref": "client Q&A script > GENERAL + ADDITIONAL"
@@ -166,7 +163,7 @@
     {
       "id": "order_next_steps",
       "triggers": ["final selection", "this is my final", "my address is", "address and phone", "what are the next steps", "next steps", "confirm my order", "confirm order", "place the order", "here is my address"],
-      "response": "Wonderful — thank you! 🌸\n\nOur Manager of Kitchens, Mr. Guru Dayal Singh (+91 87965 51990), has been notified of your order request and recent chat history. He will connect with you shortly on WhatsApp/Call to verify your address, share your official invoice, and confirm delivery timing!\n\nFeel free to ask any questions in the meantime. 🙏",
+      "response": "Wonderful — thank you! 🌸\n\nOur team (+91 87965 51990) has been notified of your order request and recent chat history. We will connect with you shortly on WhatsApp/Call to verify your address, share your official invoice, and confirm delivery timing!\n\nFeel free to ask any questions in the meantime. 🙏",
       "escalate": true,
       "source_ref": "client Q&A script > QUESTION"
     },
@@ -188,23 +185,28 @@
     },
 
     {
-      "id": "sondesh_price_general",
+      "id": "sondesh_price_detailed",
+      "client_confirmed_date": "2026-08-21",
       "triggers": [
         "how much is sondesh", "how much for sondesh", "price of sondesh", "cost of sondesh",
         "sondesh price", "sondesh cost", "how much sondesh", "sondesh rate", "what's the price",
         "whats the price", "what is the price", "price list", "how much does it cost", "mishti price",
-        "menu price", "সন্দেশের দাম কত", "সন্দেশের দাম", "সন্দেশ", "দাম কত", "দাম কত?", "dam koto",
-        "sondesher dam koto", "sondesher daam koto"
+        "menu price", "how many pieces", "piece count", "pieces in a box", "pieces per box",
+        "pieces of sondesh", "how many pieces of sondesh", "how many pieces do we get",
+        "250g box vs 500g box", "250g vs 500g",
+        "সন্দেশের দাম কত", "সন্দেশের দাম", "সন্দেশ", "দাম কত", "দাম কত?", "dam koto",
+        "sondesher dam koto", "sondesher daam koto",
+        "sondesh price detailed", "full price list", "detailed price", "complete price list"
       ],
-      "response": "Hi, thanks for connecting! 🌸\n\nHere is our complete price breakdown table for both handcrafted collections:\n\n*Collection 1 — Aamar Mishti*\n```\n+-----------------------+-------+-------+-------+\n| Item / Flavour        | 250g  | 500g  |  1kg  |\n+-----------------------+-------+-------+-------+\n| Classic / Rose        | ₹450  | ₹800  | ₹1500 |\n| Mango / Kesar / Ada   | ₹550  | ₹1000 | ₹1800 |\n| Nolen Gur             | ₹600  | ₹1100 | ₹2000 |\n| Jolbhora (Liquid)*    | ₹750  | ₹1400 | ₹2500 |\n| Kanchagolla           | ₹450  | ₹800  | ₹1500 |\n+-----------------------+-------+-------+-------+\n* 250g(9pc) | 500g(18pc) | 1kg(36pc)\n* Jolbhora: 6pc | 12pc | 24pc\n```\n\n*Collection 2 — Signature A2 Collection (Pure Desi A2 Milk)*\n```\n+-----------------------+-------+-------+-------+\n| Item / Flavour        | 250g  | 500g  |  1kg  |\n+-----------------------+-------+-------+-------+\n| Classic / Rose        | ₹600  | ₹1100 | ₹2000 |\n| Mango/Kesar/Vanilla.. | ₹650  | ₹1200 | ₹2200 |\n| NolenGur/Thandai/Date | ₹700  | ₹1300 | ₹2500 |\n| Mahua Sondesh         | ₹900  | ₹1600 | ₹2900 |\n| Jolbhora (Liquid)*    | ₹900  | ₹1600 | ₹2900 |\n| Kanchagolla (Classic) | ₹600  | ₹1100 | ₹2000 |\n| Kanchagolla (NolenGur)| ₹700  | ₹1300 | ₹2500 |\n+-----------------------+-------+-------+-------+\n* Real Vanilla, Cinnamon, Thandai, Dates, Chocolate\n* 250g(9pc) | 500g(18pc) | 1kg(36pc)\n* Jolbhora: 6pc | 12pc | 24pc\n```\n\nPorter delivery charges on actuals from Sushant Lok, Gurgaon. Which collection, item, and flavour would you like?",
+      "response": "Hi! Thanks for getting in touch. 🌸\n\nAt Camellia.artisanal, every Sondesh is made from scratch using time-tested traditional recipes. We work with small-batch artisanal farmers, trusted dairies, and carefully selected partners — never general retail sourcing. An all-women team makes the sondesh for you.\n\nOur box price starts from ₹450 (for a 250g box of 9 pieces) and goes up to ₹900 depending on the collection and flavour.\n\nWe offer two distinct collections:\n\n• *Collection 1 — Aamar Mishti (আমার মিষ্টি)*:\nIndulgence for sweet cravings at home or work — good dairy milk, partially mechanised, made in-house at our kitchen.\n(250g: ₹450–₹750 | 500g: ₹800–₹1,400 | 1kg: ₹1,500–₹2,500)\n\n• *Collection 2 — Signature Collection*:\nMishti for special occasions, gifting & when you are in the mood to give yourself a treat — made using pure desi A2 cow milk that has not been industrially processed. Completely handcrafted end to end.\n(250g: ₹600–₹900 | 500g: ₹1,100–₹1,600 | 1kg: ₹2,000–₹2,900)\n\nPorter delivery charges are on actuals from Sushant Lok, Gurgaon.\n\nPlease feel free to ask anything before confirming! 🙏",
       "escalate": false,
-      "source_ref": "client Q&A script > PRICE"
+      "source_ref": "client Q&A script > savoury food ordering"
     },
 
     {
       "id": "sondesh_classic_rose",
       "triggers": ["classic sondesh", "rose sondesh", "classic rose", "classic and rose", "rose and classic", "classic sondesh price", "rose sondesh price", "how much is rose sondesh", "how much is classic sondesh", "how much for rose sondesh", "how much for classic sondesh", "how much is rose", "how much is classic", "rose mishti", "classic mishti", "rose price", "classic price", "cost of rose", "cost of classic", "cost of rose sondesh", "cost of classic sondesh", "price of rose sondesh", "price of classic sondesh", "rate of rose sondesh", "rate of classic sondesh", "rose", "classic"],
-      "response": "Our handcrafted *Classic & Rose Sondesh* 🌸 is made with fresh artisanal chhana and infused with delicate cardamom or organic rose petals.\n\n*Price Breakdown:*\n```\n+-------------------------------------+-------+-------+-------+\n| Collection                          | 250g  | 500g  |  1kg  |\n+-------------------------------------+-------+-------+-------+\n| Collection 1 — Aamar Mishti (Dairy) | ₹450  | ₹800  | ₹1500 |\n| Collection 2 — Signature (Desi A2)  | ₹600  | ₹1100 | ₹2000 |\n+-------------------------------------+-------+-------+-------+\n* Box count: 9 pcs (250g) | 18 pcs (500g) | 36 pcs (1kg)\n```\n\n• *Collection 1 (Aamar Mishti)*: Daily indulgence made with pure dairy milk in our kitchen.\n• *Collection 2 (Signature A2)*: 100% hand-kneaded with unadulterated desi A2 cow milk — exceptionally rich & melt-in-the-mouth.\n\nWhich collection, flavour (Classic or Rose), and pack size (250g, 500g, or 1kg) would you like to order?",
+      "response": "Our handcrafted *Classic & Rose Sondesh* 🌸 is made with fresh artisanal chhana and infused with delicate cardamom or organic rose petals.\n\n*Price Breakdown:*\n```\n+-------------------------------------+-------+-------+-------+\n| Collection                          | 250g  | 500g  |  1kg  |\n+-------------------------------------+-------+-------+-------+\n| Collection 1 — Aamar Mishti (Dairy) | ₹450  | ₹800  | ₹1500 |\n| Collection 2 — Signature (Desi A2)  | ₹600  | ₹1100 | ₹2000 |\n+-------------------------------------+-------+-------+-------+\n* Box count: 9 pcs (250g) | 18 pcs (500g) | 36 pcs (1kg)\n```\n\n• *Collection 1 (Aamar Mishti)*: Daily indulgence, good dairy milk, partially mechanised, made in-house at our kitchen.\n• *Collection 2 (Signature A2)*: Special occasions & gifting — made with pure desi A2 cow milk (not industrially processed), completely handcrafted end to end.\n\nWhich collection, flavour (Classic or Rose), and pack size (250g, 500g, or 1kg) would you like to order?",
       "escalate": false,
       "source_ref": "menu.json > Sondesh > Classic/Rose"
     },
@@ -313,21 +315,53 @@
     },
 
     {
-      "id": "GUARD_collection_customization",
+      "id": "GUARD_collection_differentiation",
+      "client_confirmed_date": "2026-08-21",
       "triggers": [
-        "difference between collection 1 and collection 2", "difference between collection 1 and 2",
-        "collection 1 vs collection 2", "compare collection 1 and collection 2",
-        "what is the difference between collection 1 and collection 2", "collection 1 and collection 2 difference",
-        "what is difference between collection 1 and collection 2", "difference between the collections",
-        "how do the collections differ", "difference between collection", "difference between collections",
-        "customize", "customise", "custom box", "customised box", "customized box",
-        "mix flavours", "mix flavors", "mix of rose", "mix of classic", "mix sondesh",
-        "assorted box", "assorted", "can i mix", "can we mix", "mix two flavours", "mix two flavors",
-        "mix and match", "mix 2 flavours", "mix 2 flavors", "mixed flavours", "mixed flavors",
-        "mix of rose and classic", "customize the box", "customise the box", "can i customize",
-        "can i customise", "mix rose and classic", "mix classic and rose", "can i mix rose and classic",
-        "mix rose and classic flavours", "mix rose and classic flavors", "mix flavours in a 500g box",
-        "mix flavors in a 500g box", "can i mix rose and classic flavours in a 500g box"
+        "difference between collection 1 and collection 2",
+        "difference between collection 1 and 2",
+        "difference between the collections",
+        "difference between collections",
+        "collection 1 vs collection 2",
+        "collection 1 and collection 2 difference",
+        "what is the difference between collection 1 and collection 2",
+        "what is difference between collection 1 and collection 2",
+        "how do the collections differ",
+        "compare collection 1 and collection 2",
+        "compare collections",
+        "how are the collections different"
+      ],
+      "response": "Collection 1 (Aamar Mishti / \"আমার মিষ্টি\") is for indulgence for your sweet cravings at home or work — good dairy milk, partially mechanised, made in-house at our kitchen. Collection 2 (Signature Sondesh) is for special occasions, gifting & when you are in the mood to give yourself a treat — made using pure desi A2 cow milk that has not been industrially processed, completely handcrafted end to end.",
+      "escalate": false,
+      "source_ref": "client confirmation (Somdeb Ji) > collection differentiation"
+    },
+
+    {
+      "id": "GUARD_customization_flavour_mixing",
+      "guard_reason": "Awaiting client confirmation on flavour-mixing and custom assorted box policy.",
+      "triggers": [
+        "can i mix rose and classic",
+        "mix rose and classic",
+        "mix classic and rose",
+        "mix rose and classic flavours",
+        "mix rose and classic flavors",
+        "mix flavours in a 500g box",
+        "mix flavors in a 500g box",
+        "can i mix rose and classic flavours in a 500g box",
+        "can i mix flavours",
+        "can i mix flavors",
+        "can we mix flavours",
+        "can we mix flavors",
+        "mix different flavours",
+        "mix different flavors",
+        "custom assorted box",
+        "customize flavours",
+        "customise flavours",
+        "customize the box",
+        "customise the box",
+        "customize flavors",
+        "customise flavors",
+        "custom box"
       ],
       "response": null,
       "escalate": true,
@@ -335,32 +369,65 @@
     },
 
     {
-      "id": "GUARD_dietary_halal_oil",
+      "id": "GUARD_halal_ingredients_oil",
+      "client_confirmed_date": "2026-08-21",
       "triggers": [
-        "halal", "halal certified", "is food halal", "is meat halal", "is chicken halal",
-        "is mutton halal", "jhatka", "what oil", "which oil", "cooking oil", "mustard oil",
-        "mustard", "ghee", "what medium", "oil do you cook in", "dietary", "pure veg prep",
-        "cooking medium", "oil do you use", "what kind of oil", "which meat", "halal meat",
+        "halal",
+        "halal certified",
+        "is food halal",
+        "is meat halal",
+        "is chicken halal",
+        "is mutton halal",
+        "is your meat halal",
+        "jhatka",
+        "cooking oil",
+        "which cooking oil",
+        "what cooking oil",
+        "which oil do you cook in",
+        "oil do you cook in",
+        "what oil do you use",
+        "which oil do you use",
+        "cooking medium",
+        "what cooking medium",
+        "mustard oil",
+        "desi ghee",
         "is your meat halal and which oil do you cook in"
       ],
-      "response": null,
-      "escalate": true,
-      "source_ref": "GUARD: Pending client confirmation from Somdeb Ji"
+      "response": "Mutton is Halal. Cooking oil is mustard oil, sourced directly from a farmer in Bengal. Ingredients have no industrial processing.",
+      "escalate": false,
+      "source_ref": "client confirmation (Somdeb Ji) > halal & ingredients sourcing"
     },
 
     {
-      "id": "GUARD_payment_methods",
+      "id": "GUARD_payment_method",
+      "client_confirmed_date": "2026-08-21",
       "triggers": [
-        "payment methods", "payment method", "how to pay", "how do i pay", "payment options",
-        "do you take cod", "cash on delivery", "cod", "do you accept upi", "accept upi",
-        "gpay", "paytm", "phonepe", "net banking", "credit card", "debit card", "pay online",
-        "payment mode", "mode of payment", "take cod", "qr code", "upi qr", "send qr", "qr",
-        "online pay", "can i pay via upi qr code or cod", "can i pay via upi", "pay via upi",
-        "pay via upi qr", "qr code or cod"
+        "payment methods",
+        "payment method",
+        "how to pay",
+        "how do i pay",
+        "how can i pay",
+        "payment options",
+        "do you take cod",
+        "pay via cod",
+        "cash on delivery option",
+        "pay by cash on delivery",
+        "pay via upi",
+        "pay via upi qr",
+        "upi qr code",
+        "accept upi",
+        "do you accept upi",
+        "can i pay via upi",
+        "can i pay via upi qr code or cod",
+        "pay online",
+        "payment mode",
+        "mode of payment",
+        "qr code for payment",
+        "send qr code for payment"
       ],
-      "response": null,
-      "escalate": true,
-      "source_ref": "GUARD: Pending client confirmation from Somdeb Ji"
+      "response": "UPI / bank transfer only (shared when order is confirmed — No COD on delivery). If you are picking up your order directly from our Sushant Lok kitchen, cash on pickup is accepted.",
+      "escalate": false,
+      "source_ref": "client confirmation (Somdeb Ji) > payment methods & COD"
     },
 
     {
@@ -394,16 +461,18 @@
     {
       "id": "delivery_out_of_area",
       "triggers": [
-        "bangalore", "bengaluru", "mumbai", "kolkata", "calcutta", "chennai", "hyderabad",
+        "bangalore", "bengaluru", "mumbai", "chennai", "hyderabad",
         "pune", "ahmedabad", "jaipur", "chandigarh", "lucknow", "kanpur", "surat",
         "indore", "bhopal", "patna", "ranchi", "bhubaneswar", "guwahati", "kochi",
         "trivandrum", "coimbatore", "out of delhi", "outside delhi", "outside ncr",
         "outside delhi ncr", "other city", "other cities", "different city", "out of state",
         "interstate", "do you deliver to bangalore", "do you deliver in bangalore",
-        "bangalore delivery", "deliver to bangalore", "ship to bangalore",
+        "bangalore delivery", "deliver to bangalore", "ship to bangalore", "courier to bangalore",
         "can you deliver to bangalore", "can you deliver 2 boxes of nolen gur sondesh to bangalore",
         "deliver 2 boxes to bangalore", "do you deliver to other cities", "deliver to other cities",
-        "ship to other cities", "other cities delivery"
+        "ship to other cities", "other cities delivery", "deliver to kolkata", "delivery in kolkata",
+        "kolkata delivery", "ship to kolkata", "courier to kolkata", "deliver to mumbai", "mumbai delivery",
+        "deliver to pune", "pune delivery", "deliver to hyderabad", "deliver to chennai"
       ],
       "response": "Hi, thank you for getting in touch.\n\nI would have loved to. However, the Norom Pak Sondesh that we make can be transported from one city to another only through a reliable cold-chain courier service. Unfortunately, we haven't yet found a partner who can offer this at a reasonable cost.\n\nSo for now, we're unable to ship our sondesh outside Delhi NCR — we do not deliver to Bangalore or other cities at this time. We'd love to, though, and will certainly start as soon as we find a dependable cold-chain delivery option.\n\nThat said, many of our regular customers who live in different parts of India and the world do buy our sondesh by asking friends or family travelling from Delhi NCR to carry a few boxes for them. We're happy to deliver the order to their home, office, hotel, or any other convenient location before they travel.\n\nThank you for thinking of camellia.artisanal! 🌸",
       "escalate": false,
@@ -441,7 +510,7 @@
     {
       "id": "how_to_order",
       "triggers": ["how to order", "how do i order", "place an order", "want to order"],
-      "response": "Great! To place an order, please share:\n1. Item & Flavour (e.g. Nolen Gur Sondesh)\n2. Collection (Aamar Mishti / Signature)\n3. Pack Size (250g, 500g, or 1kg)\n4. Delivery Address & Phone Number\n\nOnce shared, our Manager of Kitchens, Mr. Guru Dayal Singh (+91 87965 51990), will verify your details with you on WhatsApp/Call and share your invoice for payment before dispatch! 🌸",
+      "response": "Great! To place an order, please share:\n1. Item & Flavour (e.g. Nolen Gur Sondesh)\n2. Collection (Aamar Mishti / Signature)\n3. Pack Size (250g, 500g, or 1kg)\n4. Delivery Address & Phone Number\n\nOnce shared, our team (+91 87965 51990) will verify your details with you on WhatsApp/Call and share your invoice for payment before dispatch! 🌸",
       "escalate": false
     },
 
@@ -459,19 +528,29 @@
     },
 
     {
-      "id": "GUARD_allergen_nut_safety",
+      "id": "GUARD_allergen_nutfree_glutenfree",
+      "client_confirmed_date": "2026-08-21",
       "triggers": [
-        "allergy", "allergies", "nut allergy", "nuts allergy", "allergic to nuts",
-        "nut-free", "nut free", "nuts free", "allergen", "allergens", "allergic",
-        "pistachio allergy", "cashew allergy", "peanut allergy", "gluten allergy",
-        "gluten free", "gluten-free", "contains nuts", "without nuts", "no nuts",
-        "severe nut allergy", "severe nut", "safe for someone with a severe nut allergy",
-        "are your classic and rose sondesh safe for someone with a severe nut allergy", "safe for allergy",
-        "severe allergy", "cross contamination", "severe nut allergies", "nut safety"
+        "nut allergy",
+        "nuts allergy",
+        "allergic to nuts",
+        "severe nut allergy",
+        "severe nut allergies",
+        "peanut allergy",
+        "cashew allergy",
+        "pistachio allergy",
+        "gluten allergy",
+        "cross contamination",
+        "safe for someone with a severe nut allergy",
+        "safe for severe nut allergy",
+        "safe for nut allergy",
+        "severe allergy",
+        "nut allergen",
+        "are your classic and rose sondesh safe for someone with a severe nut allergy"
       ],
-      "response": null,
-      "escalate": true,
-      "source_ref": "GUARD: Pending client confirmation from Somdeb Ji"
+      "response": "Sondesh is made from milk & sugar only — no nuts.",
+      "escalate": false,
+      "source_ref": "client confirmation (Somdeb Ji) > allergen & nut safety"
     },
 
     {
@@ -482,25 +561,33 @@
         "paid but no reply", "order tracking", "no confirmation yet", "dispatch status",
         "when will it arrive", "where is the delivery", "has it dispatched", "order update", "check my order"
       ],
-      "response": "Thank you for checking in! 🌸\n\nIf you have already transferred the payment or placed your order, our Kitchen Manager, Mr. Guru Dayal Singh (+91 87965 51990), is verifying your dispatch on Porter/courier.\n\nHe will immediately share the live delivery tracking link or dispatch confirmation with you right here on WhatsApp! Feel free to ping him directly on +91 87965 51990 if it is urgent. 🙏",
+      "response": "Thank you for checking in! 🌸\n\nIf you have already transferred the payment or placed your order, our team is verifying your dispatch on Porter/courier.\n\nWe will immediately share the live delivery tracking link or dispatch confirmation with you right here on WhatsApp! Feel free to ping us directly on +91 87965 51990 if it is urgent. 🙏",
       "escalate": false,
       "source_ref": "customer support & order dispatch"
     },
 
     {
-      "id": "GUARD_kitchen_pickup_address",
+      "id": "GUARD_pickup_address_hours",
+      "client_confirmed_date": "2026-08-21",
       "triggers": [
-        "kitchen address", "pickup address", "self pickup", "pick it up from kitchen",
-        "pick up directly", "come pick it up", "kitchen timings", "pickup timing",
-        "kitchen location", "sushant arcade address", "pick up location", "can i pick up",
-        "can i come and collect", "takeaway from kitchen", "pickup from sushant", "where is your kitchen",
-        "can i pick up my order from your kitchen", "can i pick up my order from your kitchen? what is the address and timings?",
-        "collect directly", "pickup timings", "kitchen pickup", "pick up from kitchen",
-        "pick up from your kitchen", "pickup from your kitchen"
+        "kitchen address",
+        "pickup address",
+        "self pickup address",
+        "pick it up from kitchen",
+        "pick up from kitchen",
+        "pickup from kitchen",
+        "kitchen location",
+        "where is your kitchen located",
+        "where is the kitchen located",
+        "kitchen pickup timings",
+        "can i pick up my order from your kitchen",
+        "can i pick up my order from your kitchen? what is the address and timings?",
+        "can i collect directly from kitchen",
+        "collect order from kitchen"
       ],
-      "response": null,
-      "escalate": true,
-      "source_ref": "GUARD: Pending client confirmation from Somdeb Ji"
+      "response": "Address: E144, ground floor, Sushant Arcade, Sushant Lok 1, Gurgaon — easily accessible from Gate No. 4. Kitchen hours: 10:00 AM – 7:30 PM daily. Please call the kitchen number (+91 8796551990) for directions if needed.",
+      "escalate": false,
+      "source_ref": "client confirmation (Somdeb Ji) > kitchen address & pickup hours"
     },
 
     {
@@ -539,30 +626,148 @@
 
     {
       "id": "GUARD_shelf_life_storage",
+      "client_confirmed_date": "2026-08-21",
       "triggers": [
-        "shelf life", "how long can i store", "how long does it last", "how long will it last",
-        "storage", "refrigeration", "refrigerate", "refrigerator", "fridge", "how to store",
-        "expiry", "how many days will it last", "how long to keep", "keep in fridge",
-        "keep in refrigerator", "storage guidelines", "how long does sondesh last",
-        "how long can i store the sondesh and does it need refrigeration", "shelf life and storage",
-        "store in fridge", "store in refrigerator", "store sondesh", "does it spoil"
+        "shelf life",
+        "how long can i store the sondesh",
+        "how long can i store",
+        "how long does sondesh last",
+        "how long does it last",
+        "how long will it last",
+        "how many days will it last",
+        "does it need refrigeration",
+        "need refrigeration",
+        "needs refrigeration",
+        "how to store sondesh",
+        "store in fridge",
+        "store in refrigerator",
+        "storage guidelines",
+        "how long can i store the sondesh and does it need refrigeration"
       ],
-      "response": null,
-      "escalate": true,
-      "source_ref": "GUARD: Pending client confirmation from Somdeb Ji"
+      "response": "Stays well for a week refrigerated. For best texture, heat for 12 seconds after taking it out of the fridge.",
+      "escalate": false,
+      "source_ref": "client confirmation (Somdeb Ji) > shelf life & storage"
     },
 
     {
-      "id": "GUARD_staff_identity",
+      "id": "GUARD_staff_names_manager_contact",
+      "client_confirmed_date": "2026-08-21",
       "triggers": [
-        "who is the owner", "owner name", "who is the founder", "who is the chef",
-        "who is the cook", "who runs the kitchen", "staff names", "who works there",
-        "kitchen staff", "manager name", "who is your manager", "who is somdeb",
-        "cook name", "founder name", "head chef", "owner of camellia", "founder of camellia"
+        "who is the owner",
+        "owner of camellia",
+        "who is the founder",
+        "founder of camellia",
+        "who is the chef",
+        "who is the cook",
+        "who is the head chef",
+        "who runs the kitchen",
+        "staff names",
+        "who is somdeb",
+        "somdeb name",
+        "owner name",
+        "founder name",
+        "chef name",
+        "manager",
+        "manager name",
+        "who is the manager"
+      ],
+      "response": "Manager of Kitchens is Mr. Guru Dayal Singh, +91 8796551990 (same as the official WhatsApp number — there is no separate number).",
+      "escalate": false,
+      "source_ref": "client confirmation (Somdeb Ji) > kitchen manager"
+    },
+
+    {
+      "id": "savoury_food_intro",
+      "client_confirmed_date": "2026-08-21",
+      "triggers": [
+        "lunch menu", "dinner options", "savoury food", "bengali meals", "lunch options",
+        "dinner menu", "savoury menu", "bengali lunch", "bengali dinner", "lunch", "dinner",
+        "meals", "food menu", "savoury options", "savoury dishes", "3 ways to order",
+        "how to order food", "savoury ordering", "savoury", "cooked meals", "bengali food"
+      ],
+      "response": "We offer 3 ways to order our freshly cooked Bengali meals: 🍱\n\n1. **À La Carte**: Choose individual dishes from our weekly rotating menu (Vegetarian & Non-Vegetarian curries, Basanti Polao & rice). No minimum order.\n2. **Bengali Bento**: Complete curated meal boxes with Mains, Luchi/Rice & Sondesh.\n3. **Everyday Meal Subscription (Gurgaon only)**: Convenient multi-meal plans with flexible scheduling.\n\nAll prices include GST, packaging, and portal charges; only Porter delivery is additional.\n\nEverything is cooked fresh in small batches, so pre-ordering is recommended as some dishes may run out! 🌸",
+      "escalate": false,
+      "source_ref": "client Q&A script > savoury food ordering"
+    },
+
+    {
+      "id": "bento_details",
+      "client_confirmed_date": "2026-08-21",
+      "guard_reason": "Pricing conflict: 3-tier breakdown (₹350/₹400/₹600) conflicts with existing weekly-menu flyer pricing (₹400/₹700). Pending client confirmation.",
+      "triggers": [
+        "bento", "bengali bento", "what's in the bento", "what is in the bento",
+        "bento details", "bento box details", "bento options", "bento meal",
+        "bento tiers", "bento prices", "bento pricing", "bento breakdown", "bento items"
       ],
       "response": null,
       "escalate": true,
-      "source_ref": "GUARD: Pending client confirmation from Somdeb Ji"
+      "source_ref": "client Q&A script > savoury food ordering"
+    },
+
+    {
+      "id": "subscription_details",
+      "client_confirmed_date": "2026-08-21",
+      "triggers": [
+        "subscription", "meal plan", "everyday meal", "everyday meal subscription",
+        "meal subscription", "daily meals", "monthly meal", "weekly meal plan",
+        "subscription details", "subscription pricing", "subscription options", "how does subscription work",
+        "meal packages", "5 meals package"
+      ],
+      "response": "Our Everyday Meal Subscription (Gurgaon only) offers fresh, homely Bengali meals delivered to your doorstep: 🍱\n\n**Plan Options (5 Meals Package):**\n• **Vegetarian Plan**: ₹1,500 for 5 meals (₹300/meal)\n• **Veg + Chicken Plan**: ₹1,750 for 5 meals (Combination of Veg & Chicken meals)\n• **Chicken Plan**: ₹2,000 for 5 meals (₹400/meal)\n\n**Subscription Highlights:**\n• **Polao / Luchi Rule**: You can choose Basanti Polao or Luchi once during your 5-meal cycle at no extra cost.\n• **No Fixed Schedule**: You don't have to take meals on consecutive days — order whenever you want lunch or dinner.\n• **Loyalty Reward**: For every 10 meals completed, your 11th meal is completely FREE! 🌸\n\nAll prices include GST, packaging, and portal charges; only Porter delivery is additional.\n\nWould you like to book?",
+      "escalate": false,
+      "source_ref": "client Q&A script > savoury food ordering"
+    },
+
+    {
+      "id": "subscription_booking_steps",
+      "client_confirmed_date": "2026-08-21",
+      "triggers": [
+        "how to book subscription", "book subscription", "start subscription", "subscribe",
+        "how do i book subscription", "how to start meal plan", "book meal plan",
+        "booking steps for subscription", "next steps for subscription", "how to subscribe"
+      ],
+      "response": "Here are the Next Steps to activate your Everyday Meal Subscription: 🌸\n\n1. **Choose your plan** (Vegetarian ₹1,500 / Veg+Chicken ₹1,750 / Chicken ₹2,000 for 5 meals)\n2. **Pay** via UPI / bank transfer\n3. **Tell us your preferred dates**\n4. **Done — we deliver on those dates without you following up**\n\n(Please provide at least 5 hours advance notice for any schedule or date changes). 🌸",
+      "escalate": false,
+      "source_ref": "client Q&A script > savoury food ordering"
+    },
+
+    {
+      "id": "alacarte_prebooking_steps",
+      "client_confirmed_date": "2026-08-21",
+      "triggers": [
+        "how to order from menu", "how to order item from menu", "pre-book", "prebook",
+        "pre book", "pre-order savoury", "preorder savoury", "how to pre-book",
+        "how to prebook", "book savoury meal", "how to order alacarte", "order alacarte",
+        "order à la carte", "prebooking steps", "how to pre-order food"
+      ],
+      "response": "To place or pre-book an À La Carte order from our weekly menu, please share: 📝\n\n1. **Items & Quantity** (e.g. 1 Robibarer Mangsho, 1 Basanti Polao)\n2. **Delivery Address** (used to calculate Porter delivery charges on actuals)\n3. **Receiver's Phone Number**\n4. **Preferred Delivery Slot / Day** (Lunch / Dinner)\n5. **Google Location Pin** (especially if delivering to a standalone house or villa)\n\nYou can share these details here, or call/WhatsApp our kitchen directly at 8796551990. We will verify availability and share your invoice before dispatch! 🌸",
+      "escalate": false,
+      "source_ref": "client Q&A script > savoury food ordering"
+    },
+
+    {
+      "id": "sondesh_dispatch_time",
+      "client_confirmed_date": "2026-08-21",
+      "triggers": [
+        "how long to deliver", "dispatch time", "how fast", "how fast can you deliver",
+        "dispatch timing", "prep time", "how long to dispatch", "sondesh dispatch time",
+        "dispatch hours", "how fast is delivery", "how quickly can you dispatch"
+      ],
+      "response": "Hi! Thank you for getting in touch.\n\nOnce your sondesh order is confirmed, we usually dispatch it from our kitchen in Sushant Lok, Gurgaon within 15 minutes. Kanchagolla takes about 30 minutes. Jolbhora takes about an hour.\n\nDelivery time after that depends on the Porter rider's travel time, which varies based on traffic and the time of day.\n\nOur kitchen is open 10:00 AM – 7:30 PM every day. We always request a pre-order so we can make and send exactly what you want — we make in small batches, so we sometimes run out of stock. 🌸",
+      "escalate": false,
+      "source_ref": "client Q&A script > savoury food ordering"
+    },
+
+    {
+      "id": "savoury_crosssell_sondesh",
+      "client_confirmed_date": "2026-08-21",
+      "triggers": [
+        "savoury crosssell", "also sondesh", "offer sondesh", "do you have sweets too",
+        "any sweets with meal", "dessert with meal", "sweets along with meal", "sondesh with food"
+      ],
+      "response": "We also make & send Bengali mishti - norom pak Sondesh. All milk protein, no gluten, mild sweet, no added fat - subtle natural flavours…. Handcrafted.",
+      "escalate": false,
+      "source_ref": "client Q&A script > savoury food ordering"
     }
   ],
 
@@ -586,7 +791,7 @@
       "failed transactions or UPI deduction issues",
       "anything not matching any template above with sufficient confidence"
     ],
-    "fallback_response": "Thank you for getting in touch! 🌸 I've notified our team and Kitchen Manager, Mr. Guru Dayal Singh (+91 87965 51990), regarding your request and they'll connect you with our team directly on WhatsApp/call shortly.\n\nIn the meantime, feel free to ask me about:\n• 🌸 Our fresh Sondesh, Kanchagolla & Jolbhora (Aamar Mishti & Signature Collections)\n• 🍱 This week's fresh Bengali Lunch & Dinner Bento menu\n• 🚚 Delivery details across Delhi NCR\n\nOr reply 'menu' to see our complete price list!"
+    "fallback_response": "Thank you for getting in touch! 🌸 I've notified our team (+91 87965 51990) regarding your request and they'll connect with you directly on WhatsApp/call shortly.\n\nIn the meantime, feel free to ask me about:\n• 🌸 Our fresh Sondesh, Kanchagolla & Jolbhora (Aamar Mishti & Signature Collections)\n• 🍱 This week's fresh Bengali Lunch & Dinner Bento menu\n• 🚚 Delivery details across Delhi NCR\n\nOr reply 'menu' to see our complete price list!"
   },
 
   "open_questions_for_client": [

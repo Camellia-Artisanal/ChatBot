@@ -346,7 +346,7 @@ class OrderCalculator:
                 f"• *Courier (Porter):* Actuals at dispatch (from Sushant Arcade, Gurgaon)\n"
                 f"─────────────────────────────\n"
                 f"💰 *Total Estimated Item Price:* ₹{itm['total_price']:,}\n\n"
-                f"📞 *Next Steps:* Our Manager of Kitchens, Mr. Guru Dayal Singh (+91 87965 51990), "
+                f"📞 *Next Steps:* Our team (+91 87965 51990) "
                 f"will verify your delivery address & share the official invoice via WhatsApp!"
             )
             return {
@@ -357,7 +357,8 @@ class OrderCalculator:
                 "unit_price": itm["unit_price"],
                 "total_price": itm["total_price"],
                 "items": combined_items,
-                "formatted_receipt": receipt
+                "formatted_receipt": receipt,
+                "has_new_items": bool(extracted_items or is_remove_intent)
             }
         else:
             item_lines = []
@@ -388,13 +389,14 @@ class OrderCalculator:
                 f"• *Courier (Porter):* Actuals at dispatch (from Sushant Arcade, Gurgaon)\n"
                 f"─────────────────────────────\n"
                 f"💰 *Total Estimated Item Price:* ₹{grand_total:,}\n\n"
-                f"📞 *Next Steps:* Our Manager of Kitchens, Mr. Guru Dayal Singh (+91 87965 51990), "
+                f"📞 *Next Steps:* Our team (+91 87965 51990) "
                 f"will verify your delivery address & share the official invoice via WhatsApp!"
             )
             return {
                 "items": combined_items,
                 "total_price": grand_total,
-                "formatted_receipt": receipt
+                "formatted_receipt": receipt,
+                "has_new_items": bool(extracted_items or is_remove_intent)
             }
 
 order_calculator = OrderCalculator()
