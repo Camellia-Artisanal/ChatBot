@@ -347,5 +347,92 @@ class Test25AgentStressScenarios(unittest.TestCase):
         self.assertIn("Aamar Mishti", resp2.text)
         self.assertIn("Signature", resp2.text)
 
+    def test_agent_26_savoury_lunch_dinner_to_bento(self):
+        """Agent 26 (Phase D): Savoury food inquiry followed by Bengali Bento specific inquiry (bento_details escalates cleanly)."""
+        user_id = "user_savoury_26"
+        channel = "whatsapp"
+
+        # Turn 1: General lunch/dinner options
+        resp1 = self.responder.respond("Do you have any lunch or dinner options today?", user_id=user_id, channel=channel)
+        self.assertTrue(resp1.was_matched)
+        self.assertEqual(resp1.template_id, "savoury_food_intro")
+        self.assertIn("3 ways to order", resp1.text)
+
+        # Turn 2: Specific Bento box details (bento_details is a locked guard template -> escalates cleanly without pricing leak)
+        resp2 = self.responder.respond("Tell me more about the Bengali Bento meal box", user_id=user_id, channel=channel)
+        self.assertFalse(resp2.was_matched)
+        self.assertIn("+91 87965 51990", resp2.text)
+
+    def test_agent_27_subscription_plan_to_booking_flow(self):
+        """Agent 27 (Phase D): Subscription inquiry followed by booking steps in same session."""
+        user_id = "user_sub_27"
+        channel = "whatsapp"
+
+        # Turn 1: Ask about subscription plan
+        resp1 = self.responder.respond("Tell me about your everyday meal subscription", user_id=user_id, channel=channel)
+        self.assertTrue(resp1.was_matched)
+        self.assertEqual(resp1.template_id, "subscription_details")
+        self.assertIn("Would you like to book?", resp1.text)
+
+        # Turn 2: Follow up with booking steps
+        resp2 = self.responder.respond("How do I book the subscription plan?", user_id=user_id, channel=channel)
+        self.assertTrue(resp2.was_matched)
+        self.assertEqual(resp2.template_id, "subscription_booking_steps")
+        self.assertIn("Choose your plan", resp2.text)
+        self.assertNotIn("how_to_order", resp2.template_id)
+
+    def test_agent_28_first_time_vs_returning_customer_savoury_intro(self):
+        """Agent 28 (Phase D): First-time customer vs returning customer detection on savoury intro."""
+        from database import db
+
+        # Scenario 1: First-time customer (no prior history)
+        first_time_uid = "user_first_time_28"
+        session_memory.clear_session(first_time_uid, "whatsapp")
+        resp1 = self.responder.respond("What is your savoury lunch menu?", user_id=first_time_uid, channel="whatsapp")
+        self.assertTrue(resp1.was_matched)
+        self.assertEqual(resp1.template_id, "savoury_food_intro")
+        self.assertIn("If this is your first Camellia meal and the menu feels unfamiliar, I'll be happy to help you choose!", resp1.text)
+
+        # Scenario 2: Returning customer with seeded SQLite DB history
+        returning_uid = "user_returning_28"
+        session_memory.clear_session(returning_uid, "whatsapp")
+        db.log_conversation(returning_uid, "whatsapp", "Hi prior turn", "Hello response", True, "greeting")
+
+        resp2 = self.responder.respond("What is your savoury lunch menu?", user_id=returning_uid, channel="whatsapp")
+        self.assertTrue(resp2.was_matched)
+        self.assertEqual(resp2.template_id, "savoury_food_intro")
+        self.assertNotIn("If this is your first Camellia meal and the menu feels unfamiliar, I'll be happy to help you choose!", resp2.text)
+
+    def test_agent_29_returning_customer_after_24h_gap_flow(self):
+        """Agent 29 (Phase D): Full agent flow simulating >24h gap with name retention & order draft reset."""
+        import time
+
+        gap_uid = "user_gap_29"
+        channel = "whatsapp"
+        session_memory.clear_session(gap_uid, channel)
+
+        # Turn 1: User introduces name and asks about Jolbhora Sondesh (creating order draft & facts)
+        resp1 = self.responder.respond("Hi, my name is Priya. What is the price of Jolbhora Sondesh?", user_id=gap_uid, channel=channel)
+        self.assertTrue(resp1.was_matched)
+        sess = session_memory.get_session(gap_uid, channel)
+        self.assertEqual(sess["facts"]["name"], "Priya")
+        self.assertEqual(sess["facts"]["order_draft"]["flavour"], "jolbhora")
+
+        # Simulate >24h inactivity gap (e.g. 25 hours = 90000 seconds)
+        sess["last_updated"] = time.time() - 90000
+
+        # Turn 2: Customer returns 25 hours later asking about savoury lunch options
+        resp2 = self.responder.respond("What savoury lunch options do you have today?", user_id=gap_uid, channel=channel)
+        self.assertTrue(resp2.was_matched)
+        self.assertEqual(resp2.template_id, "savoury_food_intro")
+
+        # Verify: Customer name is RETAINED in session memory, order draft is RESET, cross-sell P.S. note fires
+        sess_after = session_memory.get_session(gap_uid, channel)
+        self.assertEqual(sess_after["facts"]["name"], "Priya")
+        self.assertIsNone(sess_after["facts"]["order_draft"]["flavour"])
+        self.assertIn("*P.S.* We also make & send Bengali mishti", resp2.text)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+

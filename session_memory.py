@@ -16,9 +16,12 @@ class SessionMemoryManager:
         self._sessions: "OrderedDict[tuple, Dict[str, Any]]" = OrderedDict()
 
     def get_session(self, user_id: str, channel: str) -> Dict[str, Any]:
+        import time
+        current_time = time.time()
         key = (str(user_id), str(channel))
         if key not in self._sessions:
             self._sessions[key] = {
+                "last_updated": current_time,
                 "facts": {
                     "name": None,
                     "image_card_sent": False,
@@ -37,6 +40,21 @@ class SessionMemoryManager:
             while len(self._sessions) > self.max_sessions:
                 self._sessions.popitem(last=False)
         else:
+            session = self._sessions[key]
+            last_updated = session.get("last_updated", current_time)
+            if current_time - last_updated > 86400:
+                facts = session.get("facts", {})
+                facts["image_card_sent"] = False
+                facts["awaiting_subscription_booking"] = False
+                facts["savoury_crosssell_sent"] = False
+                facts["cart"] = []
+                facts["order_draft"] = {
+                    "flavour": None,
+                    "collection": None,
+                    "size": None,
+                    "quantity": 1
+                }
+            session["last_updated"] = current_time
             self._sessions.move_to_end(key)
         return self._sessions[key]
 

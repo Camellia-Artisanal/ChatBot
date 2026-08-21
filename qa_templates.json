@@ -331,7 +331,7 @@
         "compare collections",
         "how are the collections different"
       ],
-      "response": "Collection 1 (Aamar Mishti / \"আমার মিষ্টি\") is for indulgence for your sweet cravings at home or work — good dairy milk, partially mechanised, made in-house at our kitchen. Collection 2 (Signature Sondesh) is for special occasions, gifting & when you are in the mood to give yourself a treat — made using pure desi A2 cow milk that has not been industrially processed, completely handcrafted end to end.",
+      "response": "Collection 1 (Aamar Mishti / \"আমার মিষ্টি\") is for indulgence for your sweet cravings at home or work — good local dairy milk. Partially mechanised, made in-house at our kitchen. Collection 2 (Signature Sondesh) is for special occasions, gifting & when you are in the mood to give yourself a treat — made using pure desi A2 cow milk that has not been industrially processed, completely handcrafted end to end.",
       "escalate": false,
       "source_ref": "client confirmation (Somdeb Ji) > collection differentiation"
     },

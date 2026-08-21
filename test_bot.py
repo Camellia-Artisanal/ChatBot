@@ -1595,8 +1595,81 @@ class TestCamelliaBot(unittest.TestCase):
         # Since history exists in DB, first-time greeting must NOT appear
         self.assertNotIn("If this is your first Camellia meal and the menu feels unfamiliar, I'll be happy to help you choose!", resp3)
 
+    def test_phase_c_24h_hybrid_expiry_model(self):
+        """Phase C: Test 24-hour hybrid expiry model (transient facts reset after 24h, name/history retained)."""
+        import time
+        from session_memory import session_memory
+
+        expiry_uid = "test_24h_expiry_user"
+        session_memory.clear_session(expiry_uid, "whatsapp")
+
+        # Step 1: User introduces name and creates transient state (order draft, flags)
+        sess = session_memory.get_session(expiry_uid, "whatsapp")
+        session_memory.extract_and_update_facts(expiry_uid, "whatsapp", "My name is Ananya")
+        sess["facts"]["order_draft"] = {"flavour": "jolbhora", "collection": "signature", "size": "500g", "quantity": 2}
+        sess["facts"]["cart"] = [{"item": "Jolbhora 500g"}]
+        sess["facts"]["savoury_crosssell_sent"] = True
+        sess["facts"]["awaiting_subscription_booking"] = True
+        sess["facts"]["image_card_sent"] = True
+
+        self.assertEqual(sess["facts"]["name"], "Ananya")
+        self.assertEqual(sess["facts"]["order_draft"]["flavour"], "jolbhora")
+        self.assertTrue(sess["facts"]["savoury_crosssell_sent"])
+
+        # Step 2: Return within 24h (e.g. 23 hours / 82800 seconds later)
+        now = time.time()
+        sess["last_updated"] = now - 82800
+        sess_23h = session_memory.get_session(expiry_uid, "whatsapp")
+
+        # Verify facts & order draft retained
+        self.assertEqual(sess_23h["facts"]["name"], "Ananya")
+        self.assertEqual(sess_23h["facts"]["order_draft"]["flavour"], "jolbhora")
+        self.assertEqual(len(sess_23h["facts"]["cart"]), 1)
+        self.assertTrue(sess_23h["facts"]["savoury_crosssell_sent"])
+
+        # Step 3: Return after >24h (e.g. 25 hours / 90000 seconds later)
+        sess["last_updated"] = now - 90000
+        sess_25h = session_memory.get_session(expiry_uid, "whatsapp")
+
+        # Verify transient facts reset while customer name is retained
+        self.assertEqual(sess_25h["facts"]["name"], "Ananya")
+        self.assertIsNone(sess_25h["facts"]["order_draft"]["flavour"])
+        self.assertEqual(len(sess_25h["facts"]["cart"]), 0)
+        self.assertFalse(sess_25h["facts"]["savoury_crosssell_sent"])
+        self.assertFalse(sess_25h["facts"]["awaiting_subscription_booking"])
+        self.assertFalse(sess_25h["facts"]["image_card_sent"])
+
+    def test_phase_d_ad_gate_savoury_subscription_regression(self):
+        """Phase D: Confirm Ad-Gate blocks organic Instagram DMs and allows Ad-Click / WhatsApp DMs for savoury/subscription templates."""
+        savoury_queries = [
+            "What is your savoury lunch menu?",
+            "Do you have weekly veg menu?",
+            "Tell me about your everyday meal subscription",
+            "How do I book subscription?",
+        ]
+
+        for q in savoury_queries:
+            # 1. Organic Instagram DM -> BLOCKED by Ad-Gate (left for manual reply)
+            resp_org, matched_org, tmpl_org, _ = responder.match_and_respond(q, user_id="ig_org_user", channel="instagram", referral_source=None)
+            self.assertFalse(matched_org, f"Organic IG DM should be blocked for '{q}'")
+            self.assertEqual(tmpl_org, "ad_gate_blocked")
+            self.assertEqual(resp_org, "")
+
+            # 2. Ad-Click Instagram DM (referral_source="ADS") -> ALLOWED
+
+            resp_ad, matched_ad, tmpl_ad, _ = responder.match_and_respond(q, user_id="ig_ad_user", channel="instagram", referral_source="ADS")
+            self.assertTrue(matched_ad, f"Ad IG DM should pass for '{q}'")
+            self.assertIsNotNone(tmpl_ad)
+
+            # 3. WhatsApp DM -> ALLOWED
+            resp_wa, matched_wa, tmpl_wa, _ = responder.match_and_respond(q, user_id="wa_user", channel="whatsapp")
+            self.assertTrue(matched_wa, f"WhatsApp DM should pass for '{q}'")
+            self.assertIsNotNone(tmpl_wa)
+
 if __name__ == "__main__":
     unittest.main()
+
+
 
 
 
