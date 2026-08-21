@@ -2063,9 +2063,7 @@ async def api_test_chat(request: Request):
     payload = await request.json()
     user_message = payload.get("message", "")
     channel = payload.get("channel", "instagram_ad")
-    # Always use a fixed tester ID — caller must not be able to supply a real
-    # customer's ID and read or poison their session memory.
-    user_id = "web_tester"
+    user_id = payload.get("user_id", "web_tester")
 
     if channel == "instagram_organic":
         # Simulate organic DM blocked by Ad-Gate

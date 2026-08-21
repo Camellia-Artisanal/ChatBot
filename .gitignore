@@ -27,3 +27,8 @@ test_camellia.db
 .idea/
 .ds_store
 
+# Scratch & temporary artifacts
+scratch/
+simulation_results.json
+
+
