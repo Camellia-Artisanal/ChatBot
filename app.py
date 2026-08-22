@@ -2080,10 +2080,14 @@ async def api_test_chat(request: Request):
     if channel == "instagram_ad":
         db.set_ad_qualified(user_id, "instagram", is_ad_qualified=True)
         ch_name = "instagram"
+        ref_source = "ADS"
     else:
         ch_name = "whatsapp"
+        ref_source = None
 
-    response_text, was_matched, template_id, image_url = responder.match_and_respond(user_message, user_id=user_id, channel=ch_name)
+    response_text, was_matched, template_id, image_url = responder.match_and_respond(
+        user_message, user_id=user_id, channel=ch_name, referral_source=ref_source
+    )
     db.log_conversation(user_id, ch_name, user_message, response_text, was_matched, template_id)
 
     if not was_matched:
