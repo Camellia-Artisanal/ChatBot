@@ -290,7 +290,7 @@ class DeterministicResponder:
                     "GUARD_allergen_nutfree_glutenfree": {"allergy", "allergies", "allergic", "allergen", "allergens", "peanut", "peanuts", "cashew", "cashews", "pistachio", "pistachios", "gluten", "contamination", "nut", "nuts"},
                     "GUARD_pickup_address_hours": {"pickup", "pick", "collect", "kitchen"},
                     "GUARD_shelf_life_storage": {"shelf", "storage", "refrigeration", "refrigerate", "fridge", "expiry", "spoil", "heat", "store", "last"},
-                    "GUARD_staff_names_manager_contact": {"owner", "founder", "chef", "cook", "somdeb", "manager", "staff", "guru"}
+                    "GUARD_staff_names_manager_contact": {"owner", "founder", "chef", "somdeb", "manager", "staff", "guru", "email"}
                 }
                 anchors = guard_anchors.get(tmpl_id, set())
                 if anchors and not any(a in lowered_text for a in anchors):
@@ -316,7 +316,7 @@ class DeterministicResponder:
                     score += 100
                 elif tmpl_id == "GUARD_pickup_address_hours" and re.search(r'\b(pickup address|kitchen address|self pickup|pick it up from kitchen|pick up from (your )?kitchen|pickup from (your )?kitchen|where is your kitchen|kitchen location|pickup timings|kitchen pickup timings)\b', lowered_text):
                     score += 100
-                elif tmpl_id == "GUARD_staff_names_manager_contact" and re.search(r'\b(who is the owner|who is the founder|who is the chef|who is the cook|who runs the kitchen|who is somdeb|chef name|owner name|founder name|staff names|manager|manager name)\b', lowered_text):
+                elif tmpl_id == "GUARD_staff_names_manager_contact" and re.search(r'\b(who is the owner|who is the founder|who is the chef|who is the cook|who runs the kitchen|who is somdeb|chef name|owner name|founder name|staff names|kitchen manager|who is the manager|manager name|manager email|email address|email id|your email)\b', lowered_text):
                     score += 100
                 elif tmpl_id == "GUARD_collection_differentiation" and re.search(r'\b(difference between collection|collection 1 vs collection 2|collection 1 and collection 2 difference|how do the collections differ|compare collection|how are the collections different)\b', lowered_text):
                     score += 100
@@ -346,6 +346,14 @@ class DeterministicResponder:
                     score += 80
                 elif tmpl_id == "sondesh_price_detailed" and re.search(r'\b(sondesh price|price of sondesh|cost of sondesh|how much is sondesh|price list|sondesh cost|sondesh rate|how many pieces)\b', lowered_text):
                     score += 70
+                elif tmpl_id == "savoury_best_time_to_book" and re.search(r'\b(best time to order|when should i book|when to book|best time to book|when should i order|how early to book|how far in advance|when to place order|best time to place order)\b', lowered_text):
+                    score += 80
+                elif tmpl_id == "savoury_delivery_time" and re.search(r'\b(savoury delivery time|delivery time for food|how long for food|when will my meal arrive|food dispatch time|meal delivery time|how long for lunch|how long for dinner|food delivery time|when will meal arrive)\b', lowered_text):
+                    score += 80
+                elif tmpl_id == "kolkata_expansion_info" and re.search(r'\b(kolkata|moving to kolkata|leaving delhi|expansion to kolkata|who runs the kitchen now|kolkata kitchen|relocating to kolkata)\b', lowered_text):
+                    score += 80
+                elif tmpl_id == "sondesh_crosssell_savoury" and re.search(r'\b(sondesh crosssell|also savoury|also meals|do you have food too|bengali meals|also cook meals|food menu too|do you also cook meals)\b', lowered_text):
+                    score += 80
 
             if is_guard:
                 if score > best_guard_score:
@@ -441,6 +449,20 @@ class DeterministicResponder:
                 response_text = response_text.rstrip() + crosssell_nudge
             elif tmpl_id == "savoury_crosssell_sondesh":
                 facts["savoury_crosssell_sent"] = True
+
+            # One-time sondesh cross-sell nudge logic (reverse direction: sondesh -> savoury)
+            sondesh_templates = {
+                "sondesh_price_detailed", "sondesh_price_general",
+                "classic_collection_details", "signature_collection_details",
+                "aamar_mishti_details", "signature_sondesh_details",
+                "jolbhora_talgash_details", "shelf_life_storage"
+            }
+            if tmpl_id in sondesh_templates and not facts.get("sondesh_crosssell_sent"):
+                facts["sondesh_crosssell_sent"] = True
+                crosssell_nudge = "\n\n*P.S.* We also prepare and deliver freshly cooked Bengali meals across Delhi NCR. I've attached this week's menu in case you'd like to have a look. Everything is cooked fresh in small batches, and some dishes are available only in limited quantities. If you'd like a recommendation based on whether you prefer vegetarian, fish or meat, just let me know — I'd be happy to help."
+                response_text = response_text.rstrip() + crosssell_nudge
+            elif tmpl_id == "sondesh_crosssell_savoury":
+                facts["sondesh_crosssell_sent"] = True
 
             if intro_greeting_prefix and not response_text.startswith("Nice to meet you"):
                 if response_text.startswith("Hi! "):
@@ -591,8 +613,8 @@ class DeterministicResponder:
             else:
                 target_images = [img_aamar_mishti, img_signature_sondesh]
 
-        # Savoury food intro — attach current weekly menu image card alongside text
-        elif template_id == "savoury_food_intro":
+        # Savoury food intro & Sondesh->Savoury cross-sell — attach current weekly menu image card alongside text
+        elif template_id in ["savoury_food_intro", "sondesh_crosssell_savoury"]:
             target_images = current_weekly_img
             formatted_text = default_response
 

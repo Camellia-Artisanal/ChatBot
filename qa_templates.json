@@ -667,13 +667,19 @@
         "owner name",
         "founder name",
         "chef name",
-        "manager",
+        "kitchen manager",
         "manager name",
-        "who is the manager"
+        "who is the manager",
+        "manager email",
+        "manager's email",
+        "email address",
+        "email id",
+        "what is your email",
+        "email"
       ],
-      "response": "Manager of Kitchens is Mr. Guru Dayal Singh, +91 8796551990 (same as the official WhatsApp number — there is no separate number).",
+      "response": "Manager of Kitchens is Mr. Guru Dayal Singh, +91 8796551990 (same as the official WhatsApp number — there is no separate number). You can also reach us by email at camellia.artisanal.gurgaon@gmail.com.",
       "escalate": false,
-      "source_ref": "client confirmation (Somdeb Ji) > kitchen manager"
+      "source_ref": "client confirmation (Somdeb Ji) > kitchen manager (email camellia.artisanal.gurgaon@gmail.com confirmed Phase E-continued)"
     },
 
     {
@@ -768,6 +774,59 @@
       "response": "We also make & send Bengali mishti - norom pak Sondesh. All milk protein, no gluten, mild sweet, no added fat - subtle natural flavours…. Handcrafted.",
       "escalate": false,
       "source_ref": "client Q&A script > savoury food ordering"
+    },
+
+    {
+      "id": "sondesh_crosssell_savoury",
+      "client_confirmed_date": "2026-08-24",
+      "triggers": [
+        "sondesh crosssell", "also savoury", "also meals", "do you have food too",
+        "bengali meals", "also cook meals", "meals across delhi ncr", "food menu too",
+        "savoury food", "do you also cook meals", "do you deliver meals"
+      ],
+      "response": "We also prepare and deliver freshly cooked Bengali meals across Delhi NCR. I've attached this week's menu in case you'd like to have a look. Everything is cooked fresh in small batches, and some dishes are available only in limited quantities. If you'd like a recommendation based on whether you prefer vegetarian, fish or meat, just let me know — I'd be happy to help.",
+      "escalate": false,
+      "source_ref": "client Q&A script > sondesh to savoury crosssell"
+    },
+
+    {
+      "id": "savoury_best_time_to_book",
+      "client_confirmed_date": "2026-08-24",
+      "triggers": [
+        "best time to order", "when should i book", "when to book", "best time to book",
+        "when should i order", "how early to book", "how far in advance", "when to place order",
+        "how early should i order", "best time to place order", "advance booking"
+      ],
+      "response": "We always recommend pre-ordering. It helps us ensure that the dishes you want are available, exactly as you'd like them. Since we cook everything in small batches, some dishes may sell out if you order at the last minute. Pre-ordering is the best way to avoid disappointment.",
+      "escalate": false,
+      "source_ref": "client Q&A script > savoury best time to book"
+    },
+
+    {
+      "id": "savoury_delivery_time",
+      "client_confirmed_date": "2026-08-24",
+      "triggers": [
+        "savoury delivery time", "delivery time for food", "how long for food",
+        "when will my meal arrive", "how long to deliver food", "food dispatch time",
+        "meal delivery time", "how long for lunch", "how long for dinner", "food delivery time",
+        "when will meal arrive", "dispatch time for food"
+      ],
+      "response": "Once your order is confirmed, we usually dispatch freshly prepared Bengali meals from our kitchen in Sushant Lok, Gurgaon within 45 minutes.\n\nDelivery time after that depends on the Porter rider's travel time, which varies based on traffic and the time of day.\n\nOur kitchen is open 10:00 AM – 7:30 PM every day. If you need any assistance with your order or delivery timing, feel free to message us here on DM or call/WhatsApp us directly at 8796551990. 🌸",
+      "escalate": false,
+      "source_ref": "client Q&A script > savoury food delivery time"
+    },
+
+    {
+      "id": "kolkata_expansion_info",
+      "client_confirmed_date": "2026-08-24",
+      "triggers": [
+        "kolkata", "moving", "leaving", "expansion", "who runs the kitchen now",
+        "kolkata expansion", "moving to kolkata", "leaving delhi", "expansion to kolkata",
+        "kolkata kitchen", "relocating to kolkata", "moving kitchen"
+      ],
+      "response": "We are expanding our operations to Kolkata! While our team is transitioning and expanding, our Gurgaon kitchen operations remain unchanged. Our kitchen in Sushant Lok, Gurgaon continues to be managed on-site by our Kitchen Manager, Mr. Guru Dayal Singh, alongside our all-women kitchen team who have been trained with us for over 4 years. The founders remotely monitor quality and operations daily, so nothing changes for our guests in Delhi NCR — we continue to craft and deliver fresh Sondesh and Bengali meals every day with the exact same quality and standards. 🌸",
+      "escalate": false,
+      "source_ref": "client Q&A script > kolkata expansion"
     }
   ],
 
@@ -775,9 +834,11 @@
     "description": "These are NOT answered by the bot — always forwarded to human team, per client requirement #4",
     "keywords": [
       "refund", "complaint", "cancel order", "talk to human", "speak to human",
-      "human agent", "manager", "custom order", "bulk order", "negotiation",
+      "human agent", "speak to manager", "speak to your manager", "speak to a manager", "talk to manager", "talk to your manager", "talk to a manager",
+      "ask for manager", "ask for your manager", "connect me to manager", "connect me to your manager", "call manager", "get manager", "where is my manager", "where is the manager", "where is manager",
+      "custom order", "bulk order", "negotiation",
       "payment link", "transaction failed", "payment failed", "upi failed",
-      "money deducted", "payment error", "payment issue", "amount deducted", "failed payment",
+      "money deducted", "payment error", "payment issue", "amount deducted", "failed payment", "no confirmation", "paid but no confirmation",
       "discount", "discounts", "bulk discount", "custom branding", "ribbons", "branding",
       "instead of", "can you do it for", "less price", "negotiate", "cheaper",
       "same menu last week", "best seller", "bestseller", "manager number", "manager's phone number",

@@ -45,6 +45,7 @@ class TestCamelliaBot(unittest.TestCase):
         gemini_responder._openai_cooldown_until = 0.0
         from session_memory import session_memory
         session_memory._sessions.clear()
+        responder.qa_data = responder._load_json(responder.qa_path)
         # Clear tables between tests
         with db.get_connection() as conn:
             cursor = conn.cursor()
@@ -282,11 +283,18 @@ class TestCamelliaBot(unittest.TestCase):
         self.assertFalse(matched3)
         self.assertEqual(tmpl3, "explicit_escalation")
 
-        # 4. Out-of-context query with AI disabled -> Escalated
+        # 3b. Manager complaint/demand framing ("I want to speak to your manager NOW") -> Escalated, NOT matched to info template
+        _, matched3b, tmpl3b, _ = responder.match_and_respond("I want to speak to your manager NOW")
+        self.assertFalse(matched3b, "Manager complaint framing must escalate to human, not match info template")
+        self.assertEqual(tmpl3b, "explicit_escalation", "Manager complaint framing must map to explicit_escalation")
+
+        # 4. Out-of-context query with AI disabled -> Escalated to deterministic fallback response
         with patch.object(config, "GEMINI_ENABLED", False):
-            _, matched4, tmpl4, _ = responder.match_and_respond("What is the capital of France?")
+            resp4, matched4, tmpl4, _ = responder.match_and_respond("What is the capital of France?")
             self.assertFalse(matched4)
             self.assertIsNone(tmpl4)
+            expected_fallback = responder.qa_data.get("escalation_triggers", {}).get("fallback_response")
+            self.assertEqual(resp4, expected_fallback, "Deterministic fallback message must match exact fallback_response text")
 
     def test_whatsapp_adapter_flow(self):
         """PRD Requirement #2: WhatsApp integration handling."""
@@ -1546,6 +1554,72 @@ class TestCamelliaBot(unittest.TestCase):
         self.assertEqual(tmpl3, "savoury_crosssell_sondesh")
         self.assertIn("We also make & send Bengali mishti - norom pak Sondesh", resp3)
         self.assertIn("subtle natural flavours", resp3)
+
+    def test_phase_e_sondesh_crosssell_savoury_nudge_and_template(self):
+        """Phase E: Test sondesh -> savoury cross-sell nudge, once-per-session cap, and menu image attachment."""
+        from session_memory import session_memory
+        uid = "test_sondesh_crosssell_user"
+        session_memory.clear_session(uid, "whatsapp")
+
+        # Turn 1: Sondesh query -> should append reverse cross-sell nudge
+        msg1 = "What is the sondesh price?"
+        resp1, matched1, tmpl1, img1 = responder.match_and_respond(msg1, user_id=uid, channel="whatsapp")
+        self.assertTrue(matched1)
+        self.assertEqual(tmpl1, "sondesh_price_detailed")
+        self.assertIn("We also prepare and deliver freshly cooked Bengali meals across Delhi NCR", resp1)
+        self.assertTrue(session_memory.get_facts(uid, "whatsapp").get("sondesh_crosssell_sent"))
+
+        # Turn 2: Second sondesh query -> NO duplicate cross-sell nudge
+        msg2 = "How long to dispatch sondesh?"
+        resp2, matched2, tmpl2, _ = responder.match_and_respond(msg2, user_id=uid, channel="whatsapp")
+        self.assertTrue(matched2)
+        self.assertEqual(tmpl2, "sondesh_dispatch_time")
+        self.assertNotIn("We also prepare and deliver freshly cooked Bengali meals", resp2)
+
+        # Direct inquiry for sondesh_crosssell_savoury template
+        msg3 = "Do you also cook meals?"
+        resp3, matched3, tmpl3, img3 = responder.match_and_respond(msg3, user_id=uid, channel="whatsapp")
+        self.assertTrue(matched3)
+        self.assertEqual(tmpl3, "sondesh_crosssell_savoury")
+        self.assertIn("We also prepare and deliver freshly cooked Bengali meals across Delhi NCR", resp3)
+        self.assertIsNotNone(img3)
+
+    def test_phase_e_savoury_best_time_to_book(self):
+        """Phase E: Test savoury_best_time_to_book template response."""
+        msg = "What is the best time to order food?"
+        resp, matched, tmpl, _ = responder.match_and_respond(msg)
+        self.assertTrue(matched)
+        self.assertEqual(tmpl, "savoury_best_time_to_book")
+        self.assertIn("We always recommend pre-ordering", resp)
+        self.assertIn("avoid disappointment", resp)
+
+    def test_phase_e_savoury_delivery_time(self):
+        """Phase E: Test savoury_delivery_time template response with 45 min figure."""
+        msg = "What is the delivery time for food?"
+        resp, matched, tmpl, _ = responder.match_and_respond(msg)
+        self.assertTrue(matched)
+        self.assertEqual(tmpl, "savoury_delivery_time")
+        self.assertIn("within 45 minutes", resp)
+        self.assertIn("8796551990", resp)
+
+    def test_phase_e_kolkata_expansion_info(self):
+        """Phase E: Test kolkata_expansion_info template response."""
+        msg = "Are you moving to Kolkata?"
+        resp, matched, tmpl, _ = responder.match_and_respond(msg)
+        self.assertTrue(matched)
+        self.assertEqual(tmpl, "kolkata_expansion_info")
+        self.assertIn("expanding our operations to Kolkata!", resp)
+        self.assertIn("Mr. Guru Dayal Singh", resp)
+        self.assertIn("nothing changes for our guests in Delhi NCR", resp)
+
+    def test_phase_e_manager_contact_email_updated(self):
+        """Phase E: Test GUARD_staff_names_manager_contact updated with real email."""
+        msg = "What is the kitchen manager email address?"
+        resp, matched, tmpl, _ = responder.match_and_respond(msg)
+        self.assertTrue(matched)
+        self.assertEqual(tmpl, "GUARD_staff_names_manager_contact")
+        self.assertIn("camellia.artisanal.gurgaon@gmail.com", resp)
+        self.assertIn("Mr. Guru Dayal Singh", resp)
 
     def test_phase_c_subscription_booking_nudge(self):
         """Phase C: Test subscription_details response explicitly ends with 'Would you like to book?'."""
