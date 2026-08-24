@@ -19,9 +19,12 @@ from session_memory import session_memory
 from order_calculator import order_calculator
 from config import config
 
+from database import db
+
 class Test25AgentStressScenarios(unittest.TestCase):
     def setUp(self):
-        # Reset session memory before each agent test
+        # Reset session memory and initialize DB before each agent test
+        db.init_db()
         self.responder = DeterministicResponder()
         session_memory._sessions.clear()
 
