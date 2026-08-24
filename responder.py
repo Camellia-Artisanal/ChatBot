@@ -173,18 +173,27 @@ class DeterministicResponder:
         # 2.5 Check if accumulated order_draft slots form a complete order receipt
         order_draft = facts.get("order_draft", {})
         existing_cart = facts.get("cart", [])
-        is_general_menu_query = any(phrase in lowered_text for phrase in [
+        has_explicit_order_action = any(verb in lowered_text for verb in [
+            "want to order", "i want to order", "please order", "place order", "i would like to order",
+            "book an order", "confirm order", "need to order", "chahiye", "bhejo",
+            "order 1", "order 2", "order 3", "order 4", "order 5"
+        ])
+        is_general_menu_query = (not has_explicit_order_action) and any(phrase in lowered_text for phrase in [
             "full menu", "send menu", "price list", "show menu", "what is your menu",
             "how much is sondesh", "sondesh price", "how much sondesh", "sondesh cost", "cost of sondesh", "price of sondesh",
             "tell me about your product", "about your product", "about your products", "what products", "your products", "product", "products",
             "how can you assist", "how can you help", "what can you do", "help me", "assist me",
             "bangalore", "bengaluru", "mumbai", "pune", "kolkata", "hyderabad", "chennai", "jaipur", "ahmedabad", "chandigarh", "lucknow",
             "courier to", "deliver to bangalore", "deliver to mumbai", "deliver to pune", "deliver to kolkata", "out of ncr", "outside ncr",
-            "allergy", "allergies", "allergic", "nut allergy", "nut-free", "nut free",
+            "allergy", "allergies", "allergic", "nut allergy", "nut-free", "nut free", "nut allergens",
             "order status", "track my order", "where is my order", "paid but no confirmation", "paid 2 hours ago", "paid 1 hour ago", "order tracking",
             "kitchen address", "pickup address", "self pickup", "pick it up from kitchen", "kitchen timings",
             "how to pay", "pay", "payment", "upi", "qr", "qr code", "gpay", "paytm", "phonepe", "cod", "cash on delivery",
-            "shelf life", "how long", "storage", "refrigeration", "refrigerate", "fridge", "spoil", "expiry"
+            "shelf life", "how long", "storage", "refrigeration", "refrigerate", "fridge", "spoil", "expiry",
+            "how to order", "how do i order", "how can i order", "how to place", "place an order", "ordering process",
+            "dispatch time", "how fast", "best time to order", "best time to book", "pre-order", "pre order",
+            "subscription", "subscriptions", "what sweets", "sweet boxes", "cook meals", "bengali meals",
+            "packaging", "eco friendly", "eco-friendly", "bento", "bento details", "bento meal", "bento box", "bento combo", "bento combos", "what combos", "what is my name"
         ])
         if not is_general_menu_query:
             calc_result = order_calculator.parse_and_calculate(user_message, existing_draft=order_draft, existing_cart=existing_cart)
@@ -219,16 +228,72 @@ class DeterministicResponder:
                     if intro_greeting_prefix:
                         ans = intro_greeting_prefix + ans
                     session_memory.add_turn(user_id, channel, user_message, ans)
-                    return ans, True, f"learned_kb_{item.get('id')}", None
-        except Exception as e:
-            log.warning("Learned knowledge check error: %s", e)
+                    return ans, False, "self_healing_kb", None
+        except Exception:
+            pass
+
+        # 3. Clean Conversational Preamble to isolate Business Intent
+        cleaned_business_text = re.sub(
+            r'^(hi|hello|hey|good morning|good afternoon|good evening|namaste|nomoshkar|greetings|hie|hii+)[,\s!.-]*', '', lowered_text
+        ).strip()
+        cleaned_business_text = re.sub(
+            r'^(can you tell me|could you please tell me|i want to know|i would like to know|please let me know|please tell me|can i ask|i am looking for|im looking for|looking for|tell me)[,\s!.-]*', '', cleaned_business_text
+        ).strip()
+        cleaned_business_text = re.sub(
+            r'[,\s!.-]*(thanks|thank you|pls|please|hi|hello|hey)$', '', cleaned_business_text
+        ).strip()
+
+        cleaned_words = set(re.findall(r'\b\w+\b', cleaned_business_text)) if cleaned_business_text else set()
+
+        # Check if user message contains substantive business inquiry
+        has_business_query = bool(
+            (cleaned_words - STOP_WORDS) or
+            any(kw in lowered_text for kw in [
+                "sondesh", "menu", "price", "cost", "deliver", "delivery", "bento", "box", "order",
+                "halal", "oil", "payment", "cod", "upi", "gift", "gifting", "jolbhora", "sugar",
+                "flavour", "flavors", "sweet", "sweets", "curry", "meal", "allergy", "allergies",
+                "nut", "pickup", "tracking", "subscription", "subscriptions", "alacarte", "dispatch",
+                "product", "products", "recommend", "recommendation", "options"
+            ])
+        )
 
         templates = self.qa_data.get("templates", [])
-        
-        best_guard_template = None
-        best_guard_score = 0
-        best_normal_template = None
-        best_normal_score = 0
+
+        # Priority Tier Definitions
+        TIER_1_GUARDS = {
+            "GUARD_collection_differentiation", "GUARD_customization_flavour_mixing",
+            "GUARD_halal_ingredients_oil", "GUARD_payment_method",
+            "GUARD_allergen_nutfree_glutenfree", "GUARD_pickup_address_hours",
+            "GUARD_shelf_life_storage", "GUARD_staff_names_manager_contact"
+        }
+
+        TIER_2_SPECIFIC_INTENTS = {
+            "sondesh_price_detailed", "sondesh_classic_rose", "sondesh_mango_kesar",
+            "sondesh_nolen_gur", "nolen_gur_aamar", "jolbhora", "kanchagolla", "mahua_signature_special",
+            "aamar_mishti_collection", "signature_collection", "pack_size_250g",
+            "pack_size_500g", "pack_size_1kg", "weekly_menu_veg", "weekly_menu_nonveg",
+            "combo_bento", "delivery_area", "delivery_out_of_area", "delivery_time",
+            "packaging", "contact_social", "how_to_order", "freshness_ingredients",
+            "order_status_tracking", "jolbhora_talgash_details", "sugar_free_options",
+            "recall_order_flavour", "savoury_food_intro", "bento_details",
+            "subscription_details", "subscription_booking_steps", "alacarte_prebooking_steps",
+            "sondesh_dispatch_time", "savoury_crosssell_sondesh", "sondesh_crosssell_savoury",
+            "savoury_best_time_to_book", "savoury_delivery_time", "kolkata_expansion_info",
+            "order_next_steps", "sondesh_price_general", "recall_name"
+        }
+
+        TIER_3_GENERIC_INFO = {
+            "product_overview", "know_more", "bot_capabilities", "bot_identity",
+            "artisanal_differentiation"
+        }
+
+        TIER_4_GREETING_INTRO = {
+            "greeting", "name_introduction"
+        }
+
+        best_template = None
+        best_composite_score = -1
+        best_score = 0
 
         for tmpl in templates:
             tmpl_id = tmpl.get("id", "")
@@ -241,15 +306,19 @@ class DeterministicResponder:
                 trigger_words = set(re.findall(r'\b\w+\b', trigger_lower))
                 t_score = 0
                 
-                # Check 1: Exact full word boundary regex match
+                # Check 1: Exact full word boundary regex match against lowered_text OR cleaned_business_text
                 pattern = r'\b' + re.escape(trigger_lower) + r'\b'
-                if re.search(pattern, lowered_text):
+                if re.search(pattern, lowered_text) or (cleaned_business_text and re.search(pattern, cleaned_business_text)):
                     t_score = len(trigger_words) * 10 + 10
                 else:
                     # Check 2: Substantive (non-stopword) token intersection
                     substantive_trigger_words = trigger_words - STOP_WORDS
                     substantive_user_words = user_words - STOP_WORDS
+                    substantive_cleaned_words = cleaned_words - STOP_WORDS
+                    
                     matching_substantive = substantive_trigger_words.intersection(substantive_user_words)
+                    if substantive_cleaned_words:
+                        matching_substantive = matching_substantive.union(substantive_trigger_words.intersection(substantive_cleaned_words))
                     
                     if matching_substantive:
                         coverage = len(matching_substantive) / max(len(substantive_trigger_words), 1)
@@ -261,17 +330,17 @@ class DeterministicResponder:
                             if len(matching_substantive) >= 2 or coverage >= 0.6:
                                 t_score = len(matching_substantive) * 6 + int(coverage * 6)
                     else:
-                        # Check 3: Fuzzy word similarity match (Tiered: len >= 3 allowed with stricter threshold)
+                        # Check 3: Fuzzy word similarity match
                         fuzzy_matches = 0
                         matched_t_words = set()
-                        for u_word in substantive_user_words:
+                        eval_words = substantive_cleaned_words if substantive_cleaned_words else substantive_user_words
+                        for u_word in eval_words:
                             if len(u_word) < 3:
                                 continue
                             for t_word in substantive_trigger_words:
                                 if len(t_word) < 3 or t_word in matched_t_words:
                                     continue
                                 ratio = difflib.SequenceMatcher(None, u_word, t_word).ratio()
-                                # 3-letter words require stricter similarity (>= 0.83), 4+ letter words use 0.80
                                 threshold = 0.83 if min(len(u_word), len(t_word)) == 3 else 0.80
                                 if ratio >= threshold:
                                     fuzzy_matches += 1
@@ -287,7 +356,7 @@ class DeterministicResponder:
 
             score = max_trigger_score
 
-            # If it is a GUARD template, require at least one guard-specific anchor keyword in user text
+            # Guard Anchor Enforcement
             if is_guard:
                 guard_anchors = {
                     "GUARD_collection_differentiation": {"difference", "differ", "differs", "compare"},
@@ -303,23 +372,21 @@ class DeterministicResponder:
                 if anchors and not any(a in lowered_text for a in anchors):
                     score = 0
 
-            # Zero out GUARD_shelf_life_storage if jolbhora is mentioned (unconfirmed Jolbhora facts must escalate)
             if tmpl_id == "GUARD_shelf_life_storage" and "jolbhora" in lowered_text:
                 score = 0
 
-            # Suppress name_introduction template when we already captured name as prefix for compound inquiries
+            # Suppress greeting/name intro when user message contains substantive business inquiry
+            if has_business_query and tmpl_id in TIER_4_GREETING_INTRO:
+                score = 0
+
             if intro_greeting_prefix and tmpl_id == "name_introduction":
                 score = 0
 
-            # Give non-greeting templates priority over generic greeting if substantive product keywords are present
-            if tmpl_id not in ["greeting", "name_introduction"] and score > 0:
-                score += 2
-
-            # Priority boosts for specialized intent categories
+            # Specific Domain Boosts
             if score > 0:
                 if tmpl_id == "GUARD_halal_ingredients_oil" and re.search(r'\b(halal|jhatka|cooking oil|mustard oil|what oil|which oil|which cooking oil|what cooking oil|oil do you cook|cooking medium|what cooking medium)\b', lowered_text):
                     score += 100
-                elif tmpl_id == "GUARD_allergen_nutfree_glutenfree" and (re.search(r'\b(nut allergy|nuts allergy|severe allergy|allergic to nuts|peanut allergy|cashew allergy|pistachio allergy|gluten allergy|cross contamination|allergen|allergens|nut allergen)\b', lowered_text) or (re.search(r'\b(allergy|allergic|allergies)\b', lowered_text) and re.search(r'\b(nut|nuts|severe|peanut|cashew|pistachio|gluten)\b', lowered_text))):
+                elif tmpl_id == "GUARD_allergen_nutfree_glutenfree" and (re.search(r'\b(nut allergy|nuts allergy|severe allergy|allergic to nuts|peanut allergy|cashew allergy|pistachio allergy|gluten allergy|cross contamination|allergen|allergens|nut allergen|contain nut|contain nuts)\b', lowered_text) or (re.search(r'\b(allergy|allergic|allergies)\b', lowered_text) and re.search(r'\b(nut|nuts|severe|peanut|cashew|pistachio|gluten)\b', lowered_text))):
                     score += 100
                 elif tmpl_id == "GUARD_payment_method" and re.search(r'\b(how to pay|how do i pay|how can i pay|payment method|payment methods|payment options|pay via|pay with|pay by|cod|cash on delivery|upi qr|qr code|gpay|paytm|phonepe|net banking|credit card|debit card)\b', lowered_text):
                     score += 100
@@ -328,9 +395,7 @@ class DeterministicResponder:
                         score = 0
                     else:
                         score += 100
-                elif tmpl_id == "GUARD_pickup_address_hours" and re.search(r'\b(pickup address|kitchen address|self pickup|pick it up from kitchen|pick up from (your )?kitchen|pickup from (your )?kitchen|where is your kitchen|kitchen location|pickup timings|kitchen pickup timings)\b', lowered_text):
-                    score += 100
-                elif tmpl_id == "GUARD_staff_names_manager_contact" and re.search(r'\b(who is the owner|who is the founder|who is the chef|who is the cook|who runs the kitchen|who is somdeb|chef name|owner name|founder name|staff names|kitchen manager|who is the manager|manager name|manager email|email address|email id|your email)\b', lowered_text):
+                elif tmpl_id == "GUARD_staff_names_manager_contact" and re.search(r'\b(who is the owner|who is the founder|who is the chef|who is the cook|who runs the kitchen now|who is somdeb|chef name|owner name|founder name|staff names|kitchen manager|who is the manager|manager name|manager email|email address|email id|your email)\b', lowered_text):
                     score += 100
                 elif tmpl_id == "GUARD_collection_differentiation" and re.search(r'\b(difference between collection|collection 1 vs collection 2|collection 1 and collection 2 difference|how do the collections differ|compare collection|how are the collections different)\b', lowered_text):
                     score += 100
@@ -343,51 +408,64 @@ class DeterministicResponder:
                 ):
                     score += 50
                 elif tmpl_id == "combo_bento" and any(b in lowered_text for b in ["bento", "combo"]):
-                    score += 50
+                    score += 100
+                elif tmpl_id == "packaging" and any(p in lowered_text for p in ["packaging", "package", "packeging", "box material", "eco friendly", "eco-friendly"]):
+                    score += 100
+                elif tmpl_id == "sondesh_nolen_gur" and re.search(r'\b(nolen gur|nolen gur sondesh)\b', lowered_text) and not any(c in lowered_text for c in ["collection 1", "collection1", "aamar"]):
+                    score += 150
+                elif tmpl_id == "nolen_gur_aamar" and re.search(r'\b(nolen gur)\b', lowered_text) and any(c in lowered_text for c in ["collection 1", "collection1", "aamar"]):
+                    score += 150
+                elif tmpl_id == "kanchagolla" and re.search(r'\b(kanchagolla|kancha golla)\b', lowered_text):
+                    score += 150
+                elif tmpl_id == "pack_size_250g" and re.search(r'\b(250g|250 g)\b', lowered_text) and any(w in lowered_text for w in ["how many", "pieces", "pcs", "box", "pack", "quantity"]):
+                    score += 150
                 elif tmpl_id == "subscription_booking_steps" and facts.get("awaiting_subscription_booking") and re.search(r'\b(how (do i|to|can i) (order|book)|how to get started|book|booking steps|next steps|how do i start)\b', lowered_text):
                     score += 120
-                elif tmpl_id == "subscription_booking_steps" and re.search(r'\b(how to book subscription|book subscription|start subscription|subscribe|how do i book subscription|booking steps for subscription|next steps for subscription)\b', lowered_text):
+                elif tmpl_id == "subscription_booking_steps" and re.search(r'\b(how to book subscription|book subscription|start subscription|subscribe|how do i book subscription|booking steps for subscription|next steps for subscription|supscription)\b', lowered_text):
                     score += 100
-                elif tmpl_id == "subscription_details" and re.search(r'\b(subscription|meal plan|everyday meal|meal subscription|5 meals package|5 meals)\b', lowered_text):
+                elif tmpl_id == "subscription_details" and re.search(r'\b(subscription|subscriptions|meal plan|everyday meal|meal subscription|5 meals package|5 meals)\b', lowered_text):
                     score += 80
-                elif tmpl_id == "bento_details" and re.search(r'\b(bento|bengali bento|bento box|bento details|bento tiers|bento prices|bento pricing|bento meal)\b', lowered_text):
+                elif tmpl_id == "bento_details" and re.search(r'\b(bento|bengali bento|bento box|bento details|bento tiers|bento prices|bento pricing|bento meal|bintow)\b', lowered_text):
                     score += 80
                 elif tmpl_id == "savoury_food_intro" and re.search(r'\b(lunch menu|dinner options|savoury food|bengali meals|lunch options|dinner menu|savoury menu|bengali lunch|bengali dinner|3 ways to order|savoury dishes|savoury ordering)\b', lowered_text):
                     score += 80
-                elif tmpl_id == "alacarte_prebooking_steps" and re.search(r'\b(how to order from menu|how to order item from menu|pre-book|prebook|pre book|pre-order savoury|preorder savoury|how to order alacarte|order alacarte|order à la carte)\b', lowered_text):
+                elif tmpl_id == "alacarte_prebooking_steps" and re.search(r'\b(how to order from menu|how to order item from menu|pre-book|prebook|pre book|pre-order savoury|preorder savoury|how to order alacarte|order alacarte|order à la carte|pre-order ala carte)\b', lowered_text):
                     score += 80
-                elif tmpl_id == "sondesh_dispatch_time" and re.search(r'\b(how long to deliver|dispatch time|how fast can you deliver|dispatch timing|prep time|how long to dispatch|sondesh dispatch time)\b', lowered_text):
+                elif tmpl_id == "sondesh_dispatch_time" and re.search(r'\b(how long to deliver|dispatch time|how fast can you deliver|dispatch timing|prep time|how long to dispatch|sondesh dispatch time|how fast can you dispatch)\b', lowered_text):
                     score += 80
                 elif tmpl_id == "sondesh_price_detailed" and re.search(r'\b(sondesh price|price of sondesh|cost of sondesh|how much is sondesh|price list|sondesh cost|sondesh rate|how many pieces)\b', lowered_text):
-                    score += 70
+                    has_specific_flavour = any(fl in lowered_text for fl in ["nolen gur", "kanchagolla", "250g", "500g", "1kg", "jolbhora", "mahua", "kesar", "rose", "mango", "vanilla", "cinnamon"])
+                    if not has_specific_flavour:
+                        score += 70
                 elif tmpl_id == "savoury_best_time_to_book" and re.search(r'\b(best time to order|when should i book|when to book|best time to book|when should i order|how early to book|how far in advance|when to place order|best time to place order)\b', lowered_text):
                     score += 80
-                elif tmpl_id == "savoury_delivery_time" and re.search(r'\b(savoury delivery time|delivery time for food|how long for food|when will my meal arrive|food dispatch time|meal delivery time|how long for lunch|how long for dinner|food delivery time|when will meal arrive)\b', lowered_text):
+                elif tmpl_id == "savoury_delivery_time" and re.search(r'\b(savoury delivery time|delivery time for food|how long for food|when will my meal arrive|food dispatch time|meal delivery time|how long for lunch|how long for dinner|food delivery time|when will meal arrive|delvery time)\b', lowered_text):
+                    score += 80
+                elif tmpl_id == "order_status_tracking" and re.search(r'\b(order status|where is my order|ordr status|where is my ordr|ordr)\b', lowered_text):
                     score += 80
                 elif tmpl_id == "kolkata_expansion_info" and re.search(r'\b(kolkata|moving to kolkata|leaving delhi|expansion to kolkata|who runs the kitchen now|kolkata kitchen|relocating to kolkata)\b', lowered_text):
                     score += 80
-                elif tmpl_id == "sondesh_crosssell_savoury" and re.search(r'\b(sondesh crosssell|also savoury|also meals|do you have food too|bengali meals|also cook meals|food menu too|do you also cook meals)\b', lowered_text):
+                elif tmpl_id == "sondesh_crosssell_savoury" and re.search(r'\b(sondesh crosssell|also savoury|also meals|do you have food too|bengali meals|also cook meals|food menu too|do you also cook meals|cook bengali meals)\b', lowered_text):
+                    score += 80
+                elif tmpl_id == "how_to_order" and re.search(r'\b(how to order|how do i order|how can i order|how to place an order|how do i place an order|i want to place an order|how to buy)\b', lowered_text):
                     score += 80
 
-            if is_guard:
-                if score > best_guard_score:
-                    best_guard_score = score
-                    best_guard_template = tmpl
-            else:
-                if score > best_normal_score:
-                    best_normal_score = score
-                    best_normal_template = tmpl
+            # Calculate Tier Multiplier
+            if tmpl_id in TIER_1_GUARDS:
+                tier_multiplier = 10000
+            elif tmpl_id in TIER_2_SPECIFIC_INTENTS:
+                tier_multiplier = 1000
+            elif tmpl_id in TIER_3_GENERIC_INFO:
+                tier_multiplier = 100
+            else: # TIER_4_GREETING_INTRO
+                tier_multiplier = 1
 
-        # Rule 3: Any template whose ID starts with GUARD_ takes absolute priority over every other matching template, regardless of keyword-match count.
-        if best_guard_template and best_guard_score >= 4:
-            best_template = best_guard_template
-            best_score = best_guard_score
-        elif best_normal_template and best_normal_score >= 4:
-            best_template = best_normal_template
-            best_score = best_normal_score
-        else:
-            best_template = None
-            best_score = 0
+            composite_score = (score * tier_multiplier) if score >= 4 else 0
+
+            if composite_score > best_composite_score:
+                best_composite_score = composite_score
+                best_template = tmpl
+                best_score = score
 
         # Require a minimum matching threshold (score >= 4) in hybrid/deterministic mode
         if best_template and best_score >= 4:

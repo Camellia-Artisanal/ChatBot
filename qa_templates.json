@@ -5,16 +5,20 @@
     "matching_type": "case-insensitive substring / fuzzy keyword match (no LLM reasoning, no semantic guessing)",
     "min_confidence": "At least 1 strong keyword match required. Generic words alone (e.g. 'price', 'have') should NOT fire a template without a product keyword alongside them."
   },
-
   "templates": [
-
     {
       "id": "greeting",
-      "triggers": ["hi", "hello", "hey", "namaste", "good morning", "good evening"],
+      "triggers": [
+        "hi",
+        "hello",
+        "hey",
+        "namaste",
+        "good morning",
+        "good evening"
+      ],
       "response": "Hi! 👋 Welcome to Camellia Artisanal — Bengal-rooted, artisanal food. Ask us about our Sondesh flavours & prices, weekly menu, or delivery — happy to help!",
       "escalate": false
     },
-
     {
       "id": "bot_identity",
       "triggers": [
@@ -46,7 +50,6 @@
       "escalate": false,
       "source_ref": "brand identity & assistant introduction"
     },
-
     {
       "id": "bot_capabilities",
       "triggers": [
@@ -75,7 +78,6 @@
       "escalate": false,
       "source_ref": "brand identity & assistant capabilities"
     },
-
     {
       "id": "product_overview",
       "triggers": [
@@ -112,7 +114,6 @@
       "note": "Sends 3 cards: Aamar Mishti, Signature Sondesh, and current weekly menu.",
       "source_ref": "client Q&A script > PRODUCTS"
     },
-
     {
       "id": "name_introduction",
       "triggers": [
@@ -131,7 +132,6 @@
       "response": "Nice to meet you! 👋 Welcome to Camellia Artisanal. Ask us about our Sondesh flavours & prices, weekly menu, or delivery — happy to help!",
       "escalate": false
     },
-
     {
       "id": "recall_name",
       "triggers": [
@@ -150,174 +150,478 @@
       "response": "Yes! You introduced yourself earlier. How can I assist you today with our Sondesh or weekly menu?",
       "escalate": false
     },
-
     {
       "id": "know_more",
       "triggers": [
-        "want to know more", "know more", "tell me more", "more details", "more info", "more information",
-        "about your brand", "about camellia", "what do you offer", "send the menu", "share the menu",
-        "menu card", "full menu", "your collections", "collections", "both collections"
+        "want to know more",
+        "know more",
+        "tell me more",
+        "more details",
+        "more info",
+        "more information",
+        "about your brand",
+        "about camellia",
+        "what do you offer",
+        "send the menu",
+        "share the menu",
+        "menu card",
+        "full menu",
+        "your collections",
+        "collections",
+        "both collections"
       ],
       "response": "Hi! Thanks for getting in touch. 🌸\n\nAt Camellia.artisanal, every Sondesh is made from scratch using time-tested traditional recipes. We work with small-batch artisanal farmers, trusted dairies, and carefully selected partners — never general retail sourcing. An all-women team makes the sondesh for you.\n\nWe currently offer two collections:\n\n*Collection 1 — Aamar Mishti আমার মিষ্টি*\nIndulgence for sweet cravings at home or work — good dairy milk, partially mechanised, made in-house at our kitchen.\n\n*Collection 2 — Signature Collection*\nMishti for special occasions, gifting & when you are in the mood to give yourself a treat — made using pure desi A2 cow milk that has not been industrially processed. Completely handcrafted end to end.\n\nPorter charges are on actuals.\n\n*Also —* we prepare and deliver freshly cooked Bengali meals across Delhi NCR. Sharing this week's menu too. Everything is cooked fresh in small batches, and some dishes are available only in limited quantities.\n\nIf you'd like a recommendation based on whether you prefer vegetarian, fish or meat, just let me know — happy to help. Please feel free to ask anything before confirming! 🙏",
       "escalate": false,
       "note": "Sends 3 cards in sequence: Aamar Mishti, Signature Sondesh, and the current weekly menu.",
       "source_ref": "client Q&A script > GENERAL + ADDITIONAL"
     },
-
     {
       "id": "order_next_steps",
-      "triggers": ["final selection", "this is my final", "my address is", "address and phone", "what are the next steps", "next steps", "confirm my order", "confirm order", "place the order", "here is my address"],
+      "triggers": [
+        "final selection",
+        "this is my final",
+        "my address is",
+        "address and phone",
+        "what are the next steps",
+        "next steps",
+        "confirm my order",
+        "confirm order",
+        "place the order",
+        "here is my address"
+      ],
       "response": "Wonderful — thank you! 🌸\n\nOur team (+91 87965 51990) has been notified of your order request and recent chat history. We will connect with you shortly on WhatsApp/Call to verify your address, share your official invoice, and confirm delivery timing!\n\nFeel free to ask any questions in the meantime. 🙏",
       "escalate": true,
       "source_ref": "client Q&A script > QUESTION"
     },
-
     {
       "id": "delivery_time",
-      "triggers": ["how much time", "how long does it take", "delivery time", "how soon", "when will it arrive", "dispatch time", "kitchen timings", "kitchen hours", "what time do you open", "same day delivery", "delivery hours", "what are your delivery hours", "what's your delivery hours"],
+      "triggers": [
+        "how much time",
+        "how long does it take",
+        "delivery time",
+        "how soon",
+        "when will it arrive",
+        "dispatch time",
+        "kitchen timings",
+        "kitchen hours",
+        "what time do you open",
+        "same day delivery",
+        "delivery hours",
+        "what are your delivery hours",
+        "what's your delivery hours",
+        "how long does delivery take",
+        "how long delivery takes",
+        "delivery take how long",
+        "how long does it take to deliver",
+        "how fast is delivery"
+      ],
       "response": "Hi! Thank you for getting in touch.\n\nOnce your sondesh order is confirmed, we usually dispatch it from our kitchen in Sushant Lok, Gurgaon within 15 minutes. Kanchagolla takes about 30 minutes. Jolbhora takes about an hour.\n\nDelivery time after that depends on the Porter rider's travel time, which varies based on traffic and the time of day.\n\nOur kitchen is open 10:00 AM – 7:30 PM every day. We always request a pre-order so we can make and send exactly what you want — we make in small batches, so we sometimes run out of stock. 🌸",
       "escalate": false,
       "source_ref": "client Q&A script > TIME"
     },
-
     {
       "id": "nolen_gur_aamar",
-      "triggers": ["nolen gur aamar", "last batch", "nolen gur aamar sondesh", "aamar nolen gur"],
+      "triggers": [
+        "nolen gur aamar",
+        "last batch",
+        "nolen gur aamar sondesh",
+        "aamar nolen gur",
+        "is nolen gur sondesh available in collection 1",
+        "nolen gur sondesh in collection 1",
+        "collection 1 nolen gur"
+      ],
       "response": "Hi! Thanks for getting in touch. 🌸\n\nAt Camellia.artisanal, every Sondesh is made from scratch using time-tested traditional recipes. We work with small-batch artisanal farmers, trusted dairies, and carefully selected partners — never general retail sourcing. An all-women team makes the sondesh for you.\n\nOur Nolen Gur Sondesh from the Aamar Mishti collection is ₹600 for a box of 9 pieces (250g), ₹1100 for a box of 18 pieces (500g) & ₹2000 for 36 pieces (1kg).\n\nWe also have other flavours — sharing the full menu below.",
       "escalate": false,
       "source_ref": "client Q&A script > NOLEN GUR AAMAR"
     },
-
     {
       "id": "sondesh_price_detailed",
       "client_confirmed_date": "2026-08-21",
       "triggers": [
-        "how much is sondesh", "how much for sondesh", "price of sondesh", "cost of sondesh",
-        "sondesh price", "sondesh cost", "how much sondesh", "sondesh rate", "what's the price",
-        "whats the price", "what is the price", "price list", "how much does it cost", "mishti price",
-        "menu price", "how many pieces", "piece count", "pieces in a box", "pieces per box",
-        "pieces of sondesh", "how many pieces of sondesh", "how many pieces do we get",
-        "250g box vs 500g box", "250g vs 500g",
-        "সন্দেশের দাম কত", "সন্দেশের দাম", "সন্দেশ", "দাম কত", "দাম কত?", "dam koto",
-        "sondesher dam koto", "sondesher daam koto",
-        "sondesh price detailed", "full price list", "detailed price", "complete price list"
+        "how much is sondesh",
+        "how much for sondesh",
+        "price of sondesh",
+        "cost of sondesh",
+        "sondesh price",
+        "sondesh cost",
+        "how much sondesh",
+        "sondesh rate",
+        "what's the price",
+        "whats the price",
+        "what is the price",
+        "price list",
+        "how much does it cost",
+        "mishti price",
+        "menu price",
+        "how many pieces",
+        "piece count",
+        "pieces in a box",
+        "pieces per box",
+        "pieces of sondesh",
+        "how many pieces of sondesh",
+        "how many pieces do we get",
+        "250g box vs 500g box",
+        "250g vs 500g",
+        "সন্দেশের দাম কত",
+        "সন্দেশের দাম",
+        "সন্দেশ",
+        "দাম কত",
+        "দাম কত?",
+        "dam koto",
+        "sondesher dam koto",
+        "sondesher daam koto",
+        "sondesh price detailed",
+        "full price list",
+        "detailed price",
+        "complete price list"
       ],
       "response": "Hi! Thanks for getting in touch. 🌸\n\nAt Camellia.artisanal, every Sondesh is made from scratch using time-tested traditional recipes. We work with small-batch artisanal farmers, trusted dairies, and carefully selected partners — never general retail sourcing. An all-women team makes the sondesh for you.\n\nOur box price starts from ₹450 (for a 250g box of 9 pieces) and goes up to ₹900 depending on the collection and flavour.\n\nWe offer two distinct collections:\n\n• *Collection 1 — Aamar Mishti (আমার মিষ্টি)*:\nIndulgence for sweet cravings at home or work — good dairy milk, partially mechanised, made in-house at our kitchen.\n(250g: ₹450–₹750 | 500g: ₹800–₹1,400 | 1kg: ₹1,500–₹2,500)\n\n• *Collection 2 — Signature Collection*:\nMishti for special occasions, gifting & when you are in the mood to give yourself a treat — made using pure desi A2 cow milk that has not been industrially processed. Completely handcrafted end to end.\n(250g: ₹600–₹900 | 500g: ₹1,100–₹1,600 | 1kg: ₹2,000–₹2,900)\n\nPorter delivery charges are on actuals from Sushant Lok, Gurgaon.\n\nPlease feel free to ask anything before confirming! 🙏",
       "escalate": false,
       "source_ref": "client Q&A script > savoury food ordering"
     },
-
     {
       "id": "sondesh_classic_rose",
-      "triggers": ["what is the price of rose sondesh", "what is the price of classic sondesh", "what is the price of rose", "what is the price of classic", "classic sondesh", "rose sondesh", "classic rose", "classic and rose", "rose and classic", "classic sondesh price", "rose sondesh price", "how much is rose sondesh", "how much is classic sondesh", "how much for rose sondesh", "how much for classic sondesh", "how much is rose", "how much is classic", "rose mishti", "classic mishti", "rose price", "classic price", "cost of rose", "cost of classic", "cost of rose sondesh", "cost of classic sondesh", "price of rose sondesh", "price of classic sondesh", "rate of rose sondesh", "rate of classic sondesh", "rose", "classic"],
+      "triggers": [
+        "what is the price of rose sondesh",
+        "what is the price of classic sondesh",
+        "what is the price of rose",
+        "what is the price of classic",
+        "classic sondesh",
+        "rose sondesh",
+        "classic rose",
+        "classic and rose",
+        "rose and classic",
+        "classic sondesh price",
+        "rose sondesh price",
+        "how much is rose sondesh",
+        "how much is classic sondesh",
+        "how much for rose sondesh",
+        "how much for classic sondesh",
+        "how much is rose",
+        "how much is classic",
+        "rose mishti",
+        "classic mishti",
+        "rose price",
+        "classic price",
+        "cost of rose",
+        "cost of classic",
+        "cost of rose sondesh",
+        "cost of classic sondesh",
+        "price of rose sondesh",
+        "price of classic sondesh",
+        "rate of rose sondesh",
+        "rate of classic sondesh",
+        "rose",
+        "classic"
+      ],
       "response": "Our handcrafted *Classic & Rose Sondesh* 🌸 is made with fresh artisanal chhana and infused with delicate cardamom or organic rose petals.\n\n*Price Breakdown:*\n```\n+-------------------------------------+-------+-------+-------+\n| Collection                          | 250g  | 500g  |  1kg  |\n+-------------------------------------+-------+-------+-------+\n| Collection 1 — Aamar Mishti (Dairy) | ₹450  | ₹800  | ₹1500 |\n| Collection 2 — Signature (Desi A2)  | ₹600  | ₹1100 | ₹2000 |\n+-------------------------------------+-------+-------+-------+\n* Box count: 9 pcs (250g) | 18 pcs (500g) | 36 pcs (1kg)\n```\n\n• *Collection 1 (Aamar Mishti)*: Daily indulgence, good dairy milk, partially mechanised, made in-house at our kitchen.\n• *Collection 2 (Signature A2)*: Special occasions & gifting — made with pure desi A2 cow milk (not industrially processed), completely handcrafted end to end.\n\nWhich collection, flavour (Classic or Rose), and pack size (250g, 500g, or 1kg) would you like to order?",
       "escalate": false,
       "source_ref": "menu.json > Sondesh > Classic/Rose"
     },
-
     {
       "id": "sondesh_mango_kesar",
-      "triggers": ["mango sondesh", "kesar sondesh", "aam ada", "mango sondesh price", "kesar sondesh price", "mango price", "kesar price", "aam ada price", "mango mishti", "kesar mishti", "vanilla", "real vanilla", "cinnamon", "dalchini", "vanilla price", "cinnamon price", "dalchini price", "vanilla sondesh", "cinnamon sondesh", "dalchini sondesh", "mango", "kesar"],
+      "triggers": [
+        "mango sondesh",
+        "kesar sondesh",
+        "aam ada",
+        "mango sondesh price",
+        "kesar sondesh price",
+        "mango price",
+        "kesar price",
+        "aam ada price",
+        "mango mishti",
+        "kesar mishti",
+        "vanilla",
+        "real vanilla",
+        "cinnamon",
+        "dalchini",
+        "vanilla price",
+        "cinnamon price",
+        "dalchini price",
+        "vanilla sondesh",
+        "cinnamon sondesh",
+        "dalchini sondesh",
+        "mango",
+        "kesar"
+      ],
       "response": "Mango, Kesar, Vanilla & Cinnamon Sondesh Table: 🌸\n\n```\n+-------------------------+-------+-------+-------+\n| Collection & Flavours   | 250g  | 500g  |  1kg  |\n+-------------------------+-------+-------+-------+\n| Aamar (Mango/Kesar/Ada) | ₹550  | ₹1000 | ₹1800 |\n| Sig A2 (Mango/Van/Cin)  | ₹650  | ₹1200 | ₹2200 |\n+-------------------------+-------+-------+-------+\n* Box count: 9 pcs (250g) | 18 pcs (500g) | 36 pcs (1kg)\n```\n\nWhich collection, flavour, and pack size would you like to order?",
       "escalate": false,
       "source_ref": "menu.json > Sondesh > Mango/Kesar"
     },
-
     {
       "id": "sondesh_nolen_gur",
       "triggers": [
-        "nolen gur sondesh", "nolen gur price", "thandai", "medjool dates", "dates", "chocolate sondesh",
-        "chocolate", "nolen gur sondesh price", "thandai price", "medjool dates price", "chocolate price",
-        "dates price", "dates sondesh", "thandai sondesh", "chocolate mishti", "nolen gur mishti", "nolen gur",
-        "nolen gur kotota", "kotota available", "available ache", "নলেন গুড়", "নলেন গুড়", "নলেন গুড়ের সন্দেশ"
+        "nolen gur sondesh",
+        "nolen gur price",
+        "thandai",
+        "medjool dates",
+        "dates",
+        "chocolate sondesh",
+        "chocolate",
+        "nolen gur sondesh price",
+        "thandai price",
+        "medjool dates price",
+        "chocolate price",
+        "dates price",
+        "dates sondesh",
+        "thandai sondesh",
+        "chocolate mishti",
+        "nolen gur mishti",
+        "nolen gur",
+        "nolen gur kotota",
+        "kotota available",
+        "available ache",
+        "নলেন গুড়",
+        "নলেন গুড়",
+        "নলেন গুড়ের সন্দেশ"
       ],
       "response": "Nolen Gur, Thandai, Medjool Dates & Chocolate Sondesh Table: 🌸\n\n```\n+-------------------------+-------+-------+-------+\n| Collection & Flavours   | 250g  | 500g  |  1kg  |\n+-------------------------+-------+-------+-------+\n| Aamar Mishti (Nolen Gur)| ₹600  | ₹1100 | ₹2000 |\n| Sig A2 (Gur/Thandai/..)| ₹700  | ₹1300 | ₹2500 |\n+-------------------------+-------+-------+-------+\n* Box count: 9 pcs (250g) | 18 pcs (500g) | 36 pcs (1kg)\n```\n\nWhich collection, flavour, and pack size would you like to order?",
       "escalate": false,
       "source_ref": "menu.json > Sondesh > Nolen Gur"
     },
-
     {
       "id": "jolbhora",
-      "triggers": ["jolbhora", "liquid filling", "jol bhora", "jolbhora price", "jolbhora cost", "jol bhora price", "jolbhora rate", "jolbhora options", "price of jolbhora", "cost of jolbhora", "nolen gur jolbhora", "jolbhora sondesh"],
+      "triggers": [
+        "jolbhora",
+        "liquid filling",
+        "jol bhora",
+        "jolbhora price",
+        "jolbhora cost",
+        "jol bhora price",
+        "jolbhora rate",
+        "jolbhora options",
+        "price of jolbhora",
+        "cost of jolbhora",
+        "nolen gur jolbhora",
+        "jolbhora sondesh"
+      ],
       "response": "Specific pricing and pack sizes for Jolbhora (Nolen Gur Sondesh with authentic liquid filling) are currently pending client confirmation — please connect with our team directly on WhatsApp or call +91 87965 51990 for custom packaging details! 🌸",
       "escalate": false,
       "source_ref": "menu.json > Jolbhora"
     },
-
     {
       "id": "kanchagolla",
-      "triggers": ["kanchagolla", "kancha golla", "kanchagolla price", "kanchagolla cost", "kanchagolla rate", "kanchagolla options", "kancha golla price", "price of kanchagolla", "cost of kanchagolla"],
+      "triggers": [
+        "kanchagolla",
+        "kancha golla",
+        "kanchagolla price",
+        "kanchagolla cost",
+        "kanchagolla rate",
+        "kanchagolla options",
+        "kancha golla price",
+        "price of kanchagolla",
+        "cost of kanchagolla"
+      ],
       "response": "Kanchagolla Pricing & Options Table: 🌸\n\n```\n+-------------------------+-------+-------+-------+\n| Collection & Variety    | 250g  | 500g  |  1kg  |\n+-------------------------+-------+-------+-------+\n| Aamar: Classic / Rose   | ₹450  | ₹800  | ₹1500 |\n| Aamar: Mango / Kesar    | ₹550  | ₹1000 | ₹1800 |\n| Aamar: Nolen Gur        | ₹600  | ₹1100 | ₹2000 |\n| Signature A2: Classic   | ₹600  | ₹1100 | ₹2000 |\n| Signature A2: Nolen Gur | ₹700  | ₹1300 | ₹2500 |\n+-------------------------+-------+-------+-------+\n* Box count: 9 pcs (250g) | 18 pcs (500g) | 36 pcs (1kg)\n```\n\nWhich collection, flavour, and pack size would you like to order?",
       "escalate": false,
       "source_ref": "menu.json > Kanchagolla"
     },
-
     {
       "id": "mahua_signature_special",
-      "triggers": ["mahua", "mahua price", "mahua sondesh", "price of mahua", "cost of mahua", "rate of mahua", "what are the price of mahua", "what is the price of mahua", "mahua mishti", "mahua sondesh price"],
+      "triggers": [
+        "mahua",
+        "mahua price",
+        "mahua sondesh",
+        "price of mahua",
+        "cost of mahua",
+        "rate of mahua",
+        "what are the price of mahua",
+        "what is the price of mahua",
+        "mahua mishti",
+        "mahua sondesh price"
+      ],
       "response": "Mahua Sondesh (Signature A2 Collection only — handcrafted with pure desi A2 cow milk & forest mahua flowers): 🌸\n\n```\n+-----------------+-------------+-------+\n| Pack Size       | Piece Count | Price |\n+-----------------+-------------+-------+\n| 250g Box        | 9 pcs       | ₹900  |\n| 500g Box        | 18 pcs      | ₹1600 |\n| 1kg Box         | 36 pcs      | ₹2900 |\n+-----------------+-------------+-------+\n```\n\nPorter delivery charges on actuals. Which pack size would you like to order?",
       "escalate": false,
       "source_ref": "menu.json > signature_collection > Mahua"
     },
-
     {
       "id": "aamar_mishti_collection",
-      "triggers": ["collection 1", "collection1", "collection 1 menu", "collection 1 menu photo", "collection 1 menu card", "collection 1 card", "collection 1 photo", "collection 1 options", "collection 1 price", "collection 1 rate", "collection 1 sondesh", "1st collection", "first collection", "col 1", "option 1", "aamar mishti", "aamar mishti menu", "aamar mishti collection", "aamar mishti 250g", "aamar mishti 500g", "aamar mishti 1kg", "aamar mishti price", "aamar mishti rate", "aamar mishti options", "aamar mishti sondesh", "show collection 1", "send collection 1", "collection 1 table"],
+      "triggers": [
+        "collection 1",
+        "collection1",
+        "collection 1 menu",
+        "collection 1 menu photo",
+        "collection 1 menu card",
+        "collection 1 card",
+        "collection 1 photo",
+        "collection 1 options",
+        "collection 1 price",
+        "collection 1 rate",
+        "collection 1 sondesh",
+        "1st collection",
+        "first collection",
+        "col 1",
+        "option 1",
+        "aamar mishti",
+        "aamar mishti menu",
+        "aamar mishti collection",
+        "aamar mishti 250g",
+        "aamar mishti 500g",
+        "aamar mishti 1kg",
+        "aamar mishti price",
+        "aamar mishti rate",
+        "aamar mishti options",
+        "aamar mishti sondesh",
+        "show collection 1",
+        "send collection 1",
+        "collection 1 table"
+      ],
       "response": "Collection 1 — Aamar Mishti (আমার মিষ্টি) 🌸\nIndulgence for your daily sweet cravings at home or work. Made using pure dairy milk in our kitchen.\n\n*Price Breakdown Table:*\n```\n+-----------------------+-------+-------+-------+\n| Item / Flavour        | 250g  | 500g  |  1kg  |\n+-----------------------+-------+-------+-------+\n| Classic / Rose        | ₹450  | ₹800  | ₹1500 |\n| Mango / Kesar / Ada   | ₹550  | ₹1000 | ₹1800 |\n| Nolen Gur             | ₹600  | ₹1100 | ₹2000 |\n| Jolbhora (Liquid)*    | ₹750  | ₹1400 | ₹2500 |\n| Kanchagolla           | ₹450  | ₹800  | ₹1500 |\n+-----------------------+-------+-------+-------+\n* 250g(9pc) | 500g(18pc) | 1kg(36pc)\n* Jolbhora: 6pc | 12pc | 24pc\n```\n\nWhich item and pack size would you like to order?",
       "escalate": false,
       "source_ref": "menu.json > Aamar Mishti Collection"
     },
-
     {
       "id": "signature_collection",
-      "triggers": ["collection 2", "collection2", "collection 2 menu", "collection 2 menu photo", "collection 2 menu card", "collection 2 card", "collection 2 photo", "collection 2 options", "collection 2 price", "collection 2 rate", "collection 2 sondesh", "2nd collection", "second collection", "col 2", "option 2", "signature collection", "signature menu", "signature sondesh", "signature 250g", "signature 500g", "signature 1kg", "signature price", "signature rate", "signature options", "desi a2", "show collection 2", "send collection 2", "collection 2 table", "signature collection menu"],
+      "triggers": [
+        "collection 2",
+        "collection2",
+        "collection 2 menu",
+        "collection 2 menu photo",
+        "collection 2 menu card",
+        "collection 2 card",
+        "collection 2 photo",
+        "collection 2 options",
+        "collection 2 price",
+        "collection 2 rate",
+        "collection 2 sondesh",
+        "2nd collection",
+        "second collection",
+        "col 2",
+        "option 2",
+        "signature collection",
+        "signature menu",
+        "signature sondesh",
+        "signature 250g",
+        "signature 500g",
+        "signature 1kg",
+        "signature price",
+        "signature rate",
+        "signature options",
+        "desi a2",
+        "show collection 2",
+        "send collection 2",
+        "collection 2 table",
+        "signature collection menu"
+      ],
       "response": "Collection 2 — Signature Collection 🌸\nSpecial occasion & gifting mishti made using pure desi A2 cow milk, 100% handcrafted.\n\n*Price Breakdown Table:*\n```\n+-----------------------+-------+-------+-------+\n| Item / Flavour        | 250g  | 500g  |  1kg  |\n+-----------------------+-------+-------+-------+\n| Classic / Rose        | ₹600  | ₹1100 | ₹2000 |\n| Mango/Kesar/Van/Cin   | ₹650  | ₹1200 | ₹2200 |\n| NolenGur/Thandai/Date | ₹700  | ₹1300 | ₹2500 |\n| Mahua Sondesh         | ₹900  | ₹1600 | ₹2900 |\n| Jolbhora (Liquid)*    | ₹900  | ₹1600 | ₹2900 |\n| Kanchagolla (Classic) | ₹600  | ₹1100 | ₹2000 |\n| Kanchagolla (NolenGur)| ₹700  | ₹1300 | ₹2500 |\n+-----------------------+-------+-------+-------+\n* 250g(9pc) | 500g(18pc) | 1kg(36pc)\n* Jolbhora: 6pc | 12pc | 24pc\n```\n\nWhich item, flavour, and pack size would you like to order?",
       "escalate": false,
       "source_ref": "menu.json > Signature Collection"
     },
-
     {
       "id": "pack_size_250g",
-      "triggers": ["250g", "250 g", "250g box", "250g pack", "9 pcs", "9 pieces", "box of 9"],
+      "triggers": [
+        "250g",
+        "250 g",
+        "250g box",
+        "250g pack",
+        "9 pcs",
+        "9 pieces",
+        "box of 9"
+      ],
       "response": "All 250g Box Options (9 pcs / 6 pcs for Jolbhora): 🌸\n\n```\n+------------------------------+-------+-------+\n| Flavour / Variety (250g Box) | Aamar | SigA2 |\n+------------------------------+-------+-------+\n| Classic / Rose Sondesh       | ₹450  | ₹600  |\n| Mango / Kesar / Vanilla..    | ₹550  | ₹650  |\n| Nolen Gur / Thandai / Dates  | ₹600  | ₹700  |\n| Mahua Special                | —     | ₹900  |\n| Jolbhora (6 pcs liquid fill) | ₹750  | ₹900  |\n| Kanchagolla (Classic)        | ₹450  | ₹600  |\n| Kanchagolla (Nolen Gur)      | ₹600  | ₹700  |\n+------------------------------+-------+-------+\n```\n\nWhich 250g pack would you like to order?",
       "escalate": false,
       "source_ref": "menu.json > 250g pack options"
     },
-
     {
       "id": "pack_size_500g",
-      "triggers": ["500g", "500 g", "500g box", "500g pack", "18 pcs", "18 pieces", "box of 18"],
+      "triggers": [
+        "500g",
+        "500 g",
+        "500g box",
+        "500g pack",
+        "18 pcs",
+        "18 pieces",
+        "box of 18"
+      ],
       "response": "All 500g Box Options (18 pcs / 12 pcs for Jolbhora): 🌸\n\n```\n+------------------------------+-------+-------+\n| Flavour / Variety (500g Box) | Aamar | SigA2 |\n+------------------------------+-------+-------+\n| Classic / Rose Sondesh       | ₹800  | ₹1100 |\n| Mango / Kesar / Vanilla..    | ₹1000 | ₹1200 |\n| Nolen Gur / Thandai / Dates  | ₹1100 | ₹1300 |\n| Mahua Special                | —     | ₹1600 |\n| Jolbhora (12 pcs liquid fill)| ₹1400 | ₹1600 |\n| Kanchagolla (Classic)        | ₹800  | ₹1100 |\n| Kanchagolla (Nolen Gur)      | ₹1100 | ₹1300 |\n+------------------------------+-------+-------+\n```\n\nWhich 500g pack would you like to order?",
       "escalate": false,
       "source_ref": "menu.json > 500g pack options"
     },
-
     {
       "id": "pack_size_1kg",
-      "triggers": ["1kg", "1 kg", "1000g", "1kg box", "36 pcs", "36 pieces", "box of 36"],
+      "triggers": [
+        "1kg",
+        "1 kg",
+        "1000g",
+        "1kg box",
+        "36 pcs",
+        "36 pieces",
+        "box of 36"
+      ],
       "response": "All 1kg Box Options (36 pcs / 24 pcs for Jolbhora): 🌸\n\n```\n+------------------------------+-------+-------+\n| Flavour / Variety (1kg Box)  | Aamar | SigA2 |\n+------------------------------+-------+-------+\n| Classic / Rose Sondesh       | ₹1500 | ₹2000 |\n| Mango / Kesar / Vanilla..    | ₹1800 | ₹2200 |\n| Nolen Gur / Thandai / Dates  | ₹2000 | ₹2500 |\n| Mahua Special                | —     | ₹2900 |\n| Jolbhora (24 pcs liquid fill)| ₹2500 | ₹2900 |\n| Kanchagolla (Classic)        | ₹1500 | ₹2000 |\n| Kanchagolla (Nolen Gur)      | ₹2000 | ₹2500 |\n+------------------------------+-------+-------+\n```\n\nWhich 1kg pack would you like to order?",
       "escalate": false,
       "source_ref": "menu.json > 1kg pack options"
     },
-
     {
       "id": "weekly_menu_veg",
-      "triggers": ["veg menu", "vegetarian menu", "veg dishes", "vegetarian dishes", "veg items", "vegetarian items", "this week veg", "current veg menu", "show veg menu", "niramish", "aloor dom", "chhoto aloor dom", "dhokar dalna", "dhhokar dalna", "chhanar kofta", "chaal potol", "basonti polao", "basanti polao", "potoler dolma v"],
+      "triggers": [
+        "veg menu",
+        "vegetarian menu",
+        "veg dishes",
+        "vegetarian dishes",
+        "veg items",
+        "vegetarian items",
+        "this week veg",
+        "current veg menu",
+        "show veg menu",
+        "niramish",
+        "aloor dom",
+        "chhoto aloor dom",
+        "dhokar dalna",
+        "dhhokar dalna",
+        "chhanar kofta",
+        "chaal potol",
+        "basonti polao",
+        "basanti polao",
+        "potoler dolma v"
+      ],
       "response": "This week's Vegetarian menu (Friday Lunch–Thursday Dinner): 🌿\n\n```\n+-----------------------+------------------------------------+-------+\n| Dish Name             | Description                        | Price |\n+-----------------------+------------------------------------+-------+\n| Aloor Dom             | Spiced baby potato delicacy        | ₹300  |\n| Dhokar Dalna          | Lentil cake curry in rich gravy    | ₹300  |\n| Chhanar Kofta         | Homemade chhana dumplings in gravy | ₹300  |\n| Shorshey Diye Dhyarosh| Okra in mustard gravy              | ₹300  |\n| Potoler Dolma (Veg)   | Pointed gourd stuffed with chhana  | ₹300  |\n| Basanti Polao         | Fragrant sweet yellow festive rice | ₹300  |\n+-----------------------+------------------------------------+-------+\n```\n\nWould you like to add any of these to your order?",
       "escalate": false,
       "note": "Response provides current rotation dishes and prices.",
       "source_ref": "menu.json > weekly_menus[] > vegetarian"
     },
-
     {
       "id": "weekly_menu_nonveg",
-      "triggers": ["non veg menu", "nonveg menu", "non veg", "nonveg", "non-veg", "non-veg menu", "nin veg menu", "nin veg", "non veg dishes", "nonveg dishes", "non veg items", "nonveg items", "chicken", "mutton", "fish", "prawn", "bhetki", "chingri", "bhetki paturi", "golda chingri", "robibarer mangsho", "contai chicken", "mutton curry", "potoler dolma nv", "chicken kosha", "mutton kosha", "price of mutton kosha", "mutton kosha and basonti polao", "basonti polao and mutton kosha", "mutton kosha price", "robibarer mangsho price", "bhetki paturi price", "golda chingri price"],
+      "triggers": [
+        "non veg menu",
+        "nonveg menu",
+        "non veg",
+        "nonveg",
+        "non-veg",
+        "non-veg menu",
+        "nin veg menu",
+        "nin veg",
+        "non veg dishes",
+        "nonveg dishes",
+        "non veg items",
+        "nonveg items",
+        "chicken",
+        "mutton",
+        "fish",
+        "prawn",
+        "bhetki",
+        "chingri",
+        "bhetki paturi",
+        "golda chingri",
+        "robibarer mangsho",
+        "contai chicken",
+        "mutton curry",
+        "potoler dolma nv",
+        "chicken kosha",
+        "mutton kosha",
+        "price of mutton kosha",
+        "mutton kosha and basonti polao",
+        "basonti polao and mutton kosha",
+        "mutton kosha price",
+        "robibarer mangsho price",
+        "bhetki paturi price",
+        "golda chingri price"
+      ],
       "response": "This week's Non-Vegetarian menu (Friday Lunch–Thursday Dinner): 🍖\n\n```\n+-----------------------+------------------------------------+-------+\n| Dish Name             | Description                        | Price |\n+-----------------------+------------------------------------+-------+\n| Contai Dhaba Chicken  | Countryside Bengali chicken curry  | ₹400  |\n| Robibarer Mangsho     | Slow-cooked Sunday mutton curry    | ₹600  |\n| Bhetki Paturi         | Fresh Bhetki wrapped in banana leaf| ₹700  |\n| Golda Chingri Malai   | Jumbo prawn in spiced coconut gravy| ₹900  |\n| Potoler Dolma (NV)    | Gourd stuffed with mutton/prawn    | ₹400  |\n+-----------------------+------------------------------------+-------+\n```\n\n*Note:* We also serve fragrant in-house Basonti Polao (250g for ₹300) & Aromatic Rice (250g for ₹150) to pair with our curries!\n\nWhich dishes would you like to order?",
       "escalate": false,
       "note": "Response provides current rotation non-veg dishes and prices.",
       "source_ref": "menu.json > weekly_menus[] > non_vegetarian"
     },
-
     {
       "id": "GUARD_collection_differentiation",
       "client_confirmed_date": "2026-08-21",
@@ -339,7 +643,6 @@
       "escalate": false,
       "source_ref": "client confirmation (Somdeb Ji) > collection differentiation"
     },
-
     {
       "id": "GUARD_customization_flavour_mixing",
       "guard_reason": "Awaiting client confirmation on flavour-mixing and custom assorted box policy.",
@@ -371,7 +674,6 @@
       "escalate": true,
       "source_ref": "GUARD: Pending client confirmation from Somdeb Ji"
     },
-
     {
       "id": "GUARD_halal_ingredients_oil",
       "client_confirmed_date": "2026-08-21",
@@ -401,7 +703,6 @@
       "escalate": false,
       "source_ref": "client confirmation (Somdeb Ji) > halal & ingredients sourcing"
     },
-
     {
       "id": "GUARD_payment_method",
       "client_confirmed_date": "2026-08-21",
@@ -433,104 +734,217 @@
       "escalate": false,
       "source_ref": "client confirmation (Somdeb Ji) > payment methods & COD"
     },
-
     {
       "id": "combo_bento",
       "triggers": [
-        "combo", "bento", "luchi combo", "bengali bento", "veg bento", "non veg bento",
-        "non-veg bento", "mutton bento", "kosha mangsho bento", "bento box",
-        "what is in your non-veg bento box", "what is in your bento box", "what is in your bento",
-        "what is in your non-veg bento", "non-veg bento box", "veg bento box"
+        "combo",
+        "bento",
+        "luchi combo",
+        "bengali bento",
+        "veg bento",
+        "non veg bento",
+        "non-veg bento",
+        "mutton bento",
+        "kosha mangsho bento",
+        "bento box",
+        "what is in your non-veg bento box",
+        "what is in your bento box",
+        "what is in your bento",
+        "what is in your non-veg bento",
+        "non-veg bento box",
+        "veg bento box"
       ],
       "response": "Bengali Combo & Bento Meals Table: 🍱\n\n```\n+-----------------------+------------------------------------+-------+\n| Bento / Combo Option  | Items Included                     | Price |\n+-----------------------+------------------------------------+-------+\n| Veg Bento Box         | 6 Luchi, Chholar Daal, 1 Sondesh   | ₹400  |\n| Non-Veg Bento Box     | 6 Luchi, Kosha Mangsho, 1 Sondesh  | ₹700  |\n| Luchi + Aloor Dom     | 4 Luchi, Aloor Dom, 1 Sondesh      | ₹400  |\n| Luchi + Robibarer     | 4 Luchi, Robibarer Mangsho, 1 Mishti| ₹700 |\n+-----------------------+------------------------------------+-------+\n```\n\nWhich combo or bento meal would you like to order? 🌸",
       "escalate": false,
       "source_ref": "menu.json > weekly_menus[] > combos / bengali_bento"
     },
-
     {
       "id": "delivery_area",
       "triggers": [
-        "delivery", "deliver to", "do you deliver", "ship to", "courier",
-        "delhi", "gurgaon", "gurugram", "noida", "ghaziabad", "faridabad",
-        "delhi ncr", "ncr", "delhi delivery", "deliver in delhi", "deliver to delhi",
-        "dwarka", "indirapuram", "sector 45", "sector 62", "cr park", "chittaranjan park",
-        "cybercity", "cyberhub", "delhi te deliver hoy", "delhi te delivery", "ডেলিভারি", "ডেলিভারি হবে",
-        "delhi te", "deliver hoy"
+        "delivery",
+        "deliver to",
+        "do you deliver",
+        "ship to",
+        "courier",
+        "delhi",
+        "gurgaon",
+        "gurugram",
+        "noida",
+        "ghaziabad",
+        "faridabad",
+        "delhi ncr",
+        "ncr",
+        "delhi delivery",
+        "deliver in delhi",
+        "deliver to delhi",
+        "dwarka",
+        "indirapuram",
+        "sector 45",
+        "sector 62",
+        "cr park",
+        "chittaranjan park",
+        "cybercity",
+        "cyberhub",
+        "delhi te deliver hoy",
+        "delhi te delivery",
+        "ডেলিভারি",
+        "ডেলিভারি হবে",
+        "delhi te",
+        "deliver hoy"
       ],
       "response": "We deliver across Delhi NCR (Delhi, Gurgaon, Noida, Ghaziabad & Faridabad). Courier charges are on actuals (added above listed prices) and shipped from Sushant Arcade, Gurgaon. Which area are you in?",
       "escalate": false,
       "source_ref": "menu.json > delivery"
     },
-
     {
       "id": "delivery_out_of_area",
       "triggers": [
-        "bangalore", "bengaluru", "mumbai", "chennai", "hyderabad",
-        "pune", "ahmedabad", "jaipur", "chandigarh", "lucknow", "kanpur", "surat",
-        "indore", "bhopal", "patna", "ranchi", "bhubaneswar", "guwahati", "kochi",
-        "trivandrum", "coimbatore", "out of delhi", "outside delhi", "outside ncr",
-        "outside delhi ncr", "other city", "other cities", "different city", "out of state",
-        "interstate", "do you deliver to bangalore", "do you deliver in bangalore",
-        "bangalore delivery", "deliver to bangalore", "ship to bangalore", "courier to bangalore",
-        "can you deliver to bangalore", "can you deliver 2 boxes of nolen gur sondesh to bangalore",
-        "deliver 2 boxes to bangalore", "do you deliver to other cities", "deliver to other cities",
-        "ship to other cities", "other cities delivery", "deliver to kolkata", "delivery in kolkata",
-        "kolkata delivery", "ship to kolkata", "courier to kolkata", "deliver to mumbai", "mumbai delivery",
-        "deliver to pune", "pune delivery", "deliver to hyderabad", "deliver to chennai"
+        "bangalore",
+        "bengaluru",
+        "mumbai",
+        "chennai",
+        "hyderabad",
+        "pune",
+        "ahmedabad",
+        "jaipur",
+        "chandigarh",
+        "lucknow",
+        "kanpur",
+        "surat",
+        "indore",
+        "bhopal",
+        "patna",
+        "ranchi",
+        "bhubaneswar",
+        "guwahati",
+        "kochi",
+        "trivandrum",
+        "coimbatore",
+        "out of delhi",
+        "outside delhi",
+        "outside ncr",
+        "outside delhi ncr",
+        "other city",
+        "other cities",
+        "different city",
+        "out of state",
+        "interstate",
+        "do you deliver to bangalore",
+        "do you deliver in bangalore",
+        "bangalore delivery",
+        "deliver to bangalore",
+        "ship to bangalore",
+        "courier to bangalore",
+        "can you deliver to bangalore",
+        "can you deliver 2 boxes of nolen gur sondesh to bangalore",
+        "deliver 2 boxes to bangalore",
+        "do you deliver to other cities",
+        "deliver to other cities",
+        "ship to other cities",
+        "other cities delivery",
+        "deliver to kolkata",
+        "delivery in kolkata",
+        "kolkata delivery",
+        "ship to kolkata",
+        "courier to kolkata",
+        "deliver to mumbai",
+        "mumbai delivery",
+        "deliver to pune",
+        "pune delivery",
+        "deliver to hyderabad",
+        "deliver to chennai"
       ],
       "response": "Hi, thank you for getting in touch.\n\nI would have loved to. However, the Norom Pak Sondesh that we make can be transported from one city to another only through a reliable cold-chain courier service. Unfortunately, we haven't yet found a partner who can offer this at a reasonable cost.\n\nSo for now, we're unable to ship our sondesh outside Delhi NCR — we do not deliver to Bangalore or other cities at this time. We'd love to, though, and will certainly start as soon as we find a dependable cold-chain delivery option.\n\nThat said, many of our regular customers who live in different parts of India and the world do buy our sondesh by asking friends or family travelling from Delhi NCR to carry a few boxes for them. We're happy to deliver the order to their home, office, hotel, or any other convenient location before they travel.\n\nThank you for thinking of camellia.artisanal! 🌸",
       "escalate": false,
       "source_ref": "client Q&A script > OTHER CITIES"
     },
-
     {
       "id": "artisanal_differentiation",
       "triggers": [
-        "different from", "other sweet shops", "more expensive", "why expensive", "why is it expensive",
-        "why so expensive", "worth the price", "bhikharam", "bhikharam chandmal", "haldiram",
-        "why higher price", "compare with other", "how are you different", "why should i buy"
+        "different from",
+        "other sweet shops",
+        "more expensive",
+        "why expensive",
+        "why is it expensive",
+        "why so expensive",
+        "worth the price",
+        "bhikharam",
+        "bhikharam chandmal",
+        "haldiram",
+        "why higher price",
+        "compare with other",
+        "how are you different",
+        "why should i buy"
       ],
       "response": "What sets Camellia Artisanal apart from commercial sweet shops: 🌸\n\n• *Pure Ingredients*: We use 100% pure dairy and unadulterated desi A2 cow milk (never milk powder or commercial stabilizers).\n• *Real Kolkata Nolen Gur*: Our liquid Nolen Gur is sourced directly from artisanal jaggery producers in Bengal — zero chemical essences or artificial coloring.\n• *Made Fresh to Order*: Every single Sondesh is handcrafted from scratch in small batches by our all-women kitchen team in Sushant Lok, Gurgaon, with subtle natural sweetness.\n• *Eco-Friendly & Pure*: Delivered in plastic-free, cornstarch-based boxes.\n\nWould you like to try a 250g tasting box of our Classic, Rose, or Nolen Gur Sondesh?",
       "escalate": false,
       "source_ref": "brand positioning > artisanal differentiation"
     },
-
     {
       "id": "packaging",
-      "triggers": ["packaging", "plastic", "eco friendly", "box"],
+      "triggers": [
+        "packaging",
+        "plastic",
+        "eco friendly",
+        "box"
+      ],
       "response": "All our food is packed in eco-friendly cornstarch-based boxes — completely plastic-free!",
       "escalate": false,
       "source_ref": "menu.json > delivery.packaging_note"
     },
-
     {
       "id": "contact_social",
-      "triggers": ["instagram", "contact number", "whatsapp number", "facebook page"],
+      "triggers": [
+        "instagram",
+        "contact number",
+        "whatsapp number",
+        "facebook page"
+      ],
       "response": "You can reach us on WhatsApp at +91 8796551990, or find us on Instagram & Facebook @camellia.artisanal 🌸",
       "escalate": false,
       "source_ref": "menu.json > contact"
     },
-
     {
       "id": "how_to_order",
-      "triggers": ["how to order", "how do i order", "place an order", "want to order"],
+      "triggers": [
+        "how to order",
+        "how do i order",
+        "place an order",
+        "want to order",
+        "how do i place an order",
+        "how to place an order",
+        "how can i place an order",
+        "i want to place an order"
+      ],
       "response": "Great! To place an order, please share:\n1. Item & Flavour (e.g. Nolen Gur Sondesh)\n2. Collection (Aamar Mishti / Signature)\n3. Pack Size (250g, 500g, or 1kg)\n4. Delivery Address & Phone Number\n\nOnce shared, our team (+91 87965 51990) will verify your details with you on WhatsApp/Call and share your invoice for payment before dispatch! 🌸",
       "escalate": false
     },
-
     {
       "id": "freshness_ingredients",
       "triggers": [
-        "fresh", "freshness", "how fresh", "fresh ingredients", "quality of ingredients",
-        "are ingredients fresh", "preservatives", "sourcing", "made fresh", "freshly made",
-        "raw materials", "made from scratch", "fresh milk", "a2 milk", "sweetener", "sweeteners",
-        "jaggery", "date palm"
+        "fresh",
+        "freshness",
+        "how fresh",
+        "fresh ingredients",
+        "quality of ingredients",
+        "are ingredients fresh",
+        "preservatives",
+        "sourcing",
+        "made fresh",
+        "freshly made",
+        "raw materials",
+        "made from scratch",
+        "fresh milk",
+        "a2 milk",
+        "sweetener",
+        "sweeteners",
+        "jaggery",
+        "date palm"
       ],
       "response": "At Camellia.artisanal, freshness and quality are at the heart of everything we make! 🌸\n\n• Authentic Sweeteners & Milk: We use 100% authentic Nolen Gur (date palm jaggery) and pure un-processed desi A2 cow milk for our Signature collection.\n• Made Fresh Daily: Every Sondesh and meal is prepared from scratch in small batches using traditional recipes — zero artificial preservatives.\n• Artisanal Sourcing: Sourced directly from small-batch artisanal farmers, trusted dairies, and carefully selected partners.\n\nLet us know if you'd like to try our Sondesh or this week's fresh menu!",
       "escalate": false,
       "source_ref": "client brand standards > freshness & sourcing"
     },
-
     {
       "id": "GUARD_allergen_nutfree_glutenfree",
       "client_confirmed_date": "2026-08-21",
@@ -550,26 +964,41 @@
         "safe for nut allergy",
         "severe allergy",
         "nut allergen",
-        "are your classic and rose sondesh safe for someone with a severe nut allergy"
+        "are your classic and rose sondesh safe for someone with a severe nut allergy",
+        "nut allergens",
+        "do your sweets contain nut allergens",
+        "contain nut allergens",
+        "nut allergy options"
       ],
       "response": "Sondesh is made from milk & sugar only — no nuts.",
       "escalate": false,
       "source_ref": "client confirmation (Somdeb Ji) > allergen & nut safety"
     },
-
     {
       "id": "order_status_tracking",
       "triggers": [
-        "order status", "track my order", "where is my order", "order not received",
-        "delivery tracking", "paid but no confirmation", "paid 2 hours ago", "paid 1 hour ago",
-        "paid but no reply", "order tracking", "no confirmation yet", "dispatch status",
-        "when will it arrive", "where is the delivery", "has it dispatched", "order update", "check my order"
+        "order status",
+        "track my order",
+        "where is my order",
+        "order not received",
+        "delivery tracking",
+        "paid but no confirmation",
+        "paid 2 hours ago",
+        "paid 1 hour ago",
+        "paid but no reply",
+        "order tracking",
+        "no confirmation yet",
+        "dispatch status",
+        "when will it arrive",
+        "where is the delivery",
+        "has it dispatched",
+        "order update",
+        "check my order"
       ],
       "response": "Thank you for checking in! 🌸\n\nIf you have already transferred the payment or placed your order, our team is verifying your dispatch on Porter/courier.\n\nWe will immediately share the live delivery tracking link or dispatch confirmation with you right here on WhatsApp! Feel free to ping us directly on +91 87965 51990 if it is urgent. 🙏",
       "escalate": false,
       "source_ref": "customer support & order dispatch"
     },
-
     {
       "id": "GUARD_pickup_address_hours",
       "client_confirmed_date": "2026-08-21",
@@ -593,41 +1022,61 @@
       "escalate": false,
       "source_ref": "client confirmation (Somdeb Ji) > kitchen address & pickup hours"
     },
-
     {
       "id": "jolbhora_talgash_details",
       "triggers": [
-        "jolbhora", "jol bhora", "liquid nolen gur", "liquid filling", "talgash",
-        "palm tree shaped", "palm-tree", "liquid gur inside", "real liquid nolen gur", "liquid nolen gur inside"
+        "jolbhora",
+        "jol bhora",
+        "liquid nolen gur",
+        "liquid filling",
+        "talgash",
+        "palm tree shaped",
+        "palm-tree",
+        "liquid gur inside",
+        "real liquid nolen gur",
+        "liquid nolen gur inside"
       ],
       "response": "Yes, absolutely! 🌸 Our traditional Jolbhora Sondesh is crafted the authentic Kolkata way — featuring a delicate outer shell of artisanal Norom Pak Sondesh filled with pure, luscious liquid Nolen Gur (date palm jaggery) right in the center! Specific pricing and pack sizes for Jolbhora are currently pending client confirmation — please connect with our team directly on WhatsApp or call +91 87965 51990! 🌸",
       "escalate": false,
       "source_ref": "menu.json > Jolbhora & Talgash"
     },
-
     {
       "id": "sugar_free_options",
       "triggers": [
-        "sugar free", "sugar-free", "sugarfree", "diabetic", "diabetes", "low sugar",
-        "without sugar", "less sweet", "low glycemic", "elderly diabetic", "sugar patients"
+        "sugar free",
+        "sugar-free",
+        "sugarfree",
+        "diabetic",
+        "diabetes",
+        "low sugar",
+        "without sugar",
+        "less sweet",
+        "low glycemic",
+        "elderly diabetic",
+        "sugar patients"
       ],
       "response": "At Camellia Artisanal, all our Sondesh are handcrafted without artificial chemical sweeteners or corn syrups: 🌸\n\n• *Authentic Nolen Gur Norom Pak*: Made with 100% natural, unrefined date palm jaggery (Nolen Gur). It has a lower glycemic index and a mild, natural sweetness compared to refined white sugar sweets.\n• *Mild Sweetness Profile*: Because we make fresh small batches with pure dairy / A2 cow milk chhena, our Sondesh is noticeably light and subtly sweetened, never cloying.\n• *Diabetic Guidance*: While naturally sweetened with pure Nolen Gur or minimal unrefined cane sugar, it is not certified medical zero-calorie sugar-free. We recommend moderation or consulting with a physician for strict diabetic diets.\n\nWould you like to try our subtly sweetened Nolen Gur Norom Pak or Classic Sondesh? 🌸",
       "escalate": false,
       "source_ref": "dietary guidelines > sugar and diabetes"
     },
-
     {
       "id": "recall_order_flavour",
       "triggers": [
-        "earlier flavour choice", "earlier flavor choice", "earlier choice", "do i need to repeat",
-        "need to repeat it", "already told you", "remember my flavour", "remember my flavor",
-        "what flavour did i choose", "what did i select"
+        "earlier flavour choice",
+        "earlier flavor choice",
+        "earlier choice",
+        "do i need to repeat",
+        "need to repeat it",
+        "already told you",
+        "remember my flavour",
+        "remember my flavor",
+        "what flavour did i choose",
+        "what did i select"
       ],
       "response": "Yes! We already have your choice saved in our active session. You don't need to repeat it! 🌸",
       "escalate": false,
       "source_ref": "session memory > order draft recall"
     },
-
     {
       "id": "GUARD_shelf_life_storage",
       "client_confirmed_date": "2026-08-21",
@@ -659,7 +1108,6 @@
       "escalate": false,
       "source_ref": "client confirmation (Somdeb Ji) > shelf life & storage"
     },
-
     {
       "id": "GUARD_staff_names_manager_contact",
       "client_confirmed_date": "2026-08-21",
@@ -692,168 +1140,319 @@
       "escalate": false,
       "source_ref": "client confirmation (Somdeb Ji) > kitchen manager (email camellia.artisanal.gurgaon@gmail.com confirmed Phase E-continued)"
     },
-
     {
       "id": "savoury_food_intro",
       "client_confirmed_date": "2026-08-21",
       "triggers": [
-        "lunch menu", "dinner options", "savoury food", "bengali meals", "lunch options",
-        "dinner menu", "savoury menu", "bengali lunch", "bengali dinner", "lunch", "dinner",
-        "meals", "food menu", "savoury options", "savoury dishes", "3 ways to order",
-        "how to order food", "savoury ordering", "savoury", "cooked meals", "bengali food"
+        "lunch menu",
+        "dinner options",
+        "savoury food",
+        "bengali meals",
+        "lunch options",
+        "dinner menu",
+        "savoury menu",
+        "bengali lunch",
+        "bengali dinner",
+        "lunch",
+        "dinner",
+        "meals",
+        "food menu",
+        "savoury options",
+        "savoury dishes",
+        "3 ways to order",
+        "how to order food",
+        "savoury ordering",
+        "savoury",
+        "cooked meals",
+        "bengali food"
       ],
       "response": "We offer 3 ways to order our freshly cooked Bengali meals: 🍱\n\n1. **À La Carte**: Choose individual dishes from our weekly rotating menu (Vegetarian & Non-Vegetarian curries, Basanti Polao & rice). No minimum order.\n2. **Bengali Bento**: Complete curated meal boxes with Mains, Luchi/Rice & Sondesh.\n3. **Everyday Meal Subscription (Gurgaon only)**: Convenient multi-meal plans with flexible scheduling.\n\nAll prices include GST, packaging, and portal charges; only Porter delivery is additional.\n\nEverything is cooked fresh in small batches, so pre-ordering is recommended as some dishes may run out! 🌸",
       "escalate": false,
       "source_ref": "client Q&A script > savoury food ordering"
     },
-
     {
       "id": "bento_details",
       "client_confirmed_date": "2026-08-21",
       "guard_reason": "Pricing conflict: 3-tier breakdown (₹350/₹400/₹600) conflicts with existing weekly-menu flyer pricing (₹400/₹700). Pending client confirmation.",
       "triggers": [
-        "bento", "bengali bento", "what's in the bento", "what is in the bento",
-        "bento details", "bento box details", "bento options", "bento meal",
-        "bento tiers", "bento prices", "bento pricing", "bento breakdown", "bento items"
+        "bento",
+        "bengali bento",
+        "what's in the bento",
+        "what is in the bento",
+        "bento details",
+        "bento box details",
+        "bento options",
+        "bento meal",
+        "bento tiers",
+        "bento prices",
+        "bento pricing",
+        "bento breakdown",
+        "bento items"
       ],
       "response": null,
       "escalate": true,
       "source_ref": "client Q&A script > savoury food ordering"
     },
-
     {
       "id": "subscription_details",
       "client_confirmed_date": "2026-08-21",
       "triggers": [
-        "subscription", "meal plan", "everyday meal", "everyday meal subscription",
-        "meal subscription", "daily meals", "monthly meal", "weekly meal plan",
-        "subscription details", "subscription pricing", "subscription options", "how does subscription work",
-        "meal packages", "5 meals package"
+        "subscription",
+        "meal plan",
+        "everyday meal",
+        "everyday meal subscription",
+        "meal subscription",
+        "daily meals",
+        "monthly meal",
+        "weekly meal plan",
+        "subscription details",
+        "subscription pricing",
+        "subscription options",
+        "how does subscription work",
+        "meal packages",
+        "5 meals package",
+        "subscriptions",
+        "what subscriptions do you offer",
+        "what subscriptions",
+        "meal subscriptions"
       ],
       "response": "Our Everyday Meal Subscription (Gurgaon only) offers fresh, homely Bengali meals delivered to your doorstep: 🍱\n\n**Plan Options (5 Meals Package):**\n• **Vegetarian Plan**: ₹1,500 for 5 meals (₹300/meal)\n• **Veg + Chicken Plan**: ₹1,750 for 5 meals (Combination of Veg & Chicken meals)\n• **Chicken Plan**: ₹2,000 for 5 meals (₹400/meal)\n\n**Subscription Highlights:**\n• **Polao / Luchi Rule**: You can choose Basanti Polao or Luchi once during your 5-meal cycle at no extra cost.\n• **No Fixed Schedule**: You don't have to take meals on consecutive days — order whenever you want lunch or dinner.\n• **Loyalty Reward**: For every 10 meals completed, your 11th meal is completely FREE! 🌸\n\nAll prices include GST, packaging, and portal charges; only Porter delivery is additional.\n\nWould you like to book?",
       "escalate": false,
       "source_ref": "client Q&A script > savoury food ordering"
     },
-
     {
       "id": "subscription_booking_steps",
       "client_confirmed_date": "2026-08-21",
       "triggers": [
-        "how to book subscription", "book subscription", "start subscription", "subscribe",
-        "how do i book subscription", "how to start meal plan", "book meal plan",
-        "booking steps for subscription", "next steps for subscription", "how to subscribe"
+        "how to book subscription",
+        "book subscription",
+        "start subscription",
+        "subscribe",
+        "how do i book subscription",
+        "how to start meal plan",
+        "book meal plan",
+        "booking steps for subscription",
+        "next steps for subscription",
+        "how to subscribe"
       ],
       "response": "Here are the Next Steps to activate your Everyday Meal Subscription: 🌸\n\n1. **Choose your plan** (Vegetarian ₹1,500 / Veg+Chicken ₹1,750 / Chicken ₹2,000 for 5 meals)\n2. **Pay** via UPI / bank transfer\n3. **Tell us your preferred dates**\n4. **Done — we deliver on those dates without you following up**\n\n(Please provide at least 5 hours advance notice for any schedule or date changes). 🌸",
       "escalate": false,
       "source_ref": "client Q&A script > savoury food ordering"
     },
-
     {
       "id": "alacarte_prebooking_steps",
       "client_confirmed_date": "2026-08-21",
       "triggers": [
-        "how to order from menu", "how to order item from menu", "pre-book", "prebook",
-        "pre book", "pre-order savoury", "preorder savoury", "how to pre-book",
-        "how to prebook", "book savoury meal", "how to order alacarte", "order alacarte",
-        "order à la carte", "prebooking steps", "how to pre-order food"
+        "how to order from menu",
+        "how to order item from menu",
+        "pre-book",
+        "prebook",
+        "pre book",
+        "pre-order savoury",
+        "preorder savoury",
+        "how to pre-book",
+        "how to prebook",
+        "book savoury meal",
+        "how to order alacarte",
+        "order alacarte",
+        "order à la carte",
+        "prebooking steps",
+        "how to pre-order food",
+        "how to pre order ala carte meals",
+        "how to pre-order ala carte meals",
+        "pre-order ala carte meals",
+        "pre order ala carte"
       ],
       "response": "To place or pre-book an À La Carte order from our weekly menu, please share: 📝\n\n1. **Items & Quantity** (e.g. 1 Robibarer Mangsho, 1 Basanti Polao)\n2. **Delivery Address** (used to calculate Porter delivery charges on actuals)\n3. **Receiver's Phone Number**\n4. **Preferred Delivery Slot / Day** (Lunch / Dinner)\n5. **Google Location Pin** (especially if delivering to a standalone house or villa)\n\nYou can share these details here, or call/WhatsApp our kitchen directly at 8796551990. We will verify availability and share your invoice before dispatch! 🌸",
       "escalate": false,
       "source_ref": "client Q&A script > savoury food ordering"
     },
-
     {
       "id": "sondesh_dispatch_time",
       "client_confirmed_date": "2026-08-21",
       "triggers": [
-        "how long to deliver", "dispatch time", "how fast", "how fast can you deliver",
-        "dispatch timing", "prep time", "how long to dispatch", "sondesh dispatch time",
-        "dispatch hours", "how fast is delivery", "how quickly can you dispatch"
+        "how long to deliver",
+        "dispatch time",
+        "how fast",
+        "how fast can you deliver",
+        "dispatch timing",
+        "prep time",
+        "how long to dispatch",
+        "sondesh dispatch time",
+        "dispatch hours",
+        "how fast is delivery",
+        "how quickly can you dispatch",
+        "how fast can you dispatch sondesh",
+        "how fast can you dispatch",
+        "dispatch time for sondesh"
       ],
       "response": "Hi! Thank you for getting in touch.\n\nOnce your sondesh order is confirmed, we usually dispatch it from our kitchen in Sushant Lok, Gurgaon within 15 minutes. Kanchagolla takes about 30 minutes. Jolbhora takes about an hour.\n\nDelivery time after that depends on the Porter rider's travel time, which varies based on traffic and the time of day.\n\nOur kitchen is open 10:00 AM – 7:30 PM every day. We always request a pre-order so we can make and send exactly what you want — we make in small batches, so we sometimes run out of stock. 🌸",
       "escalate": false,
       "source_ref": "client Q&A script > savoury food ordering"
     },
-
     {
       "id": "savoury_crosssell_sondesh",
       "client_confirmed_date": "2026-08-21",
       "triggers": [
-        "savoury crosssell", "also sondesh", "offer sondesh", "do you have sweets too",
-        "any sweets with meal", "dessert with meal", "sweets along with meal", "sondesh with food"
+        "savoury crosssell",
+        "also sondesh",
+        "offer sondesh",
+        "do you have sweets too",
+        "any sweets with meal",
+        "dessert with meal",
+        "sweets along with meal",
+        "sondesh with food",
+        "do you also sell sondesh sweet boxes",
+        "do you sell sondesh sweet boxes",
+        "do you sell sondesh boxes"
       ],
       "response": "We also make & send Bengali mishti - norom pak Sondesh. All milk protein, no gluten, mild sweet, no added fat - subtle natural flavours…. Handcrafted.",
       "escalate": false,
       "source_ref": "client Q&A script > savoury food ordering"
     },
-
     {
       "id": "sondesh_crosssell_savoury",
       "client_confirmed_date": "2026-08-24",
       "triggers": [
-        "sondesh crosssell", "also savoury", "also meals", "do you have food too",
-        "bengali meals", "also cook meals", "meals across delhi ncr", "food menu too",
-        "savoury food", "do you also cook meals", "do you deliver meals"
+        "sondesh crosssell",
+        "also savoury",
+        "also meals",
+        "do you have food too",
+        "bengali meals",
+        "also cook meals",
+        "meals across delhi ncr",
+        "food menu too",
+        "savoury food",
+        "do you also cook meals",
+        "do you deliver meals",
+        "do you also cook bengali meals",
+        "do you cook bengali meals",
+        "do you prepare bengali meals"
       ],
       "response": "We also prepare and deliver freshly cooked Bengali meals across Delhi NCR. I've attached this week's menu in case you'd like to have a look. Everything is cooked fresh in small batches, and some dishes are available only in limited quantities. If you'd like a recommendation based on whether you prefer vegetarian, fish or meat, just let me know — I'd be happy to help.",
       "escalate": false,
       "source_ref": "client Q&A script > sondesh to savoury crosssell"
     },
-
     {
       "id": "savoury_best_time_to_book",
       "client_confirmed_date": "2026-08-24",
       "triggers": [
-        "best time to order", "when should i book", "when to book", "best time to book",
-        "when should i order", "how early to book", "how far in advance", "when to place order",
-        "how early should i order", "best time to place order", "advance booking"
+        "best time to order",
+        "when should i book",
+        "when to book",
+        "best time to book",
+        "when should i order",
+        "how early to book",
+        "how far in advance",
+        "when to place order",
+        "how early should i order",
+        "best time to place order",
+        "advance booking",
+        "when is the best time to order"
       ],
       "response": "We always recommend pre-ordering. It helps us ensure that the dishes you want are available, exactly as you'd like them. Since we cook everything in small batches, some dishes may sell out if you order at the last minute. Pre-ordering is the best way to avoid disappointment.",
       "escalate": false,
       "source_ref": "client Q&A script > savoury best time to book"
     },
-
     {
       "id": "savoury_delivery_time",
       "client_confirmed_date": "2026-08-24",
       "triggers": [
-        "savoury delivery time", "delivery time for food", "how long for food",
-        "when will my meal arrive", "how long to deliver food", "food dispatch time",
-        "meal delivery time", "how long for lunch", "how long for dinner", "food delivery time",
-        "when will meal arrive", "dispatch time for food"
+        "savoury delivery time",
+        "delivery time for food",
+        "how long for food",
+        "when will my meal arrive",
+        "how long to deliver food",
+        "food dispatch time",
+        "meal delivery time",
+        "how long for lunch",
+        "how long for dinner",
+        "food delivery time",
+        "when will meal arrive",
+        "dispatch time for food"
       ],
       "response": "Once your order is confirmed, we usually dispatch freshly prepared Bengali meals from our kitchen in Sushant Lok, Gurgaon within 45 minutes.\n\nDelivery time after that depends on the Porter rider's travel time, which varies based on traffic and the time of day.\n\nOur kitchen is open 10:00 AM – 7:30 PM every day. If you need any assistance with your order or delivery timing, feel free to message us here on DM or call/WhatsApp us directly at 8796551990. 🌸",
       "escalate": false,
       "source_ref": "client Q&A script > savoury food delivery time"
     },
-
     {
       "id": "kolkata_expansion_info",
       "client_confirmed_date": "2026-08-24",
       "triggers": [
-        "kolkata", "moving", "leaving", "expansion", "who runs the kitchen now",
-        "kolkata expansion", "moving to kolkata", "leaving delhi", "expansion to kolkata",
-        "kolkata kitchen", "relocating to kolkata", "moving kitchen"
+        "kolkata",
+        "moving",
+        "leaving",
+        "expansion",
+        "who runs the kitchen now",
+        "kolkata expansion",
+        "moving to kolkata",
+        "leaving delhi",
+        "expansion to kolkata",
+        "kolkata kitchen",
+        "relocating to kolkata",
+        "moving kitchen"
       ],
       "response": "We are expanding our operations to Kolkata! While our team is transitioning and expanding, our Gurgaon kitchen operations remain unchanged. Our kitchen in Sushant Lok, Gurgaon continues to be managed on-site by our Kitchen Manager, Mr. Guru Dayal Singh, alongside our all-women kitchen team who have been trained with us for over 4 years. The founders remotely monitor quality and operations daily, so nothing changes for our guests in Delhi NCR — we continue to craft and deliver fresh Sondesh and Bengali meals every day with the exact same quality and standards. 🌸",
       "escalate": false,
       "source_ref": "client Q&A script > kolkata expansion"
     }
   ],
-
   "escalation_triggers": {
     "description": "These are NOT answered by the bot — always forwarded to human team, per client requirement #4",
     "keywords": [
-      "refund", "complaint", "cancel order", "talk to human", "speak to human",
-      "human agent", "speak to manager", "speak to your manager", "speak to a manager", "talk to manager", "talk to your manager", "talk to a manager",
-      "ask for manager", "ask for your manager", "connect me to manager", "connect me to your manager", "call manager", "get manager", "where is my manager", "where is the manager", "where is manager",
-      "custom order", "bulk order", "negotiation",
-      "payment link", "transaction failed", "payment failed", "upi failed",
-      "money deducted", "payment error", "payment issue", "amount deducted", "failed payment", "no confirmation", "paid but no confirmation",
-      "discount", "discounts", "bulk discount", "custom branding", "ribbons", "branding",
-      "instead of", "can you do it for", "less price", "negotiate", "cheaper",
-      "same menu last week", "best seller", "bestseller", "manager number", "manager's phone number",
-      "give me the manager", "give me your manager"
+      "refund",
+      "complaint",
+      "cancel order",
+      "talk to human",
+      "speak to human",
+      "human agent",
+      "speak to manager",
+      "speak to your manager",
+      "speak to a manager",
+      "talk to manager",
+      "talk to your manager",
+      "talk to a manager",
+      "ask for manager",
+      "ask for your manager",
+      "connect me to manager",
+      "connect me to your manager",
+      "call manager",
+      "get manager",
+      "where is my manager",
+      "where is the manager",
+      "where is manager",
+      "custom order",
+      "bulk order",
+      "negotiation",
+      "payment link",
+      "transaction failed",
+      "payment failed",
+      "upi failed",
+      "money deducted",
+      "payment error",
+      "payment issue",
+      "amount deducted",
+      "failed payment",
+      "no confirmation",
+      "paid but no confirmation",
+      "discount",
+      "discounts",
+      "bulk discount",
+      "custom branding",
+      "ribbons",
+      "branding",
+      "instead of",
+      "can you do it for",
+      "less price",
+      "negotiate",
+      "cheaper",
+      "same menu last week",
+      "best seller",
+      "bestseller",
+      "manager number",
+      "manager's phone number",
+      "give me the manager",
+      "give me your manager"
     ],
     "examples": [
       "custom/bulk order pricing negotiation",
@@ -865,7 +1464,6 @@
     ],
     "fallback_response": "Thank you for getting in touch! 🌸 I've notified our team (+91 87965 51990) regarding your request and they'll connect with you directly on WhatsApp/call shortly.\n\nIn the meantime, feel free to ask me about:\n• 🌸 Our fresh Sondesh, Kanchagolla & Jolbhora (Aamar Mishti & Signature Collections)\n• 🍱 This week's fresh Bengali Lunch & Dinner Bento menu\n• 🚚 Delivery details across Delhi NCR\n\nOr reply 'menu' to see our complete price list!"
   },
-
   "open_questions_for_client": [
     "Payment methods accepted — needed before we can auto-answer 'how do I pay'",
     "Order minimums / lead time / cutoff — needed for 'how to order' template to be complete",

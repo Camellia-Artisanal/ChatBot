@@ -169,7 +169,7 @@ class OrderCalculator:
         if any(fl in norm_text for fl in flavours):
             return True
         sizes = ["1kg", "1 kg", "1000g", "500g", "500 g", "250g", "250 g", "36 pcs", "36pcs", "18 pcs", "18pcs", "9 pcs", "9pcs", "box", "pack", "dabba"]
-        if any(sz in norm_text for sz in sizes):
+        if any(re.search(rf'\b{re.escape(sz)}\b', norm_text) for sz in sizes):
             return True
         if any(cl in norm_text for cl in ["signature", "aamar"]):
             return True
@@ -195,7 +195,8 @@ class OrderCalculator:
             "tomorrow morning", "tomorrow evening", "by 10 am", "by 10am", "morning by",
             "shelf life", "how many pieces", "how many pcs", "how many piece",
             "is it possible to", "do you take", "do you accept", "is your food", "is meat", "what oil",
-            "halal", "payment method", "payment methods", "take cod", "cash on delivery", "failed", "transaction failed"
+            "halal", "payment method", "payment methods", "take cod", "cash on delivery", "failed", "transaction failed",
+            "bento", "combo", "combos", "packaging", "eco friendly", "eco-friendly", "what options", "what meals", "what dishes"
         ])
         has_order_action = any(verb in text_lower for verb in [
             "i want to order", "want to order", "please order", "place order", "i would like to order",
