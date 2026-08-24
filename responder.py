@@ -9,6 +9,8 @@ from gemini_responder import gemini_responder
 from session_memory import session_memory
 
 from order_calculator import order_calculator
+from rag_fallback import rag_fallback_engine
+from database import db
 
 log = get_logger("camellia.responder")
 
@@ -114,8 +116,8 @@ class DeterministicResponder:
             "i", "am", "im", "my", "is", "are", "do", "does", "did", "you", "u", "r", "a", "an", "the", "to", "for",
             "of", "in", "on", "at", "by", "from", "with", "and", "or", "we", "can", "your", "this", "that", "these", "those",
             "what", "how", "when", "where", "why", "who", "which", "many", "much", "me", "us", "it", "its",
-            "show", "tell", "more", "want", "send", "share", "about", "some", "any", "all", "than", "other",
-            "please", "pls", "give", "know", "let", "sell", "use", "be", "have", "has", "had"
+            "show", "tell", "send", "share", "about", "some", "any", "all", "than", "other",
+            "please", "pls", "give", "let", "use", "be", "has", "had"
         }
 
         # 1. Update & Extract Session Memory Facts (Name, Order Draft)
@@ -251,8 +253,13 @@ class DeterministicResponder:
                     
                     if matching_substantive:
                         coverage = len(matching_substantive) / max(len(substantive_trigger_words), 1)
-                        if len(substantive_trigger_words) == 1 or len(matching_substantive) >= 2 or coverage >= 0.6:
-                            t_score = len(matching_substantive) * 6 + int(coverage * 6)
+                        user_coverage = len(matching_substantive) / max(len(substantive_user_words), 1)
+                        if len(substantive_trigger_words) == 1:
+                            if len(substantive_user_words) <= 2 or user_coverage >= 0.35:
+                                t_score = len(matching_substantive) * 6 + int(coverage * 6)
+                        else:
+                            if len(matching_substantive) >= 2 or coverage >= 0.6:
+                                t_score = len(matching_substantive) * 6 + int(coverage * 6)
                     else:
                         # Check 3: Fuzzy word similarity match (Tiered: len >= 3 allowed with stricter threshold)
                         fuzzy_matches = 0
@@ -289,12 +296,16 @@ class DeterministicResponder:
                     "GUARD_payment_method": {"pay", "payment", "paying", "cod", "upi", "qr", "gpay", "paytm", "phonepe", "banking", "card", "cash"},
                     "GUARD_allergen_nutfree_glutenfree": {"allergy", "allergies", "allergic", "allergen", "allergens", "peanut", "peanuts", "cashew", "cashews", "pistachio", "pistachios", "gluten", "contamination", "nut", "nuts"},
                     "GUARD_pickup_address_hours": {"pickup", "pick", "collect", "kitchen"},
-                    "GUARD_shelf_life_storage": {"shelf", "storage", "refrigeration", "refrigerate", "fridge", "expiry", "spoil", "heat", "store", "last"},
+                    "GUARD_shelf_life_storage": {"shelf", "storage", "refrigeration", "refrigerate", "unrefrigerated", "fridge", "expiry", "spoil", "heat", "store", "last", "room"},
                     "GUARD_staff_names_manager_contact": {"owner", "founder", "chef", "somdeb", "manager", "staff", "guru", "email"}
                 }
                 anchors = guard_anchors.get(tmpl_id, set())
                 if anchors and not any(a in lowered_text for a in anchors):
                     score = 0
+
+            # Zero out GUARD_shelf_life_storage if jolbhora is mentioned (unconfirmed Jolbhora facts must escalate)
+            if tmpl_id == "GUARD_shelf_life_storage" and "jolbhora" in lowered_text:
+                score = 0
 
             # Suppress name_introduction template when we already captured name as prefix for compound inquiries
             if intro_greeting_prefix and tmpl_id == "name_introduction":
@@ -313,7 +324,10 @@ class DeterministicResponder:
                 elif tmpl_id == "GUARD_payment_method" and re.search(r'\b(how to pay|how do i pay|how can i pay|payment method|payment methods|payment options|pay via|pay with|pay by|cod|cash on delivery|upi qr|qr code|gpay|paytm|phonepe|net banking|credit card|debit card)\b', lowered_text):
                     score += 100
                 elif tmpl_id == "GUARD_shelf_life_storage" and re.search(r'\b(shelf life|how long (can i store|does it last|will it last|to keep)|how many days will it last|refrigeration|refrigerate|fridge|storage guidelines|how to store)\b', lowered_text):
-                    score += 100
+                    if "jolbhora" in lowered_text:
+                        score = 0
+                    else:
+                        score += 100
                 elif tmpl_id == "GUARD_pickup_address_hours" and re.search(r'\b(pickup address|kitchen address|self pickup|pick it up from kitchen|pick up from (your )?kitchen|pickup from (your )?kitchen|where is your kitchen|kitchen location|pickup timings|kitchen pickup timings)\b', lowered_text):
                     score += 100
                 elif tmpl_id == "GUARD_staff_names_manager_contact" and re.search(r'\b(who is the owner|who is the founder|who is the chef|who is the cook|who runs the kitchen|who is somdeb|chef name|owner name|founder name|staff names|kitchen manager|who is the manager|manager name|manager email|email address|email id|your email)\b', lowered_text):
@@ -419,18 +433,6 @@ class DeterministicResponder:
                 facts["awaiting_subscription_booking"] = False
             elif tmpl_id == "order_next_steps":
                 session_memory.clear_order_draft(user_id, channel)
-            elif config.is_ai_enabled:
-                context_summary = session_memory.get_context_summary(user_id, channel)
-                history_turns = session_memory.get_session(user_id, channel)["turns"]
-                refined_text, used_ai = gemini_responder.refine_template_response(
-                    template_id=tmpl_id,
-                    template_text=response_text,
-                    user_message=user_message,
-                    user_context=context_summary,
-                    history_turns=history_turns
-                )
-                if used_ai and refined_text:
-                    response_text = refined_text
 
             # First-time customer welcoming line for savoury food intro
             if tmpl_id == "savoury_food_intro" and not session_memory.has_prior_history(user_id, channel):
@@ -464,6 +466,15 @@ class DeterministicResponder:
             elif tmpl_id == "sondesh_crosssell_savoury":
                 facts["sondesh_crosssell_sent"] = True
 
+            if config.is_ai_enabled and gemini_responder.get_active_provider() != "none":
+                try:
+                    user_ctx = f"Customer Name: {facts.get('name', 'Unknown')}"
+                    refined_text, is_refined = gemini_responder.refine_template_response(tmpl_id, response_text, user_message, user_context=user_ctx)
+                    if is_refined and refined_text:
+                        response_text = refined_text
+                except Exception as e:
+                    log.warning("AI template refinement failed: %s", e)
+
             if intro_greeting_prefix and not response_text.startswith("Nice to meet you"):
                 if response_text.startswith("Hi! "):
                     response_text = response_text[4:]
@@ -474,30 +485,51 @@ class DeterministicResponder:
             session_memory.add_turn(user_id, channel, user_message, response_text)
             return response_text, True, tmpl_id, image_url
 
-        # Fallback to Cloud AI RAG Engine (OpenAI / Gemini) if enabled
-        if config.is_ai_enabled:
-            context_summary = session_memory.get_context_summary(user_id, channel)
-            history_turns = session_memory.get_session(user_id, channel)["turns"]
-
-            gemini_response, is_grounded, reason = gemini_responder.generate_response(
-                user_message,
-                user_context=context_summary,
-                history_turns=history_turns
-            )
-            if is_grounded and gemini_response:
-                if intro_greeting_prefix:
-                    gemini_response = intro_greeting_prefix + gemini_response
-                session_memory.add_turn(user_id, channel, user_message, gemini_response)
-                return gemini_response, True, "gemini_rag", None
-            elif reason == "out_of_context":
-                return gemini_response, False, "gemini_out_of_context", None
-
-        # No match found & AI RAG disabled/unreachable -> Escalate to human
+        # Check Active AI Provider (Gemini / OpenAI RAG) when enabled
         fallback = self.qa_data.get("escalation_triggers", {}).get(
-            "fallback_response", "Thanks for reaching out! Let me connect you with our team for this — they'll get back to you shortly. 🙏"
+            "fallback_response", "Thanks for reaching out! Let me connect you with our team."
         )
         if intro_greeting_prefix:
             fallback = intro_greeting_prefix + fallback
+
+        if config.is_ai_enabled and gemini_responder.get_active_provider() != "none":
+            try:
+                user_ctx = f"Customer Name: {facts.get('name', 'Unknown')}"
+                ai_resp, ok, reason = gemini_responder.generate_response(user_message, user_context=user_ctx)
+                if ok and ai_resp:
+                    # Controlled Architecture: Save AI generated response as candidate template for admin review (PENDING_APPROVAL).
+                    # DO NOT return AI generated text directly to the customer.
+                    try:
+                        db.save_candidate_template(
+                            name="gemini_rag_candidate",
+                            response=ai_resp,
+                            user_message=user_message,
+                            source_refs=["gemini_responder"],
+                            confidence=0.85,
+                            created_by="gemini_responder"
+                        )
+                    except Exception as ce:
+                        log.warning("Could not save Gemini candidate template: %s", ce)
+            except Exception as e:
+                log.warning("AI RAG generation failed: %s", e)
+
+        # Fallback to Controlled Isolated RAG Engine (RAGFallbackEngine) when no template matched
+        try:
+            rag_res = rag_fallback_engine.retrieve(user_message)
+            db.log_rag_audit(
+                user_message=user_message,
+                matched_template=None,
+                rag_invoked=True,
+                retrieved_sources=rag_res.retrieved_sources,
+                confidence_score=rag_res.confidence_score,
+                proposed_template=rag_res.proposed_intent if rag_res.confidence_score > 0 else None,
+                proposed_response=rag_res.proposed_response if rag_res.confidence_score > 0 else None,
+                approval_status=rag_res.approval_status if rag_res.confidence_score > 0 else "FAILED",
+                final_customer_response=fallback
+            )
+        except Exception as e:
+            log.error("RAG fallback processing error: %s", e)
+
         session_memory.add_turn(user_id, channel, user_message, fallback)
         return fallback, False, None, None
 

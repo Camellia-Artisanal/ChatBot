@@ -101,7 +101,11 @@
         "product details",
         "products list",
         "list of products",
-        "tell me about the products"
+        "tell me about the products",
+        "what do you have",
+        "what do u have",
+        "what do you serve",
+        "what do u serve"
       ],
       "response": "Hi! Thanks for asking about our products. 🌸\n\nAt Camellia Artisanal, we craft authentic, Bengal-rooted culinary delicacies made fresh to order from our kitchen in Sushant Lok, Gurgaon:\n\n1. *Handcrafted Sondesh Collections*:\n• *Collection 1 — Aamar Mishti (আমার মিষ্টি)*: Made with pure dairy milk for daily sweet cravings — Classic, Rose, Mango, Kesar, Aam Ada, Kanchagolla, and our signature Nolen Gur & Liquid Jolbhora Sondesh.\n• *Collection 2 — Signature A2 Collection*: Hand-kneaded end-to-end with pure desi A2 cow milk & forest Mahua — exceptionally pure, rich, and perfect for special celebrations.\n\n2. *Fresh Bengali Bento Meals & Curries*:\n• Freshly cooked homestyle Bengali lunch & dinner meals delivered across Delhi NCR (including Aloor Dom, Dhokar Dalna, Bhetki Paturi, Chingri Malaikari, Robibarer Mangsho, and Daily Bento boxes).\n\nSharing our full Sondesh and fresh weekly meal cards below! Would you like to check out our flavours, prices, or place an order?",
       "escalate": false,
@@ -170,7 +174,7 @@
 
     {
       "id": "delivery_time",
-      "triggers": ["how much time", "how long does it take", "delivery time", "how soon", "when will it arrive", "dispatch time", "kitchen timings", "kitchen hours", "what time do you open", "same day delivery"],
+      "triggers": ["how much time", "how long does it take", "delivery time", "how soon", "when will it arrive", "dispatch time", "kitchen timings", "kitchen hours", "what time do you open", "same day delivery", "delivery hours", "what are your delivery hours", "what's your delivery hours"],
       "response": "Hi! Thank you for getting in touch.\n\nOnce your sondesh order is confirmed, we usually dispatch it from our kitchen in Sushant Lok, Gurgaon within 15 minutes. Kanchagolla takes about 30 minutes. Jolbhora takes about an hour.\n\nDelivery time after that depends on the Porter rider's travel time, which varies based on traffic and the time of day.\n\nOur kitchen is open 10:00 AM – 7:30 PM every day. We always request a pre-order so we can make and send exactly what you want — we make in small batches, so we sometimes run out of stock. 🌸",
       "escalate": false,
       "source_ref": "client Q&A script > TIME"
@@ -235,7 +239,7 @@
     {
       "id": "jolbhora",
       "triggers": ["jolbhora", "liquid filling", "jol bhora", "jolbhora price", "jolbhora cost", "jol bhora price", "jolbhora rate", "jolbhora options", "price of jolbhora", "cost of jolbhora", "nolen gur jolbhora", "jolbhora sondesh"],
-      "response": "Jolbhora (Nolen Gur Sondesh with authentic liquid filling) Table: 🌸\n\n```\n+-------------------------+-------+-------+-------+\n| Pack Size (Piece Count) | Aamar | SigA2 |\n+-------------------------+-------+-------+-------+\n| 250g Box (6 pcs)        | ₹750  | ₹900  |\n| 500g Box (12 pcs)       | ₹1400 | ₹1600 |\n| 1kg Box (24 pcs)        | ₹2500 | ₹2900 |\n+-------------------------+-------+-------+-------+\n```\n\nWhich collection and pack size would you like to order?",
+      "response": "Specific pricing and pack sizes for Jolbhora (Nolen Gur Sondesh with authentic liquid filling) are currently pending client confirmation — please connect with our team directly on WhatsApp or call +91 87965 51990 for custom packaging details! 🌸",
       "escalate": false,
       "source_ref": "menu.json > Jolbhora"
     },
@@ -596,7 +600,7 @@
         "jolbhora", "jol bhora", "liquid nolen gur", "liquid filling", "talgash",
         "palm tree shaped", "palm-tree", "liquid gur inside", "real liquid nolen gur", "liquid nolen gur inside"
       ],
-      "response": "Yes, absolutely! 🌸 Our traditional Jolbhora Sondesh is crafted the authentic Kolkata way — featuring a delicate outer shell of artisanal Norom Pak Sondesh filled with pure, luscious liquid Nolen Gur (date palm jaggery) right in the center! When you bite into it, the liquid gur bursts with rich festive aroma.\n\n• Collection 1 (Aamar Mishti): 250g (6 pcs) - ₹750 | 500g (12 pcs) - ₹1,400 | 1kg (24 pcs) - ₹2,500\n• Collection 2 (Signature A2 Cow Milk): 250g (6 pcs) - ₹900 | 500g (12 pcs) - ₹1,600 | 1kg (24 pcs) - ₹2,900\n\nWe also craft our iconic palm-tree shaped Talgash Sondesh in our Signature Collection! Would you like to order a fresh box of Jolbhora or Talgash for delivery across Delhi NCR? 🌸",
+      "response": "Yes, absolutely! 🌸 Our traditional Jolbhora Sondesh is crafted the authentic Kolkata way — featuring a delicate outer shell of artisanal Norom Pak Sondesh filled with pure, luscious liquid Nolen Gur (date palm jaggery) right in the center! Specific pricing and pack sizes for Jolbhora are currently pending client confirmation — please connect with our team directly on WhatsApp or call +91 87965 51990! 🌸",
       "escalate": false,
       "source_ref": "menu.json > Jolbhora & Talgash"
     },
@@ -642,7 +646,14 @@
         "store in fridge",
         "store in refrigerator",
         "storage guidelines",
-        "how long can i store the sondesh and does it need refrigeration"
+        "how long can i store the sondesh and does it need refrigeration",
+        "unrefrigerated",
+        "without fridge",
+        "without refrigeration",
+        "outside fridge",
+        "in car",
+        "in my car",
+        "june heat"
       ],
       "response": "Stays well for a week refrigerated. For best texture, heat for 12 seconds after taking it out of the fridge.",
       "escalate": false,
@@ -677,7 +688,7 @@
         "what is your email",
         "email"
       ],
-      "response": "Manager of Kitchens is Mr. Guru Dayal Singh, +91 8796551990 (same as the official WhatsApp number — there is no separate number). You can also reach us by email at camellia.artisanal.gurgaon@gmail.com.",
+      "response": "Manager of Kitchens is Mr. Guru Dayal Singh (+91 87965 51990 — official WhatsApp line). Manager email details are currently CONFLICTED and pending client confirmation — please connect with us directly on WhatsApp or call +91 87965 51990!",
       "escalate": false,
       "source_ref": "client confirmation (Somdeb Ji) > kitchen manager (email camellia.artisanal.gurgaon@gmail.com confirmed Phase E-continued)"
     },

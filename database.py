@@ -83,6 +83,40 @@ class Database:
             );
             """)
 
+            # Candidate templates table for human approval workflow
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS candidate_templates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                status TEXT DEFAULT 'PENDING_APPROVAL',
+                user_message TEXT,
+                response TEXT NOT NULL,
+                source_refs TEXT,
+                confidence REAL DEFAULT 0.0,
+                created_by TEXT DEFAULT 'rag_fallback',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                approved_at TIMESTAMP,
+                approved_by TEXT
+            );
+            """)
+
+            # RAG audit log table
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS rag_audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_message TEXT NOT NULL,
+                matched_template TEXT,
+                rag_invoked INTEGER DEFAULT 0,
+                retrieved_sources TEXT,
+                confidence_score REAL DEFAULT 0.0,
+                proposed_template TEXT,
+                proposed_response TEXT,
+                approval_status TEXT DEFAULT 'PENDING_APPROVAL',
+                final_customer_response TEXT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+
             # Analytics summary counters table
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS analytics (
@@ -395,5 +429,94 @@ class Database:
             "escalations": max(removed_escalations, 0),
             "sessions": max(removed_sessions, 0),
         }
+
+    def save_candidate_template(
+        self,
+        name: str,
+        response: str,
+        user_message: str = None,
+        source_refs: List[str] = None,
+        confidence: float = 0.0,
+        created_by: str = "rag_fallback"
+    ) -> int:
+        """Saves a proposed candidate template with status 'PENDING_APPROVAL'."""
+        sources_str = json.dumps(source_refs or [])
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+            INSERT INTO candidate_templates (name, status, user_message, response, source_refs, confidence, created_by, created_at)
+            VALUES (?, 'PENDING_APPROVAL', ?, ?, ?, ?, ?, ?)
+            """, (name, user_message, response, sources_str, confidence, created_by, datetime.utcnow().isoformat()))
+            candidate_id = cursor.lastrowid
+            conn.commit()
+            return candidate_id
+
+    def get_pending_candidates(self) -> List[Dict[str, Any]]:
+        """Retrieves all candidate templates awaiting human approval."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM candidate_templates WHERE status = 'PENDING_APPROVAL' ORDER BY created_at DESC")
+            rows = cursor.fetchall()
+            result = []
+            for row in rows:
+                item = dict(row)
+                try:
+                    item["source_refs"] = json.loads(item.get("source_refs") or "[]")
+                except Exception:
+                    item["source_refs"] = []
+                result.append(item)
+            return result
+
+    def approve_candidate_template(self, candidate_id: int, approved_by: str = "admin") -> bool:
+        """Marks a candidate template as APPROVED and returns candidate details."""
+        now = datetime.utcnow().isoformat()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+            UPDATE candidate_templates
+            SET status = 'APPROVED', approved_at = ?, approved_by = ?
+            WHERE id = ? AND status = 'PENDING_APPROVAL'
+            """, (now, approved_by, candidate_id))
+            affected = cursor.rowcount
+            conn.commit()
+            return affected > 0
+
+    def reject_candidate_template(self, candidate_id: int) -> bool:
+        """Marks a candidate template as REJECTED."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE candidate_templates SET status = 'REJECTED' WHERE id = ?", (candidate_id,))
+            affected = cursor.rowcount
+            conn.commit()
+            return affected > 0
+
+    def log_rag_audit(
+        self,
+        user_message: str,
+        matched_template: Optional[str],
+        rag_invoked: bool,
+        retrieved_sources: List[str],
+        confidence_score: float,
+        proposed_template: Optional[str],
+        proposed_response: Optional[str],
+        approval_status: str,
+        final_customer_response: str
+    ):
+        """Logs an audit record for every RAG fallback invocation."""
+        sources_str = json.dumps(retrieved_sources or [])
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+            INSERT INTO rag_audit_logs (
+                user_message, matched_template, rag_invoked, retrieved_sources,
+                confidence_score, proposed_template, proposed_response,
+                approval_status, final_customer_response, timestamp
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                user_message, matched_template, 1 if rag_invoked else 0, sources_str,
+                confidence_score, proposed_template, proposed_response,
+                approval_status, final_customer_response, datetime.utcnow().isoformat()
+            ))
+            conn.commit()
 
 db = Database()
