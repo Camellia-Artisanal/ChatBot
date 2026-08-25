@@ -1138,6 +1138,30 @@ class TestCamelliaBot(unittest.TestCase):
         self.assertTrue(pricing_res["was_matched"])
         self.assertIn("🛍️ Place Order", pricing_res["buttons"])
 
+    def test_greeting_variations_do_not_repeat_immediately(self):
+        """Greeting replies rotate randomly without leaving the approved response bank."""
+        from session_memory import session_memory
+
+        user_id = "greeting_variation_user"
+        channel = "whatsapp"
+        session_memory.clear_session(user_id, channel)
+        approved = responder.qa_data["templates"][0]["responses"]
+
+        replies = []
+        for message in ["HI", "Hi", "hi", "HELLO", "Hey", "hello"]:
+            reply, matched, template_id, _ = responder.match_and_respond(
+                message, user_id=user_id, channel=channel
+            )
+            self.assertTrue(matched)
+            self.assertEqual(template_id, "greeting")
+            self.assertIn(reply, approved)
+            replies.append(reply)
+
+        self.assertEqual(len(replies), 6)
+        self.assertTrue(all(previous != current for previous, current in zip(replies, replies[1:])))
+        last_index = session_memory.get_facts(user_id, channel)["last_greeting_index"]
+        self.assertEqual(replies[-1], approved[last_index])
+
     @patch("whatsapp_adapter.WhatsAppAdapter.access_token", new_callable=PropertyMock)
     def test_whatsapp_mock_outbound_and_buttons(self, mock_token):
         """Tests mock WhatsApp outbound message dispatch with image and buttons."""
@@ -1677,6 +1701,7 @@ class TestCamelliaBot(unittest.TestCase):
         sess["facts"]["savoury_crosssell_sent"] = True
         sess["facts"]["awaiting_subscription_booking"] = True
         sess["facts"]["image_card_sent"] = True
+        sess["facts"]["last_greeting_index"] = 4
 
         self.assertEqual(sess["facts"]["name"], "Ananya")
         self.assertEqual(sess["facts"]["order_draft"]["flavour"], "jolbhora")
@@ -1692,6 +1717,7 @@ class TestCamelliaBot(unittest.TestCase):
         self.assertEqual(sess_23h["facts"]["order_draft"]["flavour"], "jolbhora")
         self.assertEqual(len(sess_23h["facts"]["cart"]), 1)
         self.assertTrue(sess_23h["facts"]["savoury_crosssell_sent"])
+        self.assertEqual(sess_23h["facts"]["last_greeting_index"], 4)
 
         # Step 3: Return after >24h (e.g. 25 hours / 90000 seconds later)
         sess["last_updated"] = now - 90000
@@ -1704,6 +1730,7 @@ class TestCamelliaBot(unittest.TestCase):
         self.assertFalse(sess_25h["facts"]["savoury_crosssell_sent"])
         self.assertFalse(sess_25h["facts"]["awaiting_subscription_booking"])
         self.assertFalse(sess_25h["facts"]["image_card_sent"])
+        self.assertIsNone(sess_25h["facts"]["last_greeting_index"])
 
     def test_phase_d_ad_gate_savoury_subscription_regression(self):
         """Phase D: Confirm Ad-Gate blocks organic Instagram DMs and allows Ad-Click / WhatsApp DMs for savoury/subscription templates."""

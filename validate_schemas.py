@@ -122,6 +122,13 @@ def validate_qa_templates_schema(file_path: str = "qa_templates.json") -> Tuple[
                             errors.append(f"Template '{tpl_id}': Invalid regex pattern '{kw}': {e}")
 
             response = tpl.get("response")
+            responses = tpl.get("responses")
+            if tpl_id == "greeting":
+                if not isinstance(responses, list) or not (8 <= len(responses) <= 12):
+                    errors.append(f"Template '{tpl_id}': 'responses' must contain 8-12 replies.")
+                elif any(not isinstance(reply, str) or not reply.strip() for reply in responses):
+                    errors.append(f"Template '{tpl_id}': Every greeting response must be non-empty text.")
+                continue
             is_guard_or_escalate = tpl.get("escalate") is True or (isinstance(tpl_id, str) and tpl_id.startswith("GUARD_"))
             if is_guard_or_escalate and response is None:
                 pass

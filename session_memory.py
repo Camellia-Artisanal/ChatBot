@@ -24,6 +24,7 @@ class SessionMemoryManager:
                 "last_updated": current_time,
                 "facts": {
                     "name": None,
+                    "last_greeting_index": None,
                     "image_card_sent": False,
                     "awaiting_subscription_booking": False,
                     "savoury_crosssell_sent": False,
@@ -42,11 +43,13 @@ class SessionMemoryManager:
                 self._sessions.popitem(last=False)
         else:
             session = self._sessions[key]
+            session.setdefault("facts", {}).setdefault("last_greeting_index", None)
             last_updated = session.get("last_updated", current_time)
             if current_time - last_updated > 86400:
                 facts = session.get("facts", {})
                 facts["image_card_sent"] = False
                 facts["awaiting_subscription_booking"] = False
+                facts["last_greeting_index"] = None
                 facts["savoury_crosssell_sent"] = False
                 facts["sondesh_crosssell_sent"] = False
                 facts["cart"] = []

@@ -1,5 +1,6 @@
 import difflib
 import json
+import random
 import re
 from dataclasses import dataclass
 from typing import Dict, Any, Tuple, Optional, List
@@ -117,7 +118,7 @@ class DeterministicResponder:
             "of", "in", "on", "at", "by", "from", "with", "and", "or", "we", "can", "your", "this", "that", "these", "those",
             "what", "how", "when", "where", "why", "who", "which", "many", "much", "me", "us", "it", "its",
             "show", "tell", "send", "share", "about", "some", "any", "all", "than", "other",
-            "please", "pls", "give", "let", "use", "be", "has", "had"
+            "please", "pls", "give", "let", "use", "be", "has", "had", "know"
         }
 
         # 1. Update & Extract Session Memory Facts (Name, Order Draft)
@@ -279,7 +280,7 @@ class DeterministicResponder:
             "subscription_details", "subscription_booking_steps", "alacarte_prebooking_steps",
             "sondesh_dispatch_time", "savoury_crosssell_sondesh", "sondesh_crosssell_savoury",
             "savoury_best_time_to_book", "savoury_delivery_time", "kolkata_expansion_info",
-            "order_next_steps", "sondesh_price_general", "recall_name"
+            "order_next_steps", "sondesh_price_general", "recall_name", "name_introduction"
         }
 
         TIER_3_GENERIC_INFO = {
@@ -288,14 +289,16 @@ class DeterministicResponder:
         }
 
         TIER_4_GREETING_INTRO = {
-            "greeting", "name_introduction"
+            "greeting"
         }
 
         best_template = None
         best_composite_score = -1
         best_score = 0
 
-        for tmpl in templates:
+        sorted_templates = sorted(templates, key=lambda t: 1 if t.get("id") in TIER_4_GREETING_INTRO else 0)
+
+        for tmpl in sorted_templates:
             tmpl_id = tmpl.get("id", "")
             is_guard = tmpl_id.startswith("GUARD_")
             triggers = tmpl.get("triggers", [])
@@ -375,8 +378,8 @@ class DeterministicResponder:
             if tmpl_id == "GUARD_shelf_life_storage" and "jolbhora" in lowered_text:
                 score = 0
 
-            # Suppress greeting/name intro when user message contains substantive business inquiry
-            if has_business_query and tmpl_id in TIER_4_GREETING_INTRO:
+            # Suppress greeting/name intro when user message contains substantive business inquiry and another specific template matched
+            if has_business_query and tmpl_id in TIER_4_GREETING_INTRO and best_composite_score > 0:
                 score = 0
 
             if intro_greeting_prefix and tmpl_id == "name_introduction":
@@ -470,7 +473,21 @@ class DeterministicResponder:
         # Require a minimum matching threshold (score >= 4) in hybrid/deterministic mode
         if best_template and best_score >= 4:
             tmpl_id = best_template.get("id", "")
-            raw_response = best_template.get("response")
+            facts = session_memory.get_facts(user_id, channel)
+            if tmpl_id == "greeting":
+                responses = best_template.get("responses", [])
+                last_index = facts.get("last_greeting_index")
+                available_indices = [
+                    index for index in range(len(responses)) if index != last_index
+                ]
+                if available_indices:
+                    selected_index = random.choice(available_indices)
+                    raw_response = responses[selected_index]
+                    facts["last_greeting_index"] = selected_index
+                else:
+                    raw_response = None
+            else:
+                raw_response = best_template.get("response")
 
             # Hard Code-Level Safety Checks (Rules 3 & 4):
             # 1. Any template marked escalate: true triggers escalation.
@@ -488,7 +505,7 @@ class DeterministicResponder:
                 return fallback, False, tmpl_id, None
 
             response_text, image_url = self._format_dynamic_response(
-                tmpl_id, best_template.get("response") or "", user_id=user_id, channel=channel, user_message=user_message
+                tmpl_id, raw_response or "", user_id=user_id, channel=channel, user_message=user_message
             )
             
             # Dynamic Name Personalization & Order Draft reset on order confirmation
@@ -544,7 +561,7 @@ class DeterministicResponder:
             elif tmpl_id == "sondesh_crosssell_savoury":
                 facts["sondesh_crosssell_sent"] = True
 
-            if config.is_ai_enabled and gemini_responder.get_active_provider() != "none":
+            if tmpl_id != "greeting" and config.is_ai_enabled and gemini_responder.get_active_provider() != "none":
                 try:
                     user_ctx = f"Customer Name: {facts.get('name', 'Unknown')}"
                     refined_text, is_refined = gemini_responder.refine_template_response(tmpl_id, response_text, user_message, user_context=user_ctx)
