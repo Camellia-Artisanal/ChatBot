@@ -89,12 +89,29 @@ Follow these steps to create a **Permanent Token**:
 
 In the project root directory (`Camellia.artisal`), create or update your `.env` file:
 
+#### Safe mock mode (default for development)
+
+Use a separate WhatsApp API number for the first live pilot. Until that number is ready, keep Meta outbound calls disabled:
+
+```env
+WHATSAPP_MOCK_MODE=true
+WHATSAPP_ACCESS_TOKEN=
+WHATSAPP_PHONE_NUMBER_ID=
+```
+
+The bot will process messages and return mock delivery results without making HTTP requests to Meta. Do not deregister or migrate the client's existing WhatsApp number during this stage.
+
+#### Live mode after pilot approval
+
+Add the real values only to the server's private `.env` file:
+
 ```env
 # Meta Webhook Secrets
 META_VERIFY_TOKEN=camellia_whatsapp_verify_secret_2026
 META_APP_SECRET=your_meta_app_secret_from_basic_settings
 
 # WhatsApp Cloud API Credentials
+WHATSAPP_MOCK_MODE=false
 WHATSAPP_ACCESS_TOKEN=your_permanent_system_user_access_token
 WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id_from_step_2
 WHATSAPP_API_VERSION=v19.0

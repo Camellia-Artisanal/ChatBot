@@ -1218,6 +1218,33 @@ class TestCamelliaBot(unittest.TestCase):
         self.assertEqual(send_res.get("recipient"), "919876543210")
         self.assertEqual(len(send_res.get("buttons", [])), 2)
 
+    def test_whatsapp_mock_mode_never_calls_meta(self):
+        """Mock mode remains safe even if placeholder credentials are present."""
+        from whatsapp_adapter import whatsapp_adapter
+
+        with patch.object(config, "WHATSAPP_MOCK_MODE", True), \
+             patch.object(config, "WHATSAPP_ACCESS_TOKEN", "placeholder-token"), \
+             patch.object(config, "WHATSAPP_PHONE_NUMBER_ID", "placeholder-number"), \
+             patch("whatsapp_adapter.httpx.Client") as mock_client:
+            result = whatsapp_adapter.send_message("919876543210", "Mock delivery test")
+
+        self.assertTrue(result["mock"])
+        self.assertEqual(result["mode"], "mock")
+        mock_client.assert_not_called()
+
+    def test_whatsapp_live_mode_requires_credentials_before_http(self):
+        """Live mode fails closed when credentials are not configured."""
+        from whatsapp_adapter import whatsapp_adapter
+
+        with patch.object(config, "WHATSAPP_MOCK_MODE", False), \
+             patch.object(config, "WHATSAPP_ACCESS_TOKEN", ""), \
+             patch.object(config, "WHATSAPP_PHONE_NUMBER_ID", ""), \
+             patch("whatsapp_adapter.httpx.Client") as mock_client:
+            result = whatsapp_adapter.send_message("919876543210", "Should not send")
+
+        self.assertEqual(result["status"], "not_configured")
+        mock_client.assert_not_called()
+
     def test_tiered_fuzzy_matching_3letter_words(self):
         """Tests that 3-letter food terms with minor typos (e.g. gurr) match correctly while unrelated noise is rejected."""
         # 1. 3-letter typo: 'nolen gurr' -> nolen_gur template

@@ -33,6 +33,22 @@ class WhatsAppAdapter:
     def api_url(self) -> str:
         return f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
 
+    def configuration_status(self) -> Dict[str, Any]:
+        """Reports safe WhatsApp configuration state without exposing credentials."""
+        if config.WHATSAPP_MOCK_MODE:
+            return {"mode": "mock", "ready": True, "reason": "WHATSAPP_MOCK_MODE is enabled"}
+        missing = []
+        if not self.access_token:
+            missing.append("WHATSAPP_ACCESS_TOKEN")
+        if not self.phone_number_id:
+            missing.append("WHATSAPP_PHONE_NUMBER_ID")
+        return {
+            "mode": "live",
+            "ready": not missing,
+            "reason": "Configured" if not missing else "Missing required environment variables",
+            "missing": missing,
+        }
+
     def parse_webhook_message(self, payload: Dict[str, Any]) -> Optional[Tuple[str, str, str]]:
         """
         Parses Meta WhatsApp Business API webhook payload.
@@ -130,13 +146,22 @@ class WhatsAppAdapter:
         raw_images = [image_url] if isinstance(image_url, str) else list(image_url or [])
         images = [self._public_url(img) for img in raw_images]
 
-        if not self.access_token or not self.phone_number_id:
-            # Development / Mock Mode
+        if config.WHATSAPP_MOCK_MODE:
+            # Development / Mock Mode: never construct an outbound HTTP request.
             safe_body = text_body[:60].encode("ascii", "backslashreplace").decode("ascii")
             btn_info = f" [Buttons: {', '.join(buttons)}]" if buttons else ""
             msg_type = f"IMAGE x{len(images)} ({', '.join(images)}){btn_info}" if images else f"TEXT{btn_info}"
             log.info("[MOCK WHATSAPP OUTBOUND] [%s] To: %s | Body: %s...", msg_type, recipient_phone, safe_body)
-            return {"mock": True, "status": "sent", "recipient": recipient_phone, "type": msg_type, "buttons": buttons}
+            return {"mock": True, "status": "sent", "mode": "mock", "recipient": recipient_phone, "type": msg_type, "buttons": buttons}
+
+        if not self.access_token or not self.phone_number_id:
+            log.error("WhatsApp live mode is enabled but required credentials are missing")
+            return {
+                "mock": False,
+                "status": "not_configured",
+                "mode": "live",
+                "error": "Set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID before enabling live mode",
+            }
 
         headers = {
             "Authorization": f"Bearer {self.access_token}",
