@@ -24,6 +24,15 @@ FORBIDDEN_FACT_KEYWORDS = {
     "customization", "flavour mixing", "assorted", "subscription", "policy", "policies"
 }
 
+RAG_STOP_WORDS = {
+    "i", "am", "im", "my", "is", "are", "do", "does", "did", "you", "u", "r",
+    "a", "an", "the", "to", "for", "of", "in", "on", "at", "by", "from", "with",
+    "and", "or", "we", "can", "your", "this", "that", "these", "those", "what", "how",
+    "when", "where", "why", "who", "which", "many", "much", "me", "us", "it", "its",
+    "show", "tell", "send", "share", "about", "some", "any", "all", "than", "other",
+    "please", "pls", "give", "let", "use", "be", "has", "had", "know", "offer"
+}
+
 @dataclass
 class RAGResult:
     retrieved_sources: List[str] = field(default_factory=list)
@@ -32,6 +41,7 @@ class RAGResult:
     confidence_score: float = 0.0
     proposed_intent: str = "unknown_intent"
     proposed_response: str = ""
+    auto_response: str = ""
     source_refs: List[str] = field(default_factory=list)
     has_conflict: bool = False
     contains_unapproved_facts: bool = False
@@ -87,7 +97,21 @@ class RAGFallbackEngine:
             return result
 
         lowered_text = user_message.lower().strip()
-        user_words = set(re.findall(r'\b\w+\b', lowered_text))
+        user_words = set(re.findall(r'\b\w+\b', lowered_text)) - RAG_STOP_WORDS
+
+        # Staff-approved answers are the highest-priority learned source.
+        learned = db.search_learned_knowledge(user_message)
+        if learned and learned.get("verified_answer"):
+            result.retrieved_sources = [f"learned_knowledge#{learned.get('id')}"]
+            result.source_chunks = [learned["verified_answer"]]
+            result.similarity_score = 1.0
+            result.confidence_score = float(learned.get("confidence") or 1.0)
+            result.proposed_intent = f"learned_{learned.get('id')}"
+            result.proposed_response = learned["verified_answer"]
+            result.auto_response = learned["verified_answer"]
+            result.source_refs = list(result.retrieved_sources)
+            result.approval_status = "APPROVED"
+            return result
 
         # Search approved templates in qa_templates.json for candidate match
         templates = self.qa_data.get("templates", [])
@@ -98,16 +122,29 @@ class RAGFallbackEngine:
             triggers = tmpl.get("triggers", [])
             source_ref = tmpl.get("source_ref", f"qa_templates.json#{tmpl_id}")
             response_text = tmpl.get("response") or ""
+            # Greeting variation is selected by responder.py; RAG must not invent a variation.
+            if not response_text and tmpl_id != "greeting":
+                responses = tmpl.get("responses", [])
+                response_text = responses[0] if len(responses) == 1 else ""
+            if tmpl.get("escalate") is True or tmpl_id.startswith("GUARD_") or not response_text:
+                continue
 
             best_match_count = 0
+            best_trigger_score = 0.0
             for trigger in triggers:
-                t_words = set(re.findall(r'\b\w+\b', trigger.lower()))
+                t_words = set(re.findall(r'\b\w+\b', trigger.lower())) - RAG_STOP_WORDS
                 matches = t_words.intersection(user_words)
                 if matches and len(matches) > best_match_count:
                     best_match_count = len(matches)
+                trigger_pattern = r'\b' + re.escape(trigger.lower()) + r'\b'
+                if re.search(trigger_pattern, lowered_text) and t_words:
+                    best_trigger_score = 1.0
+                elif t_words:
+                    best_trigger_score = max(best_trigger_score, len(matches) / len(t_words))
 
             if best_match_count > 0:
-                score = min(best_match_count / max(len(user_words), 1), 1.0)
+                query_coverage = best_match_count / max(len(user_words), 1)
+                score = min((best_trigger_score * 0.8) + (query_coverage * 0.2), 1.0)
                 candidates.append({
                     "tmpl_id": tmpl_id,
                     "response": response_text,
@@ -115,25 +152,6 @@ class RAGFallbackEngine:
                     "score": score,
                     "match_count": best_match_count
                 })
-
-        # Also search menu.json items
-        bento_categories = self.menu_data.get("bento_menu", {})
-        for cat_name, items in bento_categories.items():
-            if isinstance(items, list):
-                for item in items:
-                    name = item.get("name", "")
-                    desc = item.get("desc", "")
-                    item_words = set(re.findall(r'\b\w+\b', f"{name} {desc}".lower()))
-                    matches = item_words.intersection(user_words)
-                    if len(matches) >= 2:
-                        score = len(matches) / max(len(user_words), 1)
-                        candidates.append({
-                            "tmpl_id": f"menu_{name.lower().replace(' ', '_')}",
-                            "response": f"Our {name}: {desc}",
-                            "source_ref": f"menu.json#{cat_name}",
-                            "score": min(score, 0.90),
-                            "match_count": len(matches)
-                        })
 
         if not candidates:
             result.confidence_score = 0.0
@@ -173,8 +191,14 @@ class RAGFallbackEngine:
         result.source_refs = [top["source_ref"]]
         result.contains_unapproved_facts = self.contains_business_facts(result.proposed_response)
 
+        # Only a high-confidence response already present in an approved template
+        # may be sent automatically. Everything else remains human-review material.
+        if result.confidence_score >= HIGH_CONFIDENCE_THRESHOLD and top["source_ref"].startswith("qa_templates.json#"):
+            result.auto_response = result.proposed_response
+            result.approval_status = "APPROVED_SOURCE"
+
         # High / Medium confidence -> Create Candidate Template with PENDING_APPROVAL status (Section 3)
-        if result.confidence_score >= MEDIUM_CONFIDENCE_THRESHOLD:
+        if result.confidence_score >= MEDIUM_CONFIDENCE_THRESHOLD and not result.auto_response:
             try:
                 candidate_id = db.save_candidate_template(
                     name=result.proposed_intent,

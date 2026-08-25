@@ -229,7 +229,7 @@ class DeterministicResponder:
                     if intro_greeting_prefix:
                         ans = intro_greeting_prefix + ans
                     session_memory.add_turn(user_id, channel, user_message, ans)
-                    return ans, False, "self_healing_kb", None
+                    return ans, True, f"learned_{item.get('id')}", None
         except Exception:
             pass
 
@@ -587,6 +587,37 @@ class DeterministicResponder:
         if intro_greeting_prefix:
             fallback = intro_greeting_prefix + fallback
 
+        # Retrieve from approved QA/learned sources before any generative provider.
+        # High-confidence approved retrieval may answer; lower-confidence retrieval
+        # is logged for review and continues to the safe human fallback.
+        rag_res = None
+        try:
+            rag_res = rag_fallback_engine.retrieve(user_message)
+            if rag_res.auto_response:
+                response_text, image_url = self._format_dynamic_response(
+                    rag_res.proposed_intent,
+                    rag_res.auto_response,
+                    user_id=user_id,
+                    channel=channel,
+                    user_message=user_message,
+                )
+                db.log_rag_audit(
+                    user_message=user_message,
+                    matched_template=None,
+                    rag_invoked=True,
+                    retrieved_sources=rag_res.retrieved_sources,
+                    confidence_score=rag_res.confidence_score,
+                    proposed_template=rag_res.proposed_intent,
+                    proposed_response=rag_res.proposed_response,
+                    approval_status=rag_res.approval_status,
+                    final_customer_response=response_text,
+                )
+                session_memory.add_turn(user_id, channel, user_message, response_text)
+                return response_text, True, rag_res.proposed_intent, image_url
+        except Exception as e:
+            log.error("RAG retrieval error: %s", e)
+
+        # Generative providers may suggest candidate answers for review only.
         if config.is_ai_enabled and gemini_responder.get_active_provider() != "none":
             try:
                 user_ctx = f"Customer Name: {facts.get('name', 'Unknown')}"
@@ -608,9 +639,10 @@ class DeterministicResponder:
             except Exception as e:
                 log.warning("AI RAG generation failed: %s", e)
 
-        # Fallback to Controlled Isolated RAG Engine (RAGFallbackEngine) when no template matched
+        # Fallback to Controlled Isolated RAG Engine when no approved answer matched.
         try:
-            rag_res = rag_fallback_engine.retrieve(user_message)
+            if rag_res is None:
+                rag_res = rag_fallback_engine.retrieve(user_message)
             db.log_rag_audit(
                 user_message=user_message,
                 matched_template=None,

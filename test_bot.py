@@ -1162,6 +1162,45 @@ class TestCamelliaBot(unittest.TestCase):
         last_index = session_memory.get_facts(user_id, channel)["last_greeting_index"]
         self.assertEqual(replies[-1], approved[last_index])
 
+    def test_qa_rag_escalates_unknown_questions_without_guessing(self):
+        """RAG may use approved QA sources, but unknown business questions remain escalated."""
+        from rag_fallback import rag_fallback_engine
+
+        result = rag_fallback_engine.retrieve("what discount do you offer")
+        self.assertFalse(result.auto_response)
+        self.assertEqual(result.proposed_intent, "unknown_intent")
+
+        response, matched, template_id, _ = responder.match_and_respond(
+            "what discount do you offer",
+            user_id="qa_rag_unknown_user",
+            channel="whatsapp",
+        )
+        self.assertFalse(matched)
+        self.assertTrue(template_id is None or template_id == "explicit_escalation")
+        self.assertIn("notified our team", response.lower())
+
+    def test_approved_learned_answer_is_used_by_rag(self):
+        """A staff-approved learned answer is retrievable and safe to activate."""
+        from rag_fallback import rag_fallback_engine
+
+        question = "camellia approved lookup 8472"
+        answer = "This is an approved Camellia answer for testing."
+        knowledge_id = db.add_learned_knowledge(
+            "Test approved topic", question, answer, source="test", confidence=1.0
+        )
+        try:
+            result = rag_fallback_engine.retrieve(question)
+            self.assertEqual(result.auto_response, answer)
+            self.assertEqual(result.approval_status, "APPROVED")
+            response, matched, template_id, _ = responder.match_and_respond(
+                question, user_id="qa_rag_learned_user", channel="whatsapp"
+            )
+            self.assertTrue(matched)
+            self.assertEqual(template_id, f"learned_{knowledge_id}")
+            self.assertEqual(response, answer)
+        finally:
+            db.delete_learned_knowledge(knowledge_id)
+
     @patch("whatsapp_adapter.WhatsAppAdapter.access_token", new_callable=PropertyMock)
     def test_whatsapp_mock_outbound_and_buttons(self, mock_token):
         """Tests mock WhatsApp outbound message dispatch with image and buttons."""

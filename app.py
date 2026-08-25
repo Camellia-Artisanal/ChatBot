@@ -833,6 +833,68 @@ async def update_templates(request: Request, x_admin_key: Optional[str] = Header
         log.error("Failed to update qa_templates.json: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/admin/candidates")
+def get_candidate_templates(
+    x_admin_key: Optional[str] = Header(None),
+    x_admin_pin: Optional[str] = Header(None),
+):
+    """Returns RAG/AI candidate answers awaiting human approval."""
+    require_admin(x_admin_key, x_admin_pin)
+    candidates = db.get_pending_candidates()
+    return {"status": "success", "count": len(candidates), "candidates": candidates}
+
+@app.post("/admin/candidates/{candidate_id}/approve")
+async def approve_candidate_template(
+    candidate_id: int,
+    request: Request,
+    x_admin_key: Optional[str] = Header(None),
+    x_admin_pin: Optional[str] = Header(None),
+):
+    """Approves a candidate and activates it in the reviewed knowledge base."""
+    require_admin(x_admin_key, x_admin_pin)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    candidate = db.get_candidate_template(candidate_id)
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate template not found")
+    if candidate.get("status") != "PENDING_APPROVAL":
+        raise HTTPException(status_code=409, detail="Candidate template is no longer pending")
+
+    approved_by = body.get("approved_by", "admin")
+    if not db.approve_candidate_template(candidate_id, approved_by=approved_by):
+        raise HTTPException(status_code=409, detail="Candidate template could not be approved")
+
+    knowledge_id = db.add_learned_knowledge(
+        topic=candidate.get("name") or "Approved candidate",
+        question_pattern=candidate.get("user_message") or candidate.get("name") or "",
+        verified_answer=candidate["response"],
+        source=f"approved_candidate#{candidate_id}",
+        confidence=max(float(candidate.get("confidence") or 0.0), 0.90),
+    )
+    return {
+        "status": "approved",
+        "candidate_id": candidate_id,
+        "learned_knowledge_id": knowledge_id,
+        "message": "Candidate approved and added to the reviewed knowledge base.",
+    }
+
+@app.post("/admin/candidates/{candidate_id}/reject")
+def reject_candidate_template(
+    candidate_id: int,
+    x_admin_key: Optional[str] = Header(None),
+    x_admin_pin: Optional[str] = Header(None),
+):
+    """Rejects a proposed answer without activating it."""
+    require_admin(x_admin_key, x_admin_pin)
+    if not db.get_candidate_template(candidate_id):
+        raise HTTPException(status_code=404, detail="Candidate template not found")
+    if not db.reject_candidate_template(candidate_id):
+        raise HTTPException(status_code=409, detail="Candidate template could not be rejected")
+    return {"status": "rejected", "candidate_id": candidate_id}
+
 @app.post("/admin/sync-menu")
 @limiter.limit("20/minute")
 def sync_menu(request: Request, csv_url: Optional[str] = None, x_admin_key: Optional[str] = Header(None), x_admin_pin: Optional[str] = Header(None)):

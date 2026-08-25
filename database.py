@@ -467,6 +467,21 @@ class Database:
                 result.append(item)
             return result
 
+    def get_candidate_template(self, candidate_id: int) -> Optional[Dict[str, Any]]:
+        """Returns one candidate template for the approval workflow."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM candidate_templates WHERE id = ?", (candidate_id,))
+            row = cursor.fetchone()
+            if not row:
+                return None
+            item = dict(row)
+            try:
+                item["source_refs"] = json.loads(item.get("source_refs") or "[]")
+            except Exception:
+                item["source_refs"] = []
+            return item
+
     def approve_candidate_template(self, candidate_id: int, approved_by: str = "admin") -> bool:
         """Marks a candidate template as APPROVED and returns candidate details."""
         now = datetime.utcnow().isoformat()
