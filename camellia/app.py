@@ -3359,6 +3359,14 @@ def _health_details():
         warnings.append("Instagram delivery jobs need operator review; see instagram_delivery_jobs.")
     if config.ENABLE_WEB_TESTER:
         warnings.append("ENABLE_WEB_TESTER is on — /chat is reachable by anyone with the URL.")
+    # Menu cards are fetched by Meta from PUBLIC_BASE_URL. A bare domain or an
+    # empty value drops every card silently; another server's domain works only
+    # while that server is up (the 2026-10-16 migration failure).
+    own_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "")
+    if not config.PUBLIC_BASE_URL.startswith(("http://", "https://")):
+        warnings.append("PUBLIC_BASE_URL is not a full https:// address — menu cards are dropped from every Instagram reply.")
+    elif own_domain and urlsplit(config.PUBLIC_BASE_URL).hostname != own_domain:
+        warnings.append("PUBLIC_BASE_URL points at a different server — menu cards load only while that server is up.")
     if not storage["database"]["expected_durable"]:
         warnings.append(
             f"Database is at {storage['database']['path']}, which is inside the "
