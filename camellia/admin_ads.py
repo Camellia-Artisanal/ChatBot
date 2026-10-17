@@ -6,6 +6,7 @@ HTML = r'''
   <div id="adsSummary" class="gallery-toolbar" aria-label="Ads summary"></div>
   <div class="gallery-toolbar" role="group" aria-label="Ads filters">
     <button class="btn-secondary active" data-ads-filter="running" onclick="setAdsFilter('running')">Running Now</button>
+    <button class="btn-secondary" data-ads-filter="needs_answers" onclick="setAdsFilter('needs_answers')">⚠ Needs answers</button>
     <button class="btn-secondary" data-ads-filter="active" onclick="setAdsFilter('active')">Meta Active</button>
     <button class="btn-secondary" data-ads-filter="unmapped" onclick="setAdsFilter('unmapped')">Unmapped</button>
     <button class="btn-secondary" data-ads-filter="mapped" onclick="setAdsFilter('mapped')">Mapped</button>
@@ -102,7 +103,12 @@ function renderAdsWorkspace() {
     const rawCounts = [['all','All'],['raw_running','Schedule-eligible + delivered today + ACTIVE'],['raw_active','Meta-reported active'],['unmapped','Unmapped'],['mapped','Mapped'],['inactive','Inactive / ended']];
     const counts = adsWorkspace.counts || {};
     const plain = counts.mapped == null && counts.unmapped == null ? '' : `<div style="width:100%;font-size:1rem;"><b>${Number(counts.mapped || 0)}</b> ads mapped · <b>${Number(counts.unmapped || 0)}</b> not mapped</div>`;
-    document.getElementById('adsSummary').innerHTML = `${plain}<details style="width:100%;" class="ig-media-muted"><summary>Counts</summary><div style="width:100%;">Running Now: <b>${counts.running == null ? 'Not checked / unavailable' : Number(counts.running)}</b> creative groups · Meta-reported active creative groups: <b>${Number(counts.active || 0)}</b></div><div style="width:100%;"><b>Raw Meta Ad ID counts</b> · ${rawCounts.map(([key,label]) => `${label}: ${counts[key] == null ? 'Not checked' : Number(counts[key])}`).join(' · ')}</div></details>`;
+    // Ads customers messaged from this week that cannot answer price, without needing their IDs.
+    const gaps = Number(counts.answer_gaps || 0);
+    const gapBanner = adsFilter === 'needs_answers'
+        ? `<div style="width:100%;font-size:1rem;margin-bottom:6px;">${gaps ? `<b>${gaps}</b> ad(s) customers messaged from this week can't answer “How much does it cost?”. Tap <b>Map Ad</b> on each and set its answers.` : '✅ Every ad customers messaged from this week answers price questions.'}</div>`
+        : gaps ? `<div style="width:100%;font-size:1rem;margin-bottom:6px;">⚠ <b>${gaps}</b> ad(s) customers messaged from this week can't answer price questions. <button class="btn-secondary" type="button" onclick="setAdsFilter('needs_answers')">Show them</button></div>` : '';
+    document.getElementById('adsSummary').innerHTML = `${gapBanner}${plain}<details style="width:100%;" class="ig-media-muted"><summary>Counts</summary><div style="width:100%;">Running Now: <b>${counts.running == null ? 'Not checked / unavailable' : Number(counts.running)}</b> creative groups · Meta-reported active creative groups: <b>${Number(counts.active || 0)}</b></div><div style="width:100%;"><b>Raw Meta Ad ID counts</b> · ${rawCounts.map(([key,label]) => `${label}: ${counts[key] == null ? 'Not checked' : Number(counts[key])}`).join(' · ')}</div></details>`;
     const sync = adsWorkspace.sync || {};
     document.getElementById('adsSyncStatus').textContent = `Last successful sync: ${sync.last_success_at || 'Never'}${sync.error_category ? ' · Sync warning: ' + sync.error_category + ' · Last complete inventory retained.' : ''}${sync.optional_fields_reduced ? ' · Some creative fields are unavailable.' : ''}`;
     const delivery = adsWorkspace.delivery || {};

@@ -84,6 +84,20 @@ def test_gaps_count_only_recently_messaged_ads_and_reach_health(store, monkeypat
     assert any("1 ad(s) customers messaged from this week" in w for w in warnings)
 
 
+def test_needs_answers_view_lists_the_gaps_without_ad_ids(store, monkeypatch):
+    # The client cannot look ads up by Meta ID; the warning needs its own list.
+    note_only = route(store)
+    _live(store, monkeypatch)
+    assert ads.ads_workspace(store, "needs_answers")["items"] == []
+    store.log_conversation("customer", "instagram", "How much does it cost?", "note", True, "source_description", ad_id=AD)
+    listed = TestClient(app_module.app).get("/admin/instagram-ads?view=needs_answers", headers=HEADERS).json()["items"]
+    assert [row["ad_id"] for row in listed] == [AD]
+    # Approved answers on the post clear it.
+    store.save_instagram_source_route({**instagram_routing.decode_route(note_only), "response_mode": "APPROVED_QA",
+                                       "approved_qa_id": "sondesh_price_client"}, note_only["routing_id"])
+    assert ads.ads_workspace(store, "needs_answers")["items"] == []
+
+
 def test_media_item_endpoint_returns_the_editor_mapping(store, monkeypatch):
     saved = route(store)
     _live(store, monkeypatch)

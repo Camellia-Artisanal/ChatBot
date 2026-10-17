@@ -575,6 +575,7 @@ def ads_workspace(database, view="active"):
     filtered = [row for row in rows if view == "all" or (view == "active" and row["active"]) or
                 (view == "running" and row["ad_id"] in running_ids) or
                 (view == "inactive" and not row["active"] and row["inventory_state"] != "OBSERVED") or (view == "mapped" and row["mapped"]) or
-                (view == "unmapped" and not row["mapped"])]
+                (view == "unmapped" and not row["mapped"]) or
+                (view == "needs_answers" and is_answer_gap(row, row["answer_status"], recent_ids))]
     return {"status": "success", "items": filtered, "active_groups": active_groups, "running_groups": running_groups, "delivery": delivery, "counts": counts, "sync": sync_status(database),
             "routes": [row for row in routes if row.get("active") and row.get("source_type") in {"post", "reel"}]}
