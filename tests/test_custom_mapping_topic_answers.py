@@ -65,6 +65,18 @@ def test_meta_more_info_button_gets_the_note(ad_customer, topic_answers):
     assert db.get_conversations(limit=1, channel="instagram", user_id=sender)[0]["bot_response"] == NOTE
 
 
+def test_price_question_without_its_ad_gets_the_general_price_answer(ad_customer):
+    # 2026-10-17: "How much does it cost?" arrived from an ad with no ad ID and
+    # was handed to the manager. Unknown product -> general approved answer.
+    sender, facts, db = ad_customer
+    message = "How much does it cost?"
+    from camellia.ad_gate import describe_entry_point
+    entry = describe_entry_point({"sender": {"id": sender}, "message": {"text": message}})
+    _process(ad_customer, message, entry)
+    assert facts["client_qa_id"] == "general_price"
+    assert db.get_active_handoff("instagram", sender) is None
+
+
 def test_explicit_human_request_still_reaches_the_manager(ad_customer):
     _custom_route(ad_customer)
     sender, _facts, db = ad_customer

@@ -257,7 +257,12 @@ def _home_context(message: str, facts: Dict[str, Any]) -> bool:
 def _generic_price(message: str) -> bool:
     if re.fullmatch(r"(?:how much|price|cost|rate)[?!., ]*", message.strip(), re.I):
         return False
-    if re.search(r"\b(?:this|that|it)\b", message, re.I):
+    # "How much does it cost?" with no known product gets the general price
+    # answer (2026-10-17): Meta sometimes delivers an ad reply without its ad.
+    # A pronoun question about anything but price ("how much does it weigh")
+    # still has no general answer.
+    if re.search(r"\b(?:this|that|it)\b", message, re.I) and not re.search(
+            r"\b(?:cost|price|rate)s?\b|\bhow\s+much\s+(?:is|are|for)\s+(?:it|this|that)\b", message, re.I):
         return False
     return bool(re.search(r"\b(?:how much|price|cost|rate)\b", message, re.I)) and not bool(
         re.search(r"\b(?:sondesh|bento|chicken|kosha|subscription|home\s+table|meal\s+plan|mutton|mangsho|jolbhora|kanchagolla|mishti|mithai|aamar|signature|nolen\s+gur)\b", message, re.I)

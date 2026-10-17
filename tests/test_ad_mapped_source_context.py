@@ -216,10 +216,14 @@ def test_unknown_named_price_never_inherits_bound_source(ad_customer, message):
 ])
 def test_missing_or_conflicting_subject_fails_closed(state):
     for message in PRICE_VARIATIONS:
-        # Canonical general-price copy remains available only without context,
-        # as before. Pronoun follow-ups never guess from the display-only ad.
-        if any(k != "ad_product" and k != "ad_title" for k in state) or message not in {"What's the price?", "What is the price?", "Price please", "Can you tell me the price?", "  WHAT’S THE PRICE?!  "}:
+        # Without context every generic price question, pronoun or not, gets
+        # the canonical general-price copy (2026-10-17: Meta can deliver an ad
+        # reply without its ad). It never guesses a product from the
+        # display-only ad title, and any real context still fails closed here.
+        if any(k != "ad_product" and k != "ad_title" for k in state):
             assert client_qa.match(message, state) is None
+        else:
+            assert client_qa.match(message, state).entry.qa_id == "general_price"
 
 
 def test_unbound_ad_natural_price_does_not_borrow_title(ad_customer):

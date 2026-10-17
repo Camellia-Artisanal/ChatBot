@@ -157,10 +157,11 @@ def test_referential_message_without_source_clarifies(deterministic_responder, t
         assert template_id == "order_intake_draft"
         assert reply
     else:
-        assert matched is False
-        assert template_id is None
-        assert "Manager of Kitchens" in reply
-        assert facts["last_route_source"] == "HUMAN_HANDOFF"
+        # With no source and no product, a generic price question gets the
+        # client's general price answer instead of a handoff (2026-10-17).
+        assert matched is True
+        assert facts["client_qa_id"] == "general_price"
+        assert reply
 
 
 def test_inactive_source_context_does_not_control_a_new_message(deterministic_responder):
