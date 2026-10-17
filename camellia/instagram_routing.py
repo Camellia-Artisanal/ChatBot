@@ -618,6 +618,11 @@ def route_for_inbound(
                 "shortcode": None,
                 "media_id": None,
             }, "legacy_ad_id"
+        # No live binding: the ad answers like the exact Post/Reel it promotes.
+        from camellia.instagram_ads import inherited_route_for_ad
+        inherited = inherited_route_for_ad(db, str(ad_id))
+        if inherited:
+            return decode_route(source_contract(db, inherited)), "ad_creative"
     if media_id:
         route = db.find_instagram_source_route(
             "media_id", str(media_id), source_type="story" if source_type == "story_reply" else None,

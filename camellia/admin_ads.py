@@ -114,6 +114,7 @@ function renderAdsWorkspace() {
         ? (ad.mapping ? `✅ Mapped to: <b>${escapeHtml(sourceLabel(ad.mapping))}</b>${ad.binding_active ? '' : ' · answers paused'}` : '⚠ Mapped, but its Reel or Post is no longer available')
         : '⚪ Not mapped';
     const renderAd = ad => {
+        const badge = adsAnswerBadge(ad);
         const image = ad.thumbnail_url || ad.mapping?.preview_url;
         const preview = image ? `<img class="ig-media-thumb" loading="lazy" src="${escapeHtml(image)}" alt="Ad preview">` : '<div class="ig-media-placeholder">Preview unavailable</div>';
         const identity = ad.instagram_permalink_url || ad.effective_instagram_media_id || 'Not supplied by Meta';
@@ -122,10 +123,11 @@ function renderAdsWorkspace() {
         const description = ad.mapping ? (ad.mapping.display_description || ad.mapping.source_description || '') : '';
         const inherited = ad.mapping ? `<details class="ads-source-config"><summary>Answers this ad uses · ${ad.binding_active ? 'binding on' : 'binding off'}</summary><p><b>Selected approved questions:</b></p>${(ad.mapping.display_approved_questions || []).map(item => `<details><summary>${escapeHtml(item.question)} · ${escapeHtml(item.qa_id)}</summary><p style="white-space:pre-wrap;">${escapeHtml(item.answer)}</p></details>`).join('') || '<p>No currently effective selected Q&amp;As.</p>'}</details>` : '';
         const primary = ad.mapped ? '<button class="btn-primary" data-ads-action="map">Change Mapping</button>' : '<button class="btn-primary" data-ads-action="map">Map Ad</button>';
-        const suggested = ad.suggested_routing_id && !ad.mapped && suggestedRoute ? `<button class="btn-secondary" data-ads-action="suggestion">Use Existing Mapping: ${escapeHtml(sourceLabel(suggestedRoute))}</button>` : '';
+        const choose = '<button class="btn-secondary" data-ads-action="choose">Use a different Post/Reel</button>';
+        const suggested = ad.suggested_routing_id && !ad.mapped && ad.answers_from !== 'post' && suggestedRoute ? `<button class="btn-secondary" data-ads-action="suggestion">Use Existing Mapping: ${escapeHtml(sourceLabel(suggestedRoute))}</button>` : '';
         const more = ad.mapped ? '<button class="btn-secondary" data-ads-action="edit">Edit Mapping</button><button class="btn-secondary" data-ads-action="toggle">' + (ad.binding_active ? 'Disable Binding' : 'Enable Binding') + '</button><button class="btn-secondary" data-ads-action="history">History</button>' : '';
         const details = `<details><summary>More details</summary><div class="ig-media-summary">Meta Ad ID: ${escapeHtml(ad.ad_id)}</div><div class="ig-media-facts"><span>${ad.inventory_state === 'OBSERVED' ? 'OBSERVED' : ad.active ? 'ACTIVE' : 'INACTIVE'} · ${escapeHtml(ad.effective_status)}</span><span>${ad.mapped ? 'MAPPED ✓' : 'UNMAPPED'} · ${escapeHtml(ad.binding_status)}</span><span>Linked source: ${escapeHtml(ad.source_type || 'unknown')}</span></div><p style="overflow-wrap:anywhere;">${escapeHtml(identity)}</p><p>${escapeHtml(linked)}</p>${description ? `<p style="white-space:pre-wrap;">${escapeHtml(description)}</p>` : ''}${inherited}<small>Last synced: ${escapeHtml(ad.last_synced_at || 'Not yet synced')}</small>${more ? `<div class="ig-media-actions" style="margin-top:8px;">${more}</div>` : ''}</details>`;
-        return `<article class="ig-media-card" data-ad-id="${escapeHtml(ad.ad_id)}"><div class="ig-media-preview">${preview}</div><div class="ig-media-main"><b>AD · ${escapeHtml(ad.name)}</b><p style="font-size:1rem;">${adStatus(ad)}</p>${details}</div><div class="ig-media-actions">${primary}${suggested}</div></article>`;
+        return `<article class="ig-media-card" data-ad-id="${escapeHtml(ad.ad_id)}"><div class="ig-media-preview">${preview}</div><div class="ig-media-main"><b>AD · ${escapeHtml(ad.name)}</b><p style="font-size:1rem;">${adStatus(ad)}</p>${badge}${details}</div><div class="ig-media-actions">${primary}${suggested}${choose}</div></article>`;
     };
     const groups = adsFilter === 'running' ? adsWorkspace.running_groups : adsWorkspace.active_groups;
     if ((adsFilter === 'active' || adsFilter === 'running') && groups) {
@@ -144,8 +146,10 @@ function renderAdsWorkspace() {
                 ? `✅ ${members.length === 1 ? '' : 'All ' + members.length + ' ads '}mapped to: <b>${escapeHtml(labels[0])}</b>`
                 : mappedCount ? `⚠ ${mappedCount} of ${members.length} ads mapped — open the list below to map the rest` : `⚪ Not mapped${members.length > 1 ? ' (' + members.length + ' ads)' : ''}`;
             const groupButton = running ? `<button class="btn-primary" data-ads-group-map="${escapeHtml(first.ad_id)}">Map Ad</button>` : '';
+            const gaps = members.filter(ad => ['NONE', 'NOTE'].includes(ad.answer_status)).length;
+            const groupBadge = gaps ? adsAnswerBadge({answer_status: members.find(ad => ad.answer_status === 'NONE') ? 'NONE' : 'NOTE'}) : adsAnswerBadge(first);
             const technical = `<details><summary>Technical details</summary><p style="overflow-wrap:anywhere;">Permalink: ${first.instagram_permalink_url ? `<a href="${escapeHtml(first.instagram_permalink_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(first.instagram_permalink_url)}</a>` : 'Unavailable'}<br>Instagram media ID: ${escapeHtml(first.effective_instagram_media_id || 'Unavailable')}</p>${running ? `<p style="overflow-wrap:anywhere;">WITHIN META SCHEDULE + DELIVERED TODAY + currently Meta ACTIVE · Evidence IDs: ${group.delivering_ad_ids.map(id => escapeHtml(id)).join(', ')}. ${members.length} exact member IDs. Mapping: ${mappedCount}/${members.length} bound.${group.verified_identity ? '' : ' Incomplete/conflicting identity: individual mapping only.'}</p>` : ''}</details>`;
-            return `<section class="ig-media-card" data-active-group="true"><div class="ig-media-preview">${preview}</div><div class="ig-media-main"><b>AD · ${escapeHtml(displayName)}</b><p style="font-size:1rem;">${status}</p>${groupButton}${technical}<details${exactId ? ' open' : ''}><summary>${members.length} Meta Ad IDs ▾</summary>${members.map(renderAd).join('')}</details></div></section>`;
+            return `<section class="ig-media-card" data-active-group="true"><div class="ig-media-preview">${preview}</div><div class="ig-media-main"><b>AD · ${escapeHtml(displayName)}</b><p style="font-size:1rem;">${status}</p>${groupBadge}${groupButton}${technical}<details${exactId ? ' open' : ''}><summary>${members.length} Meta Ad IDs ▾</summary>${members.map(renderAd).join('')}</details></div></section>`;
         }).join('');
     } else {
         list.innerHTML = (adsWorkspace.items || []).filter(ad => !exactId || ad.ad_id === exactId).map(renderAd).join('');
@@ -154,15 +158,49 @@ function renderAdsWorkspace() {
         ? '<p class="ig-media-muted">No ads match this filter.</p>'
         : '<p class="ig-media-muted">No ads match this filter. This view only shows some ads.</p><button class="btn-primary" type="button" data-ads-search-all="true">Search all ads</button>';
     list.querySelector?.('[data-ads-search-all]')?.addEventListener('click', () => setAdsFilter('all'));
-    list.querySelectorAll('[data-ads-group-map]').forEach(button => button.addEventListener('click', () => openAdsGroupMapping(button.dataset.adsGroupMap)));
+    list.querySelectorAll('[data-ads-group-map]').forEach(button => button.addEventListener('click', () => {
+        const ad = adsWorkspace.items.find(item => item.ad_id === button.dataset.adsGroupMap);
+        if (ad) openAdAnswers(ad);
+    }));
     list.querySelectorAll('[data-ad-id]').forEach(card => card.querySelectorAll('[data-ads-action]').forEach(button => button.addEventListener('click', () => {
         const ad = adsWorkspace.items.find(item => item.ad_id === card.dataset.adId);
         const action = button.dataset.adsAction;
-        if (action === 'map' || action === 'suggestion') openAdsMapping(ad, action === 'suggestion');
+        if (action === 'map' || action === 'edit') openAdAnswers(ad);
+        else if (action === 'choose' || action === 'suggestion') openAdsMapping(ad, action === 'suggestion');
         else if (action === 'history') alert(ad.history.length ? ad.history.map(event => `${event.occurred_at}: ${event.action} · source ${event.routing_id}`).join('\n') : 'No binding changes recorded.');
         else if (action === 'toggle') toggleAdsBinding(ad);
-        else if (action === 'edit') editAdsSource(ad);
     })));
+}
+function adsAnswerBadge(ad) {
+    const from = ad.answers_from === 'post' ? ' (from its Post/Reel)' : '';
+    const text = {
+        APPROVED: `✅ Answers price questions${from}`,
+        NOTE: `⚠ Price questions get only the welcome note${from} — add approved answers`,
+        NONE: '⚠ Price questions go to the manager — tap Map Ad and set its answers',
+        DISABLED: 'Answers turned off for this ad',
+    }[ad.answer_status];
+    return text ? `<p class="ads-answer-status" data-answer-status="${escapeHtml(ad.answer_status)}" style="font-size:0.95rem;margin:4px 0;">${escapeHtml(text)}</p>` : '';
+}
+async function openAdAnswers(ad) {
+    // An ad answers like the Post/Reel it promotes, so its answers are set in
+    // the same editor as Posts & Reels, once for every ad using that post.
+    let itemId = ad.answer_media_item_id;
+    try {
+        if (!itemId) {
+            if (!ad.instagram_permalink_url) { openAdsMapping(ad); return; }
+            const added = await fetch('/admin/instagram-media/manual-link', {method:'POST', headers:{...getAuthHeaders(), 'Content-Type':'application/json'}, body:JSON.stringify({url: ad.instagram_permalink_url})});
+            const addedData = await added.json().catch(() => ({}));
+            if (!added.ok || !addedData.item) throw Error(addedData.detail || 'Could not open this ad’s Post/Reel.');
+            itemId = addedData.item.id;
+        }
+        const response = await fetch(`/admin/instagram-media/${encodeURIComponent(itemId)}`, {headers: getAuthHeaders()});
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.item) throw Error(data.detail || 'Could not open this ad’s Post/Reel.');
+        if (!igTopics.length) await loadTopicsAndMenus();
+        openContentDetails('media', galleryMediaItem(data.item));
+    } catch (error) {
+        alert(error.message || 'Could not open this ad’s Post/Reel.');
+    }
 }
 function openAdsMapping(ad, suggestedOnly = false) {
     if (adsMutationBusy) return;
@@ -234,20 +272,6 @@ async function toggleAdsBinding(ad) {
         await loadAdsWorkspace();
     } catch (_) { alert('Could not update binding. Refresh Ads before retrying.'); }
     finally { adsMutationBusy = false; }
-}
-async function editAdsSource(ad) {
-    if (!ad.mapping) { alert('This source is unavailable. Choose an existing active mapping.'); return; }
-    if (ad.mapping.source_type === 'story') {
-        switchTab('tab-instagram-stories', null);
-        await loadTopicsAndMenus();
-        const source = {...ad.mapping,story_media_id:ad.mapping.media_id,mapping_status:ad.mapping.active ? 'MAPPED' : 'DISABLED'};
-        igStorySources = [...igStorySources.filter(item => item.story_media_id !== source.story_media_id),source];
-        openInstagramStoryMapping(source.story_media_id);
-        return;
-    }
-    setInstagramContentSubview('routing');
-    await loadAdRoutes();
-    editInstagramRoute(ad.routing_id);
 }
 </script>
 '''

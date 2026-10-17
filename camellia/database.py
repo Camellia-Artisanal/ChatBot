@@ -1895,6 +1895,27 @@ class Database:
                 (now, now, int(reduced), account_id))
             conn.commit()
 
+    def recently_messaged_ad_ids(self, days: int = 7) -> set:
+        """Ads customers actually messaged from: Meta's "active" includes old ads."""
+        cutoff = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+        with self.get_connection() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT ad_id FROM conversations WHERE ad_id IS NOT NULL AND ad_id != '' AND timestamp >= ?",
+                (cutoff,),
+            ).fetchall()
+        return {str(row["ad_id"]) for row in rows}
+
+    def get_instagram_ad_inventory_row(self, ad_id: str) -> Optional[Dict[str, Any]]:
+        with self.get_connection() as conn:
+            row = conn.execute("SELECT * FROM instagram_ads_inventory WHERE ad_id=?", (str(ad_id),)).fetchone()
+        return dict(row) if row else None
+
+    def get_instagram_ad_binding(self, ad_id: str) -> Optional[Dict[str, Any]]:
+        """Any binding row for the ad, including OBSERVED-only rows."""
+        with self.get_connection() as conn:
+            row = conn.execute("SELECT * FROM instagram_source_ad_bindings WHERE ad_id=?", (str(ad_id),)).fetchone()
+        return dict(row) if row else None
+
     def list_instagram_ads_inventory(self, account_id: str) -> List[Dict[str, Any]]:
         with self.get_connection() as conn:
             rows = conn.execute("SELECT * FROM instagram_ads_inventory WHERE ad_account_id=? ORDER BY active DESC,last_seen_at DESC,ad_id", (account_id,)).fetchall()
@@ -1903,6 +1924,11 @@ class Database:
     def get_instagram_media(self, item_id: int) -> Optional[Dict[str, Any]]:
         with self.get_connection() as conn:
             row = conn.execute("SELECT * FROM instagram_media WHERE id=?", (item_id,)).fetchone()
+            return dict(row) if row else None
+
+    def get_instagram_media_by_permalink(self, permalink: str) -> Optional[Dict[str, Any]]:
+        with self.get_connection() as conn:
+            row = conn.execute("SELECT * FROM instagram_media WHERE permalink=?", (permalink,)).fetchone()
             return dict(row) if row else None
 
     def get_instagram_media_by_meta_id(self, media_id: str) -> Optional[Dict[str, Any]]:

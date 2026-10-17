@@ -216,6 +216,135 @@ def exact_route_suggestion(item, routes):
     return int(candidate["routing_id"]), "EXACT_MATCH"
 
 
+def binding_disabled(binding):
+    """The client switched this ad's answers off; it must not inherit any."""
+    return bool(binding and binding.get("status") == "BOUND" and not binding.get("active"))
+
+
+def inherited_route(item, routes, binding=None):
+    """The Post/Reel mapping an ad answers with when it has no live binding.
+
+    An ad promotes one exact Post or Reel, so it answers like that content:
+    renewed and duplicated ads of the same creative are covered with no Map
+    Ad step. Stories are excluded (they expire within a day) and an ambiguous
+    identity inherits nothing.
+    """
+    if not item or binding_disabled(binding):
+        return None
+    candidates = [route for route in routes if route.get("source_type") in {"post", "reel"}]
+    routing_id, status = exact_route_suggestion(item, candidates)
+    if status != "EXACT_MATCH":
+        return None
+    return next((route for route in candidates if route.get("routing_id") == routing_id), None)
+
+
+PRICE_PROBE = "How much does it cost?"
+
+
+def price_answer_status(database, route, cache=None):
+    """What "How much does it cost?" from this ad gets, by the live matcher.
+
+    APPROVED: an approved price answer. NOTE: the mapping's welcome note once,
+    then the manager. NONE: the manager.
+    """
+    if not route or not route.get("active", True):
+        return "NONE"
+    key = route.get("routing_id")
+    if cache is not None and key in cache:
+        return cache[key]
+    from camellia import approved_qa, instagram_source_qa
+    status = None
+    try:
+        rows = approved_qa.overlays(strict=True)
+        context = None
+        if route.get("response_mode") == "APPROVED_QA":
+            if route.get("qa_bundle"):
+                rows, allowed = instagram_source_qa.effective(database, route)
+                raw = route.get("source_context")
+                context = {"bengali_home_table": "home_table", "savoury_deliveries": "savoury"}.get(raw, raw)
+            else:
+                allowed = {route.get("approved_qa_id")} - {None}
+        else:
+            topic = database.get_instagram_topic(route["topic_id"]) if route.get("topic_id") else None
+            allowed = set(json.loads((topic or {}).get("default_approved_qa_ids") or "[]"))
+        entries = [entry for entry in approved_qa.registry(rows) if entry.qa_id in allowed]
+        if entries:
+            context = context or entries[0].context
+            facts = {"last_topic": context, "home_table_context": context == "home_table"}
+            if approved_qa.match(PRICE_PROBE, facts, rows=rows, allowed_qa_ids=set(allowed)):
+                status = "APPROVED"
+    except Exception:
+        status = None
+    if status is None and route.get("response_mode", "CUSTOM") == "CUSTOM":
+        if route.get("priority_products"):
+            status = "APPROVED"  # A canonical product answers its own price.
+        elif str(route.get("source_description") or "").strip():
+            status = "NOTE"
+    status = status or "NONE"
+    if cache is not None:
+        cache[key] = status
+    return status
+
+
+def answer_media_item(database, route, item):
+    """The Posts & Reels record whose editor sets this ad's answers."""
+    for media_id, permalink in (
+        ((route or {}).get("media_id"), (route or {}).get("canonical_url")),
+        (item.get("effective_instagram_media_id"), item.get("instagram_permalink_url")),
+    ):
+        found = database.get_instagram_media_by_meta_id(str(media_id)) if media_id else None
+        canonical = _permalink(permalink)
+        if not found and canonical:
+            found = database.get_instagram_media_by_permalink(canonical)
+        if found:
+            return found
+    return None
+
+
+def effective_routes(item, binding, route_by_id, routes):
+    """(live binding route, inherited Post/Reel route) — at most one is set."""
+    live = route_by_id.get(binding["routing_id"]) if binding and binding.get("active") else None
+    return live, None if live else inherited_route(item, routes, binding)
+
+
+def is_answer_gap(item, status, recent_ids):
+    """A gap is an ad customers messaged from recently that is still running
+    (or not yet in the Ads inventory) and would not answer price questions.
+    Meta's "active" alone includes many old ads nobody messages from."""
+    ended = item.get("inventory_state", "CURRENT") == "CURRENT" and item.get("ad_account_id") and not item.get("active")
+    return item.get("ad_id") in recent_ids and not ended and status in {"NONE", "NOTE"}
+
+
+def ad_answer_gaps(database, days=7):
+    """How many recently messaged ads would not answer "How much does it cost?"."""
+    recent = database.recently_messaged_ad_ids(days)
+    if not recent:
+        return 0
+    from camellia import instagram_source_qa
+    routes = [instagram_source_qa.route_contract(database, decode_route(row))
+              for row in database.list_instagram_source_routes()]
+    route_by_id = {route["routing_id"]: route for route in routes}
+    bindings = {row["ad_id"]: row for row in database.list_instagram_ad_bindings()}
+    inventory = {row["ad_id"]: row for row in database.list_instagram_ads_inventory(ad_account_id())}
+    cache, gaps = {}, 0
+    for ad_id in recent:
+        item = inventory.get(ad_id) or {"ad_id": ad_id, "inventory_state": "OBSERVED"}
+        binding = bindings.get(ad_id)
+        if binding_disabled(binding):
+            continue
+        live, inherited = effective_routes(item if ad_id in inventory else {}, binding, route_by_id, routes)
+        gaps += is_answer_gap(item, price_answer_status(database, live or inherited, cache), recent)
+    return gaps
+
+
+def inherited_route_for_ad(database, ad_id):
+    return inherited_route(
+        database.get_instagram_ad_inventory_row(ad_id),
+        [decode_route(row) for row in database.list_instagram_source_routes()],
+        database.get_instagram_ad_binding(ad_id),
+    )
+
+
 def active_presentation_groups(rows):
     """Discovery only: exact identities never replace individual binding rows."""
     active = sorted((row for row in rows if row.get("active")), key=lambda row: row["ad_id"])
@@ -404,7 +533,8 @@ def ads_workspace(database, view="active"):
     bindings = {row["ad_id"]: row for row in database.list_instagram_ad_bindings()}
     inventory = {row["ad_id"]: row for row in database.list_instagram_ads_inventory(ad_account_id())}
     observed = {row["ad_id"]: row for row in database.list_observed_instagram_ads()}
-    rows = []
+    rows, status_cache = [], {}
+    recent_ids = database.recently_messaged_ad_ids()
     for ad_id in sorted(inventory.keys() | observed.keys() | bindings.keys()):
         item = dict(inventory.get(ad_id) or {})
         binding = bindings.get(ad_id)
@@ -419,6 +549,13 @@ def ads_workspace(database, view="active"):
                     mapping=route, suggested_routing_id=suggestion, identity_status=identity_status,
                     source_type=normalize_instagram_url(source)["source_type"] if source else route.get("source_type", "unknown") if route else "unknown",
                     history=[{key: event.get(key) for key in ("routing_id", "action", "occurred_at")} for event in database.list_instagram_ad_binding_history(ad_id)])
+        live, inherited = effective_routes(item, binding, route_by_id, routes)
+        media = answer_media_item(database, live or inherited, item)
+        item.update(answers_from="mapping" if live else "post" if inherited else None,
+                    effective_mapping=live or inherited,
+                    answer_status="DISABLED" if binding_disabled(binding) else price_answer_status(database, live or inherited, status_cache),
+                    answer_media_item_id=media["id"] if media else None,
+                    recently_messaged=ad_id in recent_ids)
         rows.append(item)
     active_groups = active_presentation_groups(rows)
     delivery = delivery_evidence() if view == "running" else {"status": "not_requested", "ads": {}}
@@ -428,7 +565,8 @@ def ads_workspace(database, view="active"):
     for row in rows:
         row["delivery"] = delivery["ads"].get(row["ad_id"])
     counts = {"active": len(active_groups), "raw_active": sum(row["active"] for row in rows), "unmapped": sum(not row["mapped"] for row in rows),
-              "mapped": sum(row["mapped"] for row in rows), "inactive": sum(not row["active"] and row["inventory_state"] != "OBSERVED" for row in rows), "all": len(rows)}
+              "mapped": sum(row["mapped"] for row in rows), "inactive": sum(not row["active"] and row["inventory_state"] != "OBSERVED" for row in rows), "all": len(rows),
+              "answer_gaps": sum(is_answer_gap(row, row["answer_status"], recent_ids) for row in rows)}
     counts["running"] = len(running_groups) if delivery["status"] == "available" else None
     if delivery["unresolved_ad_ids"]:
         counts["running"] = None

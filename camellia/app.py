@@ -849,8 +849,9 @@ def _process_instagram_event(
         unbound_ad_referral = bool(entry.from_ad_click and entry.ad_id and not source_route)
         if trace.get("ad_id") and source_route:
             log.info(
-                "INSTAGRAM_AD_ROUTE ad_present=true ad_id_hash=%s binding_status=BOUND routing_id=%s source_type=%s",
-                _safe_identifier_hash(trace["ad_id"]), source_route.get("routing_id"), source_route.get("source_type"),
+                "INSTAGRAM_AD_ROUTE ad_present=true ad_id_hash=%s binding_status=%s routing_id=%s source_type=%s",
+                _safe_identifier_hash(trace["ad_id"]), "INHERITED" if source_match_method == "ad_creative" else "BOUND",
+                source_route.get("routing_id"), source_route.get("source_type"),
             )
         if not source_route and shared_post_id:
             # Preserve the existing admin-open pairing window for Posts. Once
@@ -864,7 +865,7 @@ def _process_instagram_event(
             # This event's own ADS referral resolved an exact binding: the same
             # fresh subject as a shared Post/Reel, so a returning customer's
             # earlier topic or superseded flag cannot hide the mapped source.
-            exact_ad_click = bool(entry.from_ad_click and entry.ad_id and source_match_method == "ad_id")
+            exact_ad_click = bool(entry.from_ad_click and entry.ad_id and source_match_method in {"ad_id", "ad_creative"})
             if source_media_present or exact_ad_click:
                 # A newly identified exact source is a fresh subject. Do not
                 # let an older conversational topic prevent the mapped
@@ -3394,6 +3395,16 @@ def _health_details():
         warnings.append("PUBLIC_BASE_URL is not a full https:// address — menu cards are dropped from every Instagram reply.")
     elif own_domain and urlsplit(config.PUBLIC_BASE_URL).hostname != own_domain:
         warnings.append("PUBLIC_BASE_URL points at a different server — menu cards load only while that server is up.")
+    try:
+        from camellia.instagram_ads import ad_answer_gaps
+        ad_gaps = ad_answer_gaps(db)
+    except Exception:
+        ad_gaps = 0
+    if ad_gaps:
+        warnings.append(
+            f"{ad_gaps} ad(s) customers messaged from this week would not answer "
+            "\"How much does it cost?\" with an approved answer — see Admin → Ads."
+        )
     if not storage["database"]["expected_durable"]:
         warnings.append(
             f"Database is at {storage['database']['path']}, which is inside the "
@@ -3930,6 +3941,13 @@ def get_instagram_media(item_id: int, x_admin_key: Optional[str] = Header(None),
     if not item:
         raise HTTPException(status_code=404, detail="Instagram media not found.")
     item["needs_review"] = bool(item["needs_review"]); item["active"] = bool(item["active"])
+    # Same mapping view as the gallery list, so the Ads tab opens the same editor.
+    mapping = db.get_instagram_media_mapping(item_id)
+    if mapping:
+        from camellia.instagram_ads import mapping_display
+        from camellia.instagram_source_qa import route_contract
+        mapping = mapping_display(route_contract(db, mapping))
+    item["mapping_route"] = mapping
     return {"status": "success", "item": item}
 
 
@@ -9563,6 +9581,11 @@ THIS WEEK'S BENGAL SPECIALS
             list.querySelectorAll('[data-content-route-id]').forEach(card => { const route = igContentRoutes.find(item => String(item.routing_id) === card.dataset.contentRouteId); card.addEventListener('click', event => { if (event.target.closest('button,a')) return; openContentDetails('content', route); }); card.querySelector('[data-content-action="details"]')?.addEventListener('click', event => { event.stopPropagation(); openContentDetails('content', route); }); });
         }
 
+        function galleryMediaItem(item) {
+            const mapping = item.mapping_route; const topicId = mapping?.topic_id; const topic = igTopics.find(t => t.topic_id === topicId);
+            return { ...item, gallery_media: true, routing_id: item.id, media_id: item.instagram_media_id, preview_url: item.thumbnail_url || item.media_url, canonical_url: item.permalink, source_type: item.media_type === 'VIDEO' ? 'reel' : 'post', routing_topic: topic?.name || mapping?.display_label || mapping?.routing_topic || '', source_description: mapping?.source_description || '', menu_id: mapping?.menu_id || null, mapping_route: mapping || null };
+        }
+
         async function loadInstagramContentGallery(reset = true) {
             if (!adminAuthenticated || igContentLoadInFlight) return;
             const list = document.getElementById('igContentGallery'); if (!list) return;
@@ -9588,7 +9611,7 @@ THIS WEEK'S BENGAL SPECIALS
                         ? 'LEGACY · UNVERIFIED — showing saved media records for continuity. Their account ownership has not been verified, they are not authoritative current-account media, and mapping edits are disabled until a complete owner sync succeeds.' : '';
                 }
                 window.igGalleryCustomRoutes = (payload.items || []).map(item => item.mapping_route).filter(Boolean);
-                const pageItems = (payload.items || []).map(item => { const mapping = item.mapping_route; const topicId = mapping?.topic_id; const topic = igTopics.find(t => t.topic_id === topicId); return { ...item, gallery_media: true, routing_id: item.id, media_id: item.instagram_media_id, preview_url: item.thumbnail_url || item.media_url, canonical_url: item.permalink, source_type: item.media_type === 'VIDEO' ? 'reel' : 'post', routing_topic: topic?.name || mapping?.display_label || mapping?.routing_topic || '', source_description: mapping?.source_description || '', menu_id: mapping?.menu_id || null, mapping_route: mapping || null }; });
+                const pageItems = (payload.items || []).map(galleryMediaItem);
                 igContentRoutes = reset ? pageItems : [...igContentRoutes, ...pageItems];
                 igContentHasMore = Boolean(payload.has_more); igContentTotal = Number(payload.total || 0); igContentPage += 1;
                 window.igContentRoutes = igContentRoutes; renderInstagramContentGallery();
@@ -9692,6 +9715,9 @@ THIS WEEK'S BENGAL SPECIALS
             const response = await fetch(`/admin/instagram-media/${id}/mapping`, { method: 'PUT', headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             if (!response.ok) { const data = await response.json().catch(() => ({})); alert(data.detail || 'Could not save mapping.'); return; }
             closeContentDetails(); await loadInstagramContentGallery();
+            // Ads answer from their Post/Reel, so their status changes with it.
+            const adsList = document.getElementById('adsList');
+            if (typeof loadAdsWorkspace === 'function' && adsList && adsList.offsetParent !== null) await loadAdsWorkspace();
         }
 
         async function deleteInstagramMediaMapping(id) {
