@@ -439,4 +439,4 @@ def ads_workspace(database, view="active"):
                 (view == "inactive" and not row["active"] and row["inventory_state"] != "OBSERVED") or (view == "mapped" and row["mapped"]) or
                 (view == "unmapped" and not row["mapped"])]
     return {"status": "success", "items": filtered, "active_groups": active_groups, "running_groups": running_groups, "delivery": delivery, "counts": counts, "sync": sync_status(database),
-            "routes": [row for row in routes if row.get("active") and row.get("source_type") in {"post", "reel", "story"}]}
+            "routes": [row for row in routes if row.get("active") and row.get("source_type") in {"post", "reel"}]}

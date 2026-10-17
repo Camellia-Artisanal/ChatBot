@@ -2328,11 +2328,15 @@ class Database:
             raise ValueError("Invalid Meta Ad ID.")
         with self.get_connection() as conn:
             route = conn.execute(
-                "SELECT routing_id FROM instagram_source_routes WHERE routing_id=? AND active=1 AND archived_at IS NULL",
+                "SELECT routing_id, source_type FROM instagram_source_routes WHERE routing_id=? AND active=1 AND archived_at IS NULL",
                 (int(routing_id),),
             ).fetchone()
             if not route:
                 raise ValueError("Select an active mapped source.")
+            # A Story and its mapping are deleted when the Story expires, which
+            # silently strands every ad bound to it.
+            if route["source_type"] == "story":
+                raise ValueError("Stories expire after 24 hours. Map the ad to a Post or Reel.")
             current = conn.execute(
                 "SELECT * FROM instagram_source_ad_bindings WHERE ad_id=?", (ad_id,),
             ).fetchone()

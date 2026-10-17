@@ -793,3 +793,26 @@ const unmapped = {ad_id:'222',name:'MISHTI copy',mapped:false,history:[]};
     target.write_text(fixture + SCRIPT.replace("<script>", "").replace("</script>", "") + checks, encoding="utf-8")
     result = subprocess.run([node, str(target)], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
+
+
+def test_ads_cannot_be_mapped_to_a_story(store, monkeypatch):
+    """A Story and its mapping are deleted after 24 hours, stranding the ad.
+
+    On 2026-10-16 an ad mapped to a Story answered with the manager handoff and
+    then lost its mapping overnight. Map Ad offers only Posts and Reels, and the
+    bind itself refuses a Story.
+    """
+    post = route(store)
+    story = store.save_instagram_source_route({"source_type": "story", "media_id": "Story123",
+        "routing_topic": "Sondesh", "source_description": "Approved source description",
+        "active": True, "priority_products": [], "knowledge_scope": []})
+    sync(store, monkeypatch)
+    offered = {row["routing_id"] for row in ads.ads_workspace(store, "all")["routes"]}
+    assert post["routing_id"] in offered and story["routing_id"] not in offered
+    with pytest.raises(ValueError, match="Post or Reel"):
+        store.bind_instagram_ad(item()["id"], story["routing_id"])
+    api = TestClient(app_module.app)
+    refused = api.post(f"/admin/instagram-ads/{item()['id']}/bind", headers={"x-admin-key": "ads-admin-fixture"},
+                       json={"routing_id": story["routing_id"]})
+    assert refused.status_code == 400 and "Post or Reel" in refused.json()["detail"]
+    assert store.bind_instagram_ad(item()["id"], post["routing_id"])["routing_id"] == post["routing_id"]
