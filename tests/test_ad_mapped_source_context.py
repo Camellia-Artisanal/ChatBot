@@ -357,16 +357,23 @@ def test_returning_customer_ad_click_uses_newly_bound_source(
     assert send.called
 
 
-def test_ad_click_with_no_product_or_selected_qa_still_hands_off_price(ad_customer):
+def test_ad_click_with_no_product_or_selected_qa_gets_the_note_once_then_hands_off_price(ad_customer):
     # A free-form routing topic is not answer authority: without a canonical
-    # product or selected Approved Q&A the source owns no price answer.
+    # product or selected Approved Q&A the source owns no price answer. The
+    # client's own note is sent once instead of the handoff (2026-10-17).
     _production_shaped_source(ad_customer, "unpriced-ad", "Savoury Delivery Delhi NCR")
     sender, facts, db = ad_customer
 
     _process(ad_customer, "How much does it cost?", _ad_entry(sender, "unpriced-ad", "How much does it cost?"))
 
-    assert facts["last_route_source"] == "HUMAN_HANDOFF"
     assert facts.get("client_qa_id") is None
+    assert db.get_active_handoff("instagram", sender) is None
+    stored = db.get_conversations(limit=1, channel="instagram", user_id=sender)[0]
+    assert stored["bot_response"] == "Operator-authored reel description."
+
+    _process(ad_customer, "What is the price?", _ad_entry(sender, "unpriced-ad", "What is the price?"))
+
+    assert facts["last_route_source"] == "HUMAN_HANDOFF"
     assert db.get_active_handoff("instagram", sender)
 
 

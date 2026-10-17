@@ -1252,6 +1252,7 @@ class Database:
             );
             """)
             self._ensure_column(cursor, "instagram_topics", "response_order", "TEXT NOT NULL DEFAULT 'description_first'")
+            self._ensure_column(cursor, "instagram_topics", "default_approved_qa_ids", "TEXT NOT NULL DEFAULT '[]'")
             cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_topics_normalized_name ON instagram_topics(name COLLATE NOCASE)")
 
             self._ensure_column(cursor, "instagram_source_routes", "topic_id", "TEXT")
@@ -3600,6 +3601,7 @@ class Database:
         knowledge_scope: Optional[List[str]] = None, active: Optional[bool] = None,
         response_order: Optional[str] = None,
         clear_default_menu: bool = False,
+        default_approved_qa_ids: Optional[List[str]] = None,
     ) -> Optional[Dict[str, Any]]:
         fields, values = [], []
         if name is not None:
@@ -3616,6 +3618,8 @@ class Database:
             fields.append("knowledge_scope = ?"); values.append(json.dumps(knowledge_scope))
         if response_order is not None:
             fields.append("response_order = ?"); values.append(response_order)
+        if default_approved_qa_ids is not None:
+            fields.append("default_approved_qa_ids = ?"); values.append(json.dumps(default_approved_qa_ids))
         if active is not None:
             fields.append("active = ?"); values.append(int(active))
         if not fields:

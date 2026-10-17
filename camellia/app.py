@@ -968,6 +968,28 @@ def _process_instagram_event(
             referral_source="ADS", referral_ad_id=trace["ad_id"], referral_ad_title=trace["ad_title"],
         )
 
+        # A Custom mapping's note is the client's own reply for that ad/post.
+        # A generic price/details question nothing else answered gets it
+        # (once) instead of the manager handoff. Specific requests, orders and
+        # later unanswered questions still go to a person.
+        mapped = facts.get("source_route") if isinstance(facts.get("source_route"), dict) else {}
+        note = str(mapped.get("source_description") or "").strip()
+        if (not was_matched and template_id is None and note and mapped.get("active", True)
+                and responder_module.source_referential_intent(customer_message) in {"price", "details"}
+                and mapped.get("response_mode", "CUSTOM") == "CUSTOM"
+                and not facts.get("source_context_superseded")
+                and facts.get("source_note_sent_routing_id") != mapped.get("routing_id")
+                and not is_human_help_request(customer_message)
+                # A price for something not on the menu (e.g. paneer) needs a person, not the note.
+                and not responder_module._unknown_named_price(customer_message)):
+            menu_id = mapped.get("menu_id")
+            if str(mapped.get("menu_mode") or "INHERIT").upper() == "INHERIT" and not menu_id and mapped.get("topic_id"):
+                menu_id = (db.get_instagram_topic(mapped["topic_id"]) or {}).get("default_menu_id")
+            image_url = menu_images.current_url(str(menu_id)) if menu_id and str(mapped.get("menu_mode") or "").upper() != "NONE" else None
+            response_text, was_matched, template_id = note, True, "source_description"
+            facts["source_note_sent_routing_id"] = mapped.get("routing_id")
+            session_memory.touch(sender_id, "instagram")
+
         # Human-gated assisted resolution: unresolved Instagram messages only.
         # The draft is durable and reviewable; it is never sent from this path.
         protected_flow = bool(
@@ -6942,6 +6964,8 @@ async def update_instagram_topic_route(
         kwargs["knowledge_scope"] = body["knowledge_scope"]
     if "response_order" in body:
         kwargs["response_order"] = body["response_order"]
+    if "default_approved_qa_ids" in body:
+        kwargs["default_approved_qa_ids"] = body["default_approved_qa_ids"]
     if "default_menu_id" in body:
         if body["default_menu_id"]:
             kwargs["default_menu_id"] = body["default_menu_id"]
@@ -8880,6 +8904,11 @@ THIS WEEK'S BENGAL SPECIALS
             <input type="hidden" id="topicModalEditingId">
             <label class="field-label">Topic Name *</label>
             <input class="field-control" id="topicName" placeholder="e.g. Wedding / Event Sondesh" style="margin-bottom:10px;">
+            <div id="topicAnswersBlock" style="display:none;">
+                <label class="field-label">Answers for Custom mappings</label>
+                <p style="font-size:0.8rem;color:var(--text-muted);margin:0 0 6px;">When a Post, Reel or Story in this Topic is mapped with only a description, the bot answers matching questions (for example price) with these approved answers, word for word.</p>
+                <div id="topicAnswersList" style="max-height:220px;overflow-y:auto;border:1px solid #e5e5e5;border-radius:8px;padding:8px;"></div>
+            </div>
             <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top:16px;">
                 <button class="btn-secondary" onclick="closeTopicModal()">Cancel</button>
                 <button class="btn-primary" id="topicSaveButton" onclick="submitTopic()">Add Topic</button>
@@ -10359,8 +10388,24 @@ THIS WEEK'S BENGAL SPECIALS
             document.getElementById('topicModalEditingId').value = topic ? topic.topic_id : '';
             document.getElementById('topicName').value = topic?.name || '';
             document.getElementById('topicModalResult').style.display = 'none';
+            renderTopicAnswers(topic);
             document.getElementById('topicModal').style.display = 'flex';
             document.getElementById('topicName').focus();
+        }
+        async function renderTopicAnswers(topic) {
+            const block = document.getElementById('topicAnswersBlock');
+            const list = document.getElementById('topicAnswersList');
+            block.style.display = topic ? 'block' : 'none';
+            list.innerHTML = '';
+            if (!topic) return;
+            list.innerHTML = 'Loading approved answers…';
+            try {
+                const data = await fetch('/admin/instagram-routes/approved-qa-options', { headers: getAuthHeaders() }).then(r => r.json());
+                const selected = new Set(topic.default_approved_qa_ids || []);
+                list.innerHTML = (data.records || []).map(record => `<label style="display:flex;gap:8px;align-items:flex-start;margin:4px 0;font-size:0.85rem;"><input type="checkbox" data-topic-answer="${escapeHtml(record.qa_id)}" ${selected.has(record.qa_id) ? 'checked' : ''}><span>${escapeHtml(record.question || record.qa_id)}</span></label>`).join('') || '<p>No approved answers available.</p>';
+            } catch (err) {
+                list.innerHTML = '<p>Approved answers are unavailable right now.</p>';
+            }
         }
         function openTopicEditor() {
             const id = document.getElementById('igTopicPicker').value;
@@ -10394,6 +10439,8 @@ THIS WEEK'S BENGAL SPECIALS
         async function submitTopic() {
             const result = document.getElementById('topicModalResult');
             const payload = { name: document.getElementById('topicName').value.trim() };
+            const answerBoxes = document.querySelectorAll('#topicAnswersList [data-topic-answer]');
+            if (answerBoxes.length) payload.default_approved_qa_ids = [...answerBoxes].filter(box => box.checked).map(box => box.dataset.topicAnswer);
             try {
                 const editingId = document.getElementById('topicModalEditingId').value;
                 const resp = await fetch(editingId ? `/admin/instagram-topics/${encodeURIComponent(editingId)}` : '/admin/instagram-topics', {

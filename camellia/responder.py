@@ -2783,6 +2783,24 @@ class DeterministicResponder:
         legacy_source_match = None
         legacy_source_unavailable = False
         bundle_active = False
+
+        def independent_of_source(wording):
+            """A question with its own subject (named product, opening hours,
+            a general approved answer) is not about the mapped source."""
+            normalized = client_qa._normalise_match_text(wording)
+            global_match = client_qa.match(wording, {})
+            contextual_wording = bool(re.search(
+                r"\b(?:shelf life|storage|expiry|deliver\w*|dispatch|pay\w*|order\w*|book\w*)\b", normalized))
+            if global_match and global_match.entry.qa_id == "delivery_out_of_area_client":
+                return True  # Existing explicitly named delivery-area intent.
+            return bool(client_qa._match_subjects(normalized)) or bool(
+                OPENING_HOURS_RE.search(wording) or GREETING_ONLY_RE.fullmatch(wording.strip())
+                or menu_review.weekly_menu_browsing(wording) or order_intake.is_new_order_request(wording)) or bool(
+                global_match and global_match.entry.context == "general"
+                and not source_referential_intent(wording) and not is_payment_method_request(wording)
+                and not contextual_wording
+                and not re.search(r"\b(?:it|this|that)\b", normalized))
+
         if (channel == "instagram" and isinstance(source_for_qa, dict)
                 and source_for_qa.get("source_type") in {"story", "post", "reel"} and source_for_qa.get("routing_id")
                 and source_for_qa.get("active", True) and not facts.get("source_context_superseded")
@@ -2804,20 +2822,7 @@ class DeterministicResponder:
                     bundle_valid = bundle_valid and all(current_route.get(key) == source_for_qa.get(key) for key in instagram_source_qa.IDENTITY_FIELDS)
                 selected_count = len((bundle or source_for_qa).get("approved_qa_ids") or [])
                 wording = semantic_remainder or user_message
-                normalized = client_qa._normalise_match_text(wording)
-                global_match = client_qa.match(wording, {})
-                contextual_wording = bool(re.search(
-                    r"\b(?:shelf life|storage|expiry|deliver\w*|dispatch|pay\w*|order\w*|book\w*)\b", normalized))
-                independent = bool(client_qa._match_subjects(normalized)) or bool(
-                    OPENING_HOURS_RE.search(wording) or GREETING_ONLY_RE.fullmatch(wording.strip())
-                    or menu_review.weekly_menu_browsing(wording) or order_intake.is_new_order_request(wording)) or bool(
-                    global_match and global_match.entry.context == "general"
-                    and not source_referential_intent(wording) and not is_payment_method_request(wording)
-                    and not contextual_wording
-                    and not re.search(r"\b(?:it|this|that)\b", normalized))
-                if global_match and global_match.entry.qa_id == "delivery_out_of_area_client":
-                    independent = True  # Existing explicitly named delivery-area intent.
-                if not independent:
+                if not independent_of_source(wording):
                     bundle_active = True
                     try:
                         if not bundle_valid:
@@ -2880,6 +2885,33 @@ class DeterministicResponder:
                         except Exception:
                             legacy_source_match = None
                             legacy_source_unavailable = True
+        elif (channel == "instagram" and isinstance(source_for_qa, dict)
+                and source_for_qa.get("source_type") in {"story", "post", "reel"} and source_for_qa.get("routing_id")
+                and source_for_qa.get("active", True) and not facts.get("source_context_superseded")
+                and source_for_qa.get("response_mode", "CUSTOM") == "CUSTOM" and source_for_qa.get("topic_id")):
+            # A Custom mapping carries only the client's note. Its Topic's
+            # default approved answers let it answer price/details questions
+            # word for word instead of handing every one to the manager.
+            from camellia import approved_qa
+            topic = db.get_instagram_topic(source_for_qa["topic_id"]) or {}
+            try:
+                topic_ids = json.loads(topic.get("default_approved_qa_ids") or "[]")
+            except (TypeError, ValueError):
+                topic_ids = []
+            wording = semantic_remainder or user_message
+            if topic_ids and not independent_of_source(wording):
+                try:
+                    rows = approved_qa.overlays(strict=True)
+                    entries = [entry for entry in approved_qa.registry(rows) if entry.qa_id in topic_ids]
+                    if entries:
+                        context = entries[0].context
+                        legacy_source_match = approved_qa.match(
+                            wording, {"last_topic": context, "home_table_context": context == "home_table"},
+                            rows=rows, allowed_qa_ids=set(topic_ids),
+                        )
+                except Exception:
+                    legacy_source_match = None
+                facts["topic_default_qa_match"] = "matched" if legacy_source_match else "unresolved"
         if legacy_source_unavailable:
             # A stale legacy selection must not silently fall through to a
             # different global Q&A just because that wording happens to match.

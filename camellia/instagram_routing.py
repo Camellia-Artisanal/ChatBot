@@ -559,7 +559,7 @@ def decode_topic(row: Dict[str, Any]) -> Dict[str, Any]:
     without it, priority_products/knowledge_scope cross the API as an encoded
     string rather than an array."""
     topic = dict(row)
-    for field in ("priority_products", "knowledge_scope"):
+    for field in ("priority_products", "knowledge_scope", "default_approved_qa_ids"):
         value = topic.get(field)
         try:
             topic[field] = json.loads(value) if isinstance(value, str) else list(value or [])
@@ -741,6 +741,15 @@ def update_topic(topic_id: str, **fields: Any) -> Dict[str, Any]:
         if response_order not in RESPONSE_ORDERS:
             raise InstagramTopicError("Reply order must be Description First or Menu First.")
         fields["response_order"] = response_order
+    if "default_approved_qa_ids" in fields:
+        # Answers a Custom (description-only) mapping in this Topic may give
+        # word for word, so they must be live client-approved Q&A.
+        from camellia import client_qa
+        ids = list(dict.fromkeys(str(i).strip() for i in (fields["default_approved_qa_ids"] or []) if str(i).strip()))
+        unknown = [i for i in ids if client_qa.resolve_effective_approved_qa_by_id(i) is None]
+        if unknown:
+            raise InstagramTopicError(f"Unknown or inactive Approved Q&A: {unknown[0]}")
+        fields["default_approved_qa_ids"] = ids
     updated = db.update_instagram_topic(topic_id, **fields)
     if not updated:
         raise KeyError(topic_id)
