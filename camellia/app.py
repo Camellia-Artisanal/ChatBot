@@ -975,7 +975,12 @@ def _process_instagram_event(
         mapped = facts.get("source_route") if isinstance(facts.get("source_route"), dict) else {}
         note = str(mapped.get("source_description") or "").strip()
         if (not was_matched and template_id is None and note and mapped.get("active", True)
-                and responder_module.source_referential_intent(customer_message) in {"price", "details"}
+                and (responder_module.source_referential_intent(customer_message) in {"price", "details"}
+                     # Meta's ad button "Hello, can I get more info on this?" reads as an
+                     # order ("get ... this") but is a request for details.
+                     or re.search(r"\bmore\s+(?:info|information|details?)\b|"
+                                  r"\b(?:info|information|details?)\s+(?:on|about)\s+(?:this|that|it)\b",
+                                  customer_message, re.I))
                 and mapped.get("response_mode", "CUSTOM") == "CUSTOM"
                 and not facts.get("source_context_superseded")
                 and facts.get("source_note_sent_routing_id") != mapped.get("routing_id")

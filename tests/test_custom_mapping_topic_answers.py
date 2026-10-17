@@ -55,6 +55,16 @@ def test_without_topic_answers_the_note_is_sent_once_instead_of_the_manager(ad_c
     assert db.get_active_handoff("instagram", sender) is not None
 
 
+@pytest.mark.parametrize("topic_answers", [None, ["sondesh_price_client", "sondesh_details_client"]])
+def test_meta_more_info_button_gets_the_note(ad_customer, topic_answers):
+    # 15 customers in 30 days tapped this ad button and were all handed off.
+    _custom_route(ad_customer, topic_answers)
+    sender, _facts, db = ad_customer
+    _ask(ad_customer, "Hello, can I get more info on this?")
+    assert db.get_active_handoff("instagram", sender) is None
+    assert db.get_conversations(limit=1, channel="instagram", user_id=sender)[0]["bot_response"] == NOTE
+
+
 def test_explicit_human_request_still_reaches_the_manager(ad_customer):
     _custom_route(ad_customer)
     sender, _facts, db = ad_customer
