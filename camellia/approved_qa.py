@@ -146,7 +146,13 @@ def get(qa_id):
     return next((entry for entry in registry() if entry.qa_id == qa_id), None)
 
 
-def match(message, facts=None, *, rows=None, allowed_qa_ids=None):
+_PRODUCT_EQUIVALENTS = {
+    "general_details": ("sondesh_details_client", "home_table_details", "subscription_details_client"),
+    "general_price": ("sondesh_price_client", "home_table_price", "subscription_price"),
+}
+
+
+def match(message, facts=None, *, rows=None, allowed_qa_ids=None, product_fallback=False):
     rows = overlays() if rows is None else rows
     active = {entry.qa_id: entry for entry in registry(rows)}
     if allowed_qa_ids is not None:
@@ -178,6 +184,17 @@ def match(message, facts=None, *, rows=None, allowed_qa_ids=None):
     if original and original.entry.qa_id in active:
         # Existing QA-S1 semantic authority also participates in ambiguity checks.
         exact.add(original.entry.qa_id)
+    if product_fallback and allowed_qa_ids is not None and not exact:
+        # "Can I get more info on this?" / "How much does it cost?" name no
+        # product, so they resolve to the general answer. A checklist holding
+        # one product's answer means "this" is that product (18 Oct: a
+        # sondesh-only mapping handed Meta's ad button to the manager). Only
+        # Approved Q&A checklists ask for this; a Custom mapping sends its note.
+        for base in (original, client_qa._match_base(message, {})):
+            same = [key for key in _PRODUCT_EQUIVALENTS.get(base.entry.qa_id if base else None, ()) if key in active]
+            if len(same) == 1:
+                exact.add(same[0])
+                break
     if len(exact) != 1:
         return None
     key = exact.pop()

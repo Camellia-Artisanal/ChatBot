@@ -73,7 +73,7 @@ def test_newer_draft_blocks_old_approved_price(menu_env):
     assert "aamar_mishti" in menu_review.pending_review_keys()
     assert not matched and route == "pending_menu_handoff" and images is None
     assert "₹700" not in reply and "₹800" not in reply
-    assert "team confirm" in reply
+    assert "Manager of Kitchens" in reply
 
 
 def test_ocr_extracted_price_never_answers_before_approval(menu_env, monkeypatch):
@@ -96,7 +96,7 @@ def test_incomplete_price_stays_in_review_and_handoffs(menu_env, source):
     draft = menu_review.extract("aamar_mishti", "operator", text=source)
     assert draft["status"] == "NEEDS_REVIEW"
     reply, matched, route, _ = _reply("Kanchagolla price?")
-    assert not matched and route == "pending_menu_handoff" and "team confirm" in reply
+    assert not matched and route == "pending_menu_handoff" and "Manager of Kitchens" in reply
 
 
 def test_new_approval_releases_pending_gate(menu_env):
@@ -152,7 +152,7 @@ def test_current_weekly_menu_request_is_blocked_while_weekly_replacement_pending
     _weekly_draft()
     reply, matched, route, _ = _reply("Show me the weekly menu", user="phase2b-faq")
     assert not matched and route == "pending_menu_handoff"
-    assert "team confirm" in reply
+    assert "Manager of Kitchens" in reply
 
 
 def test_current_weekly_menu_request_keeps_existing_behavior_without_pending_draft(menu_env):

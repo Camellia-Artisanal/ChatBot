@@ -104,3 +104,30 @@ def test_more_info_button_gets_the_general_answer_not_the_manager(ad_customer, m
     _ask(ad_customer, "Hello, can I get more info on this?")
     assert facts["client_qa_id"] == "general_details"
     assert db.get_active_handoff("instagram", sender) is None
+
+
+def test_every_handoff_says_only_the_clients_handoff_text(ad_customer):
+    # 18 Oct 16:59: "How much does a box cost?" arrived without its ad and was
+    # handed off with different wording ("Let me have the team confirm").
+    from camellia import handoff
+    from camellia.ad_gate import describe_entry_point
+    sender, _facts, db = ad_customer
+    text = "Thank you for your question. Our Manager of Kitchens will get in touch with you here shortly to help."
+    db.save_response_template_override(handoff.HANDOFF_MESSAGE_OVERRIDE_ID, text, "test")
+    message = "How much does a box cost?"
+    _process(ad_customer, message, describe_entry_point({"sender": {"id": sender}, "message": {"text": message}}))
+    assert db.get_active_handoff("instagram", sender) is not None
+    assert db.get_conversations(limit=1, channel="instagram", user_id=sender)[0]["bot_response"] == text
+
+
+@pytest.mark.parametrize("message", ["Hello, can I get more info on this?", "Can you tell me more about this?"])
+def test_more_info_on_a_sondesh_checklist_gets_the_sondesh_details(ad_customer, message):
+    # 18 Oct 17:10: the post's checklist held only sondesh answers, so Meta's
+    # button (which names no product) found nothing and went to the manager.
+    _mapped_source(ad_customer, "post", AD, topic_name="Sondesh", response_mode="APPROVED_QA",
+                   approved_qa_ids=["sondesh_price_client", "sondesh_details_client", "price_is_high"],
+                   source_context="sondesh")
+    sender, facts, db = ad_customer
+    _ask(ad_customer, message)
+    assert facts["client_qa_id"] == "sondesh_details_client"
+    assert db.get_active_handoff("instagram", sender) is None

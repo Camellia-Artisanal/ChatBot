@@ -2833,7 +2833,7 @@ class DeterministicResponder:
                         # Explicit context supplies only disambiguation. The
                         # effective selected ID set remains answer authority.
                         narrow_facts = {"last_topic": context, "home_table_context": context == "home_table"}
-                        bundle_match = approved_qa.match(wording, narrow_facts, rows=rows, allowed_qa_ids=allowed)
+                        bundle_match = approved_qa.match(wording, narrow_facts, rows=rows, allowed_qa_ids=allowed, product_fallback=True)
                     except Exception:
                         bundle_match = None
                     facts[audit + "_match"] = "matched" if bundle_match else "unresolved"
@@ -3119,7 +3119,10 @@ class DeterministicResponder:
         unknown_price = (channel == "instagram" and not pending_menu
                          and not facts.get("source_route") and _unknown_named_price(user_message))
         if pending_menu or unknown_price:
-            reply = "I want to make sure I give you the current menu details. Let me have the team confirm that for you."
+            # A handoff says only the client's handoff text (18 Oct: this
+            # path had its own wording, "Let me have the team confirm").
+            from camellia.handoff import default_handoff_message
+            reply = default_handoff_message()
             facts.update({
                 "last_route_source": "HUMAN_HANDOFF",
                 "last_intents": [Intent.ESCALATION.value],
