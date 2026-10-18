@@ -54,6 +54,21 @@ def create_router(require_admin, actor):
         require_admin(x_admin_key)
         return call(approved_qa.publish, await body(request), actor())
 
+    @router.post("/contexts")
+    async def add_context(request: Request, x_admin_key: Optional[str] = Header(None)):
+        require_admin(x_admin_key)
+        return call(approved_qa.save_context, (await body(request)).get("label"), actor())
+
+    @router.patch("/contexts/{value}")
+    async def rename_context(value: str, request: Request, x_admin_key: Optional[str] = Header(None)):
+        require_admin(x_admin_key)
+        return call(approved_qa.save_context, (await body(request)).get("label"), actor(), value)
+
+    @router.delete("/contexts/{value}")
+    def delete_context(value: str, x_admin_key: Optional[str] = Header(None)):
+        require_admin(x_admin_key)
+        return call(approved_qa.delete_context, value)
+
     @router.get("/{qa_id}")
     def detail(qa_id: str, x_admin_key: Optional[str] = Header(None)):
         require_admin(x_admin_key)
@@ -95,6 +110,14 @@ HTML = r'''
  <dialog id="aqDialog" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);margin:0;width:min(800px,95vw);max-height:90vh;overflow:auto;border:1px solid #ddd;border-radius:12px;padding:24px;">
   <button class="btn-secondary" style="float:right" onclick="document.getElementById('aqDialog').close()">Close</button><div id="aqDialogContent"></div>
  </dialog>
+ <dialog id="aqContextDialog" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);margin:0;width:min(520px,95vw);max-height:85vh;overflow:auto;border:1px solid #ddd;border-radius:12px;padding:24px;">
+  <button class="btn-secondary" style="float:right" onclick="document.getElementById('aqContextDialog').close()">Close</button>
+  <h3>Categories</h3><p style="opacity:.75">Group answers by what a post or ad is about. A mapping can only use answers from its own category and General.</p>
+  <div id="aqContextList"></div>
+  <label for="aqNewContext" style="display:block;margin-top:14px">New category</label>
+  <div style="display:flex;gap:8px"><input id="aqNewContext" class="field-control" maxlength="60" placeholder="e.g. Kolkata Bengali Home Table"><button type="button" class="btn-secondary" onclick="aqAddContext()">Add</button></div>
+  <p id="aqContextNote" role="status" style="margin-top:10px"></p>
+ </dialog>
 </div>
 '''
 
@@ -126,7 +149,7 @@ async function aqView(id) { try { const r=await aqApi('/'+encodeURIComponent(id)
 function aqEdit(id) {
  aqDraft=id?aqRecords.find(r=>r.qa_id===id):null;aqToken=null;aqCreating=!id;
  const builtIn=aqDraft?.source_aliases||[];
- document.getElementById('aqDialogContent').innerHTML='<h3>'+ (id?'Edit':'Add')+' Approved Q&amp;A</h3><form id="aqForm" onsubmit="event.preventDefault();aqPreview()"><label for="aqQuestion">Question *</label><textarea id="aqQuestion" required class="field-control"></textarea><label for="aqAnswer">Approved answer *</label><textarea id="aqAnswer" required rows="9" class="field-control"></textarea><label for="aqContext">Category / context</label><select id="aqContext" required class="field-control"></select><div style="margin-top:12px"><strong>Built-in question variations (read-only)</strong>'+(builtIn.length?`<ol style="margin:8px 0 8px 22px">${builtIn.map(v=>`<li>${escapeHtml(v)}</li>`).join('')}</ol>`:'<p style="opacity:.72">None for this Q&amp;A.</p>')+'</div><label for="aqAliases">Additional Admin question variations (one per line)</label><textarea id="aqAliases" rows="3" class="field-control"></textarea><label for="aqFrom">Valid From (Asia/Kolkata)</label><input id="aqFrom" type="datetime-local" step="1" class="field-control"><label for="aqUntil">Valid Until (Asia/Kolkata)</label><input id="aqUntil" type="datetime-local" step="1" class="field-control"><p>Asset references stay read-only.</p><button class="btn-secondary" type="submit">Preview / Test</button> <button id="aqPublishButton" class="btn-secondary" type="button" onclick="aqPublish()">Preview Required Before Publish</button><div id="aqPreviewResult" role="status" style="margin-top:12px"></div></form>';
+ document.getElementById('aqDialogContent').innerHTML='<h3>'+ (id?'Edit':'Add')+' Approved Q&amp;A</h3><form id="aqForm" onsubmit="event.preventDefault();aqPreview()"><label for="aqQuestion">Question *</label><textarea id="aqQuestion" required class="field-control"></textarea><label for="aqAnswer">Approved answer *</label><textarea id="aqAnswer" required rows="9" class="field-control"></textarea><label for="aqContext">Category / context</label><div style="display:flex;gap:8px"><select id="aqContext" required class="field-control"></select><button type="button" class="btn-secondary" onclick="aqManageContexts()">Manage</button></div><div style="margin-top:12px"><strong>Built-in question variations (read-only)</strong>'+(builtIn.length?`<ol style="margin:8px 0 8px 22px">${builtIn.map(v=>`<li>${escapeHtml(v)}</li>`).join('')}</ol>`:'<p style="opacity:.72">None for this Q&amp;A.</p>')+'</div><label for="aqAliases">Additional Admin question variations (one per line)</label><textarea id="aqAliases" rows="3" class="field-control"></textarea><label for="aqFrom">Valid From (Asia/Kolkata)</label><input id="aqFrom" type="datetime-local" step="1" class="field-control"><label for="aqUntil">Valid Until (Asia/Kolkata)</label><input id="aqUntil" type="datetime-local" step="1" class="field-control"><p>Asset references stay read-only.</p><button class="btn-secondary" type="submit">Preview / Test</button> <button id="aqPublishButton" class="btn-secondary" type="button" onclick="aqPublish()">Preview Required Before Publish</button><div id="aqPreviewResult" role="status" style="margin-top:12px"></div></form>';
  const contextSelect=document.getElementById('aqContext');contextSelect.replaceChildren(...aqContexts.map(option=>new Option(option.label,option.value)));
  const r=aqDraft||{};document.getElementById('aqQuestion').value=r.question||'';document.getElementById('aqAnswer').value=r.answer||'';document.getElementById('aqContext').value=r.context||'general';document.getElementById('aqAliases').value=(r.aliases||[]).join('\n');document.getElementById('aqFrom').value=aqLocal(r.valid_from);document.getElementById('aqUntil').value=aqLocal(r.valid_until);
  document.getElementById('aqForm').oninput=()=>aqMarkDirty();document.getElementById('aqDialog').showModal();
@@ -141,6 +164,20 @@ async function aqPreview() { try { const data=await aqApi('/preview','POST',aqPa
 async function aqPublish() { if(!aqToken){await aqPreview();return;}try {await aqApi('/publish','POST',{...aqPayload(),preview_token:aqToken});document.getElementById('aqDialog').close();aqMessage('Approved Q&A published.');await loadApprovedQa();}catch(e){document.getElementById('aqPreviewResult').textContent=e.message;aqToken=null;const button=document.getElementById('aqPublishButton');button.disabled=false;button.textContent='Preview Required Before Publish';} }
 async function aqArchive(id) { if(!confirm('Delete this approved Q&A from customer matching? It will be archived with history preserved.'))return;try{await aqApi('/'+encodeURIComponent(id)+'/archive','POST');aqMessage('Q&A archived. Restore is available in history.');await loadApprovedQa();}catch(e){aqMessage(e.message,true);} }
 async function aqRestore(id,version) { if(!confirm('Restore this approved Q&A? Its validity and conflicts will be checked.'))return;try{await aqApi('/'+encodeURIComponent(id)+'/restore'+(version?'/'+version:''),'POST');document.getElementById('aqDialog').close();aqMessage('Approved Q&A restored.');await loadApprovedQa();}catch(e){aqMessage(e.message,true);} }
+// Client-added categories (18 Oct, Kolkata vs Gurgaon Home Table); built-in ones stay fixed.
+function aqContextOptions() { const select=document.getElementById('aqContext');if(!select)return;const current=select.value;select.replaceChildren(...aqContexts.map(option=>new Option(option.label,option.value)));if(aqContexts.some(option=>option.value===current))select.value=current; }
+async function aqReloadContexts() { const data=await aqApi();aqContexts=data.contexts||[];aqContextOptions();aqRenderContexts(); }
+function aqManageContexts() { aqContextNote('');aqRenderContexts();document.getElementById('aqContextDialog').showModal(); }
+function aqContextNote(text,error=false) { const el=document.getElementById('aqContextNote');el.textContent=text;el.style.color=error?'var(--danger)':''; }
+function aqRenderContexts() {
+ const list=document.getElementById('aqContextList');
+ list.innerHTML=aqContexts.filter(option=>!option.legacy).map(option=>`<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)"><span>${escapeHtml(option.label)}</span>${option.custom?`<span><button type="button" class="btn-secondary" data-ctx-rename="${escapeHtml(option.value)}">Edit</button> <button type="button" class="btn-secondary" data-ctx-delete="${escapeHtml(option.value)}">Delete</button></span>`:'<small style="opacity:.7">Built-in</small>'}</div>`).join('');
+ list.querySelectorAll('[data-ctx-rename]').forEach(button=>button.onclick=()=>aqRenameContext(button.dataset.ctxRename));
+ list.querySelectorAll('[data-ctx-delete]').forEach(button=>button.onclick=()=>aqDeleteContext(button.dataset.ctxDelete));
+}
+async function aqAddContext() { const input=document.getElementById('aqNewContext');try{const added=await aqApi('/contexts','POST',{label:input.value});input.value='';await aqReloadContexts();const select=document.getElementById('aqContext');if(select&&document.getElementById('aqForm')){select.value=added.value;aqMarkDirty();}aqContextNote('Category added.');}catch(e){aqContextNote(e.message,true);} }
+async function aqRenameContext(value) { const current=aqContexts.find(option=>option.value===value);const label=prompt('New name for this category',current?.label||'');if(label===null)return;try{await aqApi('/contexts/'+encodeURIComponent(value),'PATCH',{label});await aqReloadContexts();aqContextNote('Category renamed.');}catch(e){aqContextNote(e.message,true);} }
+async function aqDeleteContext(value) { if(!confirm('Delete this category?'))return;try{await aqApi('/contexts/'+encodeURIComponent(value),'DELETE');await aqReloadContexts();aqContextNote('Category deleted.');}catch(e){aqContextNote(e.message,true);} }
 async function aqTest() { try{const result=await aqApi('/test','POST',{message:document.getElementById('aqTestQuestion').value});document.getElementById('aqTestResult').textContent=JSON.stringify(result,null,2);}catch(e){document.getElementById('aqTestResult').textContent=e.message;} }
 </script>
 '''

@@ -36,10 +36,54 @@ def context_options(rows=None):
             snapshot = json.loads(row["snapshot_json"])
             if isinstance(snapshot.get("context"), str):
                 values.add(snapshot["context"])
+        custom = {row["value"]: row["label"] for row in conn.execute("SELECT value, label FROM approved_qa_contexts ORDER BY label")}
     return [{"value": key, "label": label, "legacy": False} for key, label in CANONICAL_CONTEXTS.items()] + [
+        {"value": key, "label": label, "legacy": False, "custom": True} for key, label in custom.items()
+    ] + [
         {"value": value, "label": (value or "Empty context") + " (existing)", "legacy": True}
-        for value in sorted(values - CANONICAL_CONTEXTS.keys())
+        for value in sorted(values - CANONICAL_CONTEXTS.keys() - custom.keys())
     ]
+
+
+def context_usage(conn, value):
+    """Answers and mappings still filed under a context; deleting it would strand them."""
+    answers = sum(1 for entry in registry(_read(conn), active_only=False) if entry.context == value)
+    mappings = sum(conn.execute(f"SELECT COUNT(*) FROM {table} WHERE context=?", (value,)).fetchone()[0]
+                   for table in ("instagram_source_qa_bundles", "instagram_story_qa_bundles"))
+    return answers, mappings
+
+
+def save_context(label, actor, value=None):
+    """Add a client category, or rename one; built-in categories stay fixed."""
+    label = " ".join(str(label or "").split())
+    if not 2 <= len(label) <= 60:
+        raise ValueError("Name the category in 2 to 60 characters")
+    now = now_utc().isoformat()
+    with _lock, _database().get_connection() as conn:
+        if value is None:
+            value = re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_")
+            taken = {option["value"] for option in context_options()} | set(CANONICAL_CONTEXTS)
+            if not value or value in taken or any(option["label"].casefold() == label.casefold() for option in context_options()):
+                raise ValueError("A category with this name already exists")
+            conn.execute("INSERT INTO approved_qa_contexts VALUES (?,?,?,?,?,?)", (value, label, now, now, actor, actor))
+        else:
+            if conn.execute("UPDATE approved_qa_contexts SET label=?, updated_at=?, updated_by=? WHERE value=?",
+                            (label, now, actor, value)).rowcount != 1:
+                raise ValueError("Only categories added here can be renamed")
+        conn.commit()
+    return {"value": value, "label": label}
+
+
+def delete_context(value):
+    with _lock, _database().get_connection() as conn:
+        if not conn.execute("SELECT 1 FROM approved_qa_contexts WHERE value=?", (value,)).fetchone():
+            raise ValueError("Only categories added here can be deleted")
+        answers, mappings = context_usage(conn, value)
+        if answers or mappings:
+            raise ValueError(f"This category is still used by {answers} answer(s) and {mappings} mapping(s). Move them to another category first.")
+        conn.execute("DELETE FROM approved_qa_contexts WHERE value=?", (value,))
+        conn.commit()
+    return {"deleted": value}
 
 
 def now_utc():
@@ -146,10 +190,25 @@ def get(qa_id):
     return next((entry for entry in registry() if entry.qa_id == qa_id), None)
 
 
-_PRODUCT_EQUIVALENTS = {
-    "general_details": ("sondesh_details_client", "home_table_details", "subscription_details_client"),
-    "general_price": ("sondesh_price_client", "home_table_price", "subscription_price"),
+_ROLES = {
+    "price": {"general_price", "home_table_price", "sondesh_price_client", "subscription_price",
+              "bento_price_client", "chicken_kosha_price_client"},
+    "details": {"general_details", "home_table_details", "sondesh_details_client",
+                "subscription_details_client", "bento_details_client"},
 }
+_ROLE_WORDING = {"price": re.compile(r"\b(?:price|prices|cost|costs|rate|rates|how\s+much|charges?)\b", re.I),
+                 "details": re.compile(r"\b(?:tell\s+me|more\s+(?:about|info|information|details)|details?)\b", re.I)}
+
+
+def _role(entry):
+    """Price or details answer: built-ins by ID, client-added ones by their question."""
+    for role, ids in _ROLES.items():
+        if entry.qa_id in ids:
+            return role
+    if entry.qa_id in client_qa.REGISTRY_BY_ID:
+        return None
+    roles = [role for role, wording in _ROLE_WORDING.items() if wording.search(entry.question or "")]
+    return roles[0] if len(roles) == 1 else None
 
 
 def match(message, facts=None, *, rows=None, allowed_qa_ids=None, product_fallback=False):
@@ -190,8 +249,12 @@ def match(message, facts=None, *, rows=None, allowed_qa_ids=None, product_fallba
         # one product's answer means "this" is that product (18 Oct: a
         # sondesh-only mapping handed Meta's ad button to the manager). Only
         # Approved Q&A checklists ask for this; a Custom mapping sends its note.
-        for base in (original, client_qa._match_base(message, {})):
-            same = [key for key in _PRODUCT_EQUIVALENTS.get(base.entry.qa_id if base else None, ()) if key in active]
+        asked = [name for name, wording in _ROLE_WORDING.items() if wording.search(message or "")]
+        for base in (original, client_qa._match_base(message, {}), None):
+            role = next((name for name, ids in _ROLES.items() if base and base.entry.qa_id in ids), None)
+            if base is None and len(asked) == 1:
+                role = asked[0]  # "Tell me more" matches no built-in answer on its own.
+            same = [key for key, entry in active.items() if role and _role(entry) == role]
             if len(same) == 1:
                 exact.add(same[0])
                 break

@@ -19,6 +19,12 @@ def initialize(cursor):
         changed_by TEXT NOT NULL, change_reason TEXT NOT NULL
     )""")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_approved_qa_versions ON approved_qa_versions(qa_id, id)")
+    # Categories the client adds in Admin (e.g. "Kolkata Bengali Home Table").
+    cursor.execute("""CREATE TABLE IF NOT EXISTS approved_qa_contexts (
+        value TEXT PRIMARY KEY, label TEXT NOT NULL,
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+        created_by TEXT NOT NULL, updated_by TEXT NOT NULL
+    )""")
     now = datetime.now(timezone.utc).isoformat()
     for qa_id in ("bento_details_client", "bento_price_client"):
         cursor.execute("""INSERT OR IGNORE INTO approved_qa_overrides
