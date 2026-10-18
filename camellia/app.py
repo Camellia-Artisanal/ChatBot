@@ -1207,34 +1207,7 @@ _DROPPED_WEBHOOK_EVENTS: List[Dict[str, Any]] = []
 _DROPPED_WEBHOOK_LIMIT = 25
 
 
-_UNREADABLE_ATTACHMENT_REPLY = (
-    "Thanks for sending that! I can't open photos or voice notes here — "
-    "could you type your question instead?\n\n"
-    "I can help with our Sondesh flavours & prices, this week's Bengali meals, "
-    "or delivery across Delhi NCR. If you'd rather speak to someone, reply “human”."
-)
-
-
-def _log_unreadable_attachment_audit(
-    sender_id: str,
-    *,
-    source_type: Optional[str] = None,
-    media_id: Optional[str] = None,
-    shortcode: Optional[str] = None,
-    source_match_method: Optional[str] = None,
-    source_media_present: bool = False,
-) -> int:
-    """Persist the observed source even when the customer notice is deduped."""
-    return db.log_conversation(
-        sender_id, "instagram", "[attachment]", _UNREADABLE_ATTACHMENT_REPLY,
-        True, "unreadable_attachment", message_source="attachment",
-        source_type=source_type, media_id=media_id, shortcode=shortcode,
-        source_match_method=source_match_method,
-        source_context_available=False, source_context_used=False,
-        source_referential_intent=None,
-        source_media_present=bool(source_media_present),
-        customer_text_accompanied_media=False,
-    )
+_ATTACHMENT_HANDOFF_REASON = "Customer sent a photo or voice note"
 
 
 def _reply_to_unreadable_attachment(
@@ -1247,55 +1220,65 @@ def _reply_to_unreadable_attachment(
     source_media_present: bool = False,
 ) -> None:
     """
-    Answers a photo, sticker or voice note we cannot read.
+    Hands a photo, sticker or voice note we cannot read to the manager.
 
-    Sent at most once per conversation. A customer who sends three photos
-    should not get the same apology three times — after the first, silence is
-    less annoying than a bot repeating itself, and the message already told
-    them how to reach a human.
+    18 Oct: the client wants these handed off, not answered with "I can't
+    open photos". Once the handoff is open the customer is muted until staff
+    resume, so further photos are logged silently.
     """
     if not instagram_chatbot_control.is_sender_allowed(sender_id, database=db):
         return
+    audit = dict(
+        message_source="attachment", source_type=source_type, media_id=media_id,
+        shortcode=shortcode, source_match_method=source_match_method,
+        source_context_available=False, source_context_used=False,
+        source_media_present=bool(source_media_present),
+        customer_text_accompanied_media=False,
+    )
     try:
-        if db.get_active_handoff("instagram", sender_id):
+        active = db.get_active_handoff("instagram", sender_id)
+        if active:
             # Staff own every inbound path while the durable pause is active.
-            # Keep the observed attachment without recording an unsent notice
-            # or consuming the once-per-conversation notice after resumption.
             db.log_conversation(
-                sender_id, "instagram", "[attachment]", "", False,
-                "waiting_for_human", message_source="attachment",
-                source_type=source_type, media_id=media_id, shortcode=shortcode,
-                source_match_method=source_match_method,
-                source_context_available=False, source_context_used=False,
-                source_media_present=bool(source_media_present),
-                customer_text_accompanied_media=False,
+                sender_id, "instagram", "[attachment]", "", False, "waiting_for_human",
+                decision_reason=json.dumps({"silent": "open handoff " + str(active.get("handoff_ref") or "")}),
+                **audit,
             )
             return
         facts = session_memory.get_facts(sender_id, "instagram")
-        if facts.get("attachment_notice_sent"):
-            log.info("Attachment notice already sent for sender_hash=%s.", _safe_identifier_hash(sender_id))
-            if source_media_present:
-                _log_unreadable_attachment_audit(
-                    sender_id, source_type=source_type, media_id=media_id,
-                    shortcode=shortcode, source_match_method=source_match_method,
-                    source_media_present=True,
-                )
-            return
-        facts["attachment_notice_sent"] = True
-
-        session_memory.add_turn(sender_id, "instagram", "[attachment]", _UNREADABLE_ATTACHMENT_REPLY)
-        conversation_id = _log_unreadable_attachment_audit(
-            sender_id, source_type=source_type, media_id=media_id,
-            shortcode=shortcode, source_match_method=source_match_method,
-            source_media_present=source_media_present,
+        identity = _cached_instagram_identity(sender_id, {"customer_external_id": sender_id}, lookup=False)
+        handoff = get_or_create_handoff(
+            user_id=sender_id, channel="instagram", reason=_ATTACHMENT_HANDOFF_REASON,
+            user_message="[attachment]", facts=facts,
+            query_summary="The customer sent a photo, sticker or voice note.",
+            customer_identity=identity,
+        )
+        if handoff.get("newly_created", True):
+            escalator.handle_escalation(
+                user_id=sender_id, channel="instagram", user_message="[attachment]",
+                reason=_ATTACHMENT_HANDOFF_REASON, context_data={
+                    "sender_id": sender_id,
+                    "customer_username": identity.get("customer_username"),
+                    "customer_external_id": identity.get("customer_external_id"),
+                    "handoff_ref": handoff["handoff_ref"],
+                    "handoff_summary": staff_summary(handoff),
+                    "source_type": source_type, "media_id": media_id, "shortcode": shortcode,
+                },
+            )
+        mark_referred(handoff["handoff_ref"])
+        notice = customer_facing_notice()
+        session_memory.add_turn(sender_id, "instagram", "[attachment]", notice)
+        conversation_id = db.log_conversation(
+            sender_id, "instagram", "[attachment]", notice, True, "attachment_handoff",
+            decision_reason=json.dumps({"handoff": handoff["handoff_ref"] + " · " + _ATTACHMENT_HANDOFF_REASON}),
+            **audit,
         )
         _send_or_queue_instagram_reply(
-            sender_id, _UNREADABLE_ATTACHMENT_REPLY,
-            inbound_message_id=conversation_id, response_type="attachment_notice",
+            sender_id, notice, inbound_message_id=conversation_id, response_type="handoff",
         )
     except Exception:
         log.exception(
-            "Failed to answer an unreadable attachment from sender_hash=%s.",
+            "Failed to hand off an unreadable attachment from sender_hash=%s.",
             _safe_identifier_hash(sender_id),
         )
         if _instagram_job_context.get() is not None:

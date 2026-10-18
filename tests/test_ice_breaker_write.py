@@ -290,11 +290,7 @@ class TestUnreadableAttachments:
             expires_at=None,
         )
         database.update_handoff_status("CAM-attachment-pause", status)
-        before = database.get_active_handoff("instagram", uid)
-        with patch.object(app_module.instagram_chatbot_control, "is_sender_allowed", return_value=True), \
-             patch.object(app_module, "_send_or_queue_instagram_reply") as outbound, \
-             patch.object(app_module, "get_or_create_handoff") as create, \
-             patch.object(database, "log_conversation", wraps=database.log_conversation) as audit:
+        with patch.object(app_module.instagram_chatbot_control, "is_sender_allowed", return_value=True),              patch.object(app_module, "_send_or_queue_instagram_reply") as outbound,              patch.object(app_module, "get_or_create_handoff") as create,              patch.object(database, "log_conversation", wraps=database.log_conversation) as audit:
             for _ in range(2):
                 app_module._reply_to_unreadable_attachment(
                     uid, source_type="post" if source_present else None,
@@ -308,22 +304,15 @@ class TestUnreadableAttachments:
             assert audit.call_args.args[3:6] == ("", False, "waiting_for_human")
             assert audit.call_args.kwargs["source_media_present"] is source_present
             assert audit.call_args.kwargs["media_id"] == ("exact-media-id" if source_present else None)
-            assert database.get_active_handoff("instagram", uid) == before
-            assert not session_memory.get_facts(uid, "instagram").get("attachment_notice_sent")
-
-            # Only an explicit operator resumption releases the existing gate.
-            database.resume_handoff("CAM-attachment-pause")
-            app_module._reply_to_unreadable_attachment(uid)
-            assert outbound.call_count == 1
-            assert outbound.call_args.args[1] == app_module._UNREADABLE_ATTACHMENT_REPLY
-            app_module._reply_to_unreadable_attachment(uid)
-            assert outbound.call_count == 1
+            assert "CAM-attachment-pause" in audit.call_args.kwargs["decision_reason"]
 
     @pytest.mark.parametrize("status", ["RESOLVED", "EXPIRED", "RESUMED"])
-    def test_closed_handoff_preserves_existing_attachment_notice(self, tmp_path, monkeypatch, status):
+    def test_closed_handoff_lets_a_new_photo_hand_off_again(self, tmp_path, monkeypatch, status):
         from camellia.database import Database
         database = Database(str(tmp_path / "attachment-closed.db"))
         monkeypatch.setattr(app_module, "db", database)
+        from camellia import handoff as handoff_module
+        monkeypatch.setattr(handoff_module, "db", database)
         uid = "attachment-closed"
         session_memory.clear_session(uid, "instagram")
         database.create_handoff(
@@ -332,11 +321,11 @@ class TestUnreadableAttachments:
             known_entities={}, unresolved_topic=None, escalation_id=None, expires_at=None,
         )
         database.update_handoff_status("CAM-attachment-closed", status)
-        with patch.object(app_module.instagram_chatbot_control, "is_sender_allowed", return_value=True), \
-             patch.object(app_module, "_send_or_queue_instagram_reply") as outbound:
+        with patch.object(app_module.instagram_chatbot_control, "is_sender_allowed", return_value=True),              patch.object(app_module, "_send_or_queue_instagram_reply") as outbound:
             app_module._reply_to_unreadable_attachment(uid)
         assert outbound.call_count == 1
-        assert outbound.call_args.args[1] == app_module._UNREADABLE_ATTACHMENT_REPLY
+        assert outbound.call_args.args[1] == app_module.customer_facing_notice()
+        assert database.get_active_handoff("instagram", uid)
 
     def test_a_photo_gets_an_answer_instead_of_silence(self):
         tasks = MagicMock()
@@ -344,46 +333,36 @@ class TestUnreadableAttachments:
             result = app_module._dispatch_instagram_payload(self._event(), tasks)
 
         assert result["results"][0]["action"] == "queued_attachment_reply"
-        # The reply now goes through the wrapper that first resolves a shared
-        # reel's source context; a plain photo carries no identity, so the
-        # answer the customer gets is unchanged.
         assert tasks.add_task.call_args.args[0] is app_module._handle_shared_attachment
         assert tasks.add_task.call_args.args[2] is None
 
-    def test_the_reply_tells_them_what_to_do_and_how_to_reach_a_human(self):
-        session_memory.clear_session("att_send", "instagram")
-        with patch.object(app_module, "send_instagram_reply") as send, \
-             patch.object(app_module.db, "log_conversation"):
-            app_module._reply_to_unreadable_attachment("att_send")
-
-        sent = send.call_args.args[1]
-        assert "type your question" in sent
-        assert "reply “human”" in sent
-        assert "87965 51990" not in sent
-
-    def test_it_is_sent_once_not_once_per_photo(self):
-        session_memory.clear_session("att_repeat", "instagram")
-        with patch.object(app_module, "send_instagram_reply") as send, \
-             patch.object(app_module.db, "log_conversation"):
+    def test_a_photo_hands_off_to_the_manager_once(self, tmp_path, monkeypatch):
+        # 18 Oct: the client wants photos and voice notes handed off, not
+        # answered with "I can't open photos".
+        from camellia.database import Database
+        database = Database(str(tmp_path / "attachment-handoff.db"))
+        monkeypatch.setattr(app_module, "db", database)
+        from camellia import handoff as handoff_module
+        monkeypatch.setattr(handoff_module, "db", database)
+        uid = "att_handoff"
+        session_memory.clear_session(uid, "instagram")
+        with patch.object(app_module.instagram_chatbot_control, "is_sender_allowed", return_value=True),              patch.object(app_module, "send_instagram_reply") as send,              patch.object(app_module.escalator, "handle_escalation"):
             for _ in range(3):
-                app_module._reply_to_unreadable_attachment("att_repeat")
-
+                app_module._reply_to_unreadable_attachment(uid)
         assert send.call_count == 1
-
-    def test_it_is_logged_so_the_conversation_makes_sense_to_staff(self):
-        session_memory.clear_session("att_log", "instagram")
-        with patch.object(app_module, "send_instagram_reply"), \
-             patch.object(app_module.db, "log_conversation") as logged:
-            app_module._reply_to_unreadable_attachment("att_log")
-
-        assert logged.call_args.args[5] == "unreadable_attachment"
-        assert logged.call_args.kwargs["message_source"] == "attachment"
+        sent = send.call_args.args[1]
+        assert sent == app_module.customer_facing_notice()
+        assert "can't open photos" not in sent
+        handoff = database.get_active_handoff("instagram", uid)
+        assert handoff and handoff["reason"] == app_module._ATTACHMENT_HANDOFF_REASON
+        logged = [r for r in database.get_conversations(limit=5) if r.get("template_id") == "attachment_handoff"]
+        assert len(logged) == 1 and handoff["handoff_ref"] in logged[0]["decision_reason"]
 
     def test_a_send_failure_never_escapes_the_background_task(self):
         session_memory.clear_session("att_boom", "instagram")
-        with patch.object(app_module, "send_instagram_reply", side_effect=RuntimeError("meta down")), \
-             patch.object(app_module.db, "log_conversation"):
+        with patch.object(app_module, "send_instagram_reply", side_effect=RuntimeError("meta down")),              patch.object(app_module.escalator, "handle_escalation"),              patch.object(app_module.db, "log_conversation"):
             app_module._reply_to_unreadable_attachment("att_boom")  # must not raise
+
 
     def test_an_echo_of_our_own_message_never_triggers_it(self):
         tasks = MagicMock()

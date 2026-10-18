@@ -255,7 +255,7 @@ def test_unknown_shape_does_not_route_by_caption_or_unverified_ids():
 
 def test_attachment_reply_behaviour_is_unchanged(monkeypatch):
     """
-    The customer still gets exactly the same "I can't open photos" reply.
+    The attachment path itself is unchanged (it now hands off, 18 Oct).
 
     This event's attachment type is not one production has ever sent — a
     reel arrives as ``ig_reel`` — so nothing is identified from it and no
