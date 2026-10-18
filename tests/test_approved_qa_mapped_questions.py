@@ -82,3 +82,15 @@ def test_editor_and_mapping_screens_carry_the_controls():
     from camellia.admin_source_response import SCRIPT as MAPPING
     assert "On mapped posts/ads, use for" in SCRIPT and "mapped_questions:" in SCRIPT and "function aqRoleChanged" in SCRIPT
     assert "What customers on this post will get" in MAPPING and "/admin/instagram-routes/answer-preview" in MAPPING
+
+
+def test_ads_card_price_check_uses_the_checklists_use_for(store, monkeypatch):
+    # 18 Oct: Kolkata ads answered "How much does it cost?" with the Kolkata
+    # answer, but the Ads card and /health said it went to the manager.
+    from camellia import instagram_ads
+    kolkata = _kolkata(mapped_role="price")
+    route = {"routing_id": 1, "active": True, "response_mode": "APPROVED_QA", "qa_bundle": True,
+             "source_context": "kolkata_bengali_home_table", "approved_qa_ids": [kolkata["qa_id"]]}
+    monkeypatch.setattr("camellia.instagram_source_qa.effective",
+                        lambda database, bundle: (approved_qa.overlays(), {kolkata["qa_id"]}))
+    assert instagram_ads.price_answer_status(store, route) == "APPROVED"

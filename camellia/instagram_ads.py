@@ -295,7 +295,10 @@ def price_answer_status(database, route, cache=None):
         if entries:
             context = context or entries[0].context
             facts = {"last_topic": context, "home_table_context": context == "home_table"}
-            if approved_qa.match(PRICE_PROBE, facts, rows=rows, allowed_qa_ids=set(allowed)):
+            # Same rule as the live reply: a checklist answers its "use for"
+            # questions (18 Oct: Kolkata ads answered, cards said manager).
+            if approved_qa.match(PRICE_PROBE, facts, rows=rows, allowed_qa_ids=set(allowed),
+                                 product_fallback=bool(route.get("qa_bundle"))):
                 status = "APPROVED"
     except Exception:
         status = None
