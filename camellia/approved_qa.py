@@ -347,6 +347,8 @@ def match(message, facts=None, *, rows=None, allowed_qa_ids=None, product_fallba
         asked = [name for name, wording in _ROLE_WORDING.items() if wording.search(message or "")]
         if set(asked) == {"price", "details"}:
             asked = ["price"]  # "Price details" / "price list info" ask for the price.
+        if client_qa.custom_quote_request(message):
+            asked = []  # A catering/hosting quote is priced by the manager.
         for base in (() if exact else (original, client_qa._match_base(message, {}), None)):
             role = next((name for name, ids in _ROLES.items() if base and base.entry.qa_id in ids), None)
             if base is None and len(asked) == 1:

@@ -84,6 +84,17 @@ def test_editor_and_mapping_screens_carry_the_controls():
     assert "What customers on this post will get" in MAPPING and "/admin/instagram-routes/answer-preview" in MAPPING
 
 
+@pytest.mark.parametrize("message", ["What are the costs of preparing a full Bengali meal",
+                                     "How much for catering 30 people?", "Cost of hosting a party?"])
+def test_custom_catering_quote_goes_to_the_manager(store, message):
+    # 18 Oct, asenc911 on the YOU HOST ad got the general price list.
+    general = {"general_price", "general_details", "price_is_high"}
+    assert _ask(message, general, context="savoury") is None
+    assert approved_qa.match(message, {}) is None
+    assert _ask("How much does it cost?", general, context="savoury") == "general_price"
+    assert approved_qa.match("How much does it cost?", {}).entry.qa_id == "general_price"
+
+
 def test_ads_card_price_check_uses_the_checklists_use_for(store, monkeypatch):
     # 18 Oct: Kolkata ads answered "How much does it cost?" with the Kolkata
     # answer, but the Ads card and /health said it went to the manager.

@@ -131,3 +131,19 @@ def test_more_info_on_a_sondesh_checklist_gets_the_sondesh_details(ad_customer, 
     _ask(ad_customer, message)
     assert facts["client_qa_id"] == "sondesh_details_client"
     assert db.get_active_handoff("instagram", sender) is None
+
+
+def test_every_logged_message_says_why(ad_customer):
+    # 18 Oct 9:54 PM: a handoff could not be explained afterwards.
+    import json
+    _custom_route(ad_customer, ["sondesh_price_client", "sondesh_details_client"])
+    sender, _facts, db = ad_customer
+    _ask(ad_customer, "How much does it cost?")
+    answered = json.loads(db.get_conversations(limit=1, channel="instagram", user_id=sender)[0]["decision_reason"])
+    assert answered["answer"] == "sondesh_price_client" and answered["matched"] is True
+    _ask(ad_customer, "I want to talk to a human")
+    handed = json.loads(db.get_conversations(limit=1, channel="instagram", user_id=sender)[0]["decision_reason"])
+    assert handed["handoff"].startswith("CAM-") and "answer" not in handed  # no stale previous answer
+    _ask(ad_customer, "Hello?")
+    muted = json.loads(db.get_conversations(limit=1, channel="instagram", user_id=sender)[0]["decision_reason"])
+    assert muted["silent"].startswith("open handoff CAM-")

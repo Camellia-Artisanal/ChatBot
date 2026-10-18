@@ -254,8 +254,21 @@ def _home_context(message: str, facts: Dict[str, Any]) -> bool:
     )
 
 
+# "What are the costs of preparing a full Bengali meal" (YOU HOST ad, 18 Oct)
+# asks for a custom catering quote, which the manager prices, not the menu.
+_CUSTOM_QUOTE_RE = re.compile(
+    r"\b(?:prepar(?:e|es|ed|ing)|cater(?:ing|er|ers)?|cook(?:ing)?\s+for|host(?:ing)?\s+(?:a|an|my|our|the)|hosting"
+    r"|party|parties|function|wedding|gathering|bulk\s+order)\b", re.I)
+
+
+def custom_quote_request(message: str) -> bool:
+    return bool(_CUSTOM_QUOTE_RE.search(message or ""))
+
+
 def _generic_price(message: str) -> bool:
     if re.fullmatch(r"(?:how much|price|cost|rate)[?!., ]*", message.strip(), re.I):
+        return False
+    if custom_quote_request(message):
         return False
     # "How much does it cost?" with no known product gets the general price
     # answer (2026-10-17): Meta sometimes delivers an ad reply without its ad.

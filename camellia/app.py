@@ -793,6 +793,7 @@ def _process_instagram_event(
             db.log_conversation(
                 sender_id, "instagram", customer_message, "", False,
                 "waiting_for_human", message_source=entry.source, ad_id=ad_id,
+                decision_reason=json.dumps({"silent": "open handoff " + active_handoff["handoff_ref"]}),
             )
             log.info(
                 "Stored Instagram customer message while handoff %s is waiting for human.",
@@ -1069,6 +1070,9 @@ def _process_instagram_event(
             (source_route or {}).get("escalation_policy"),
             bool(needs_escalation),
         )
+        decision = {"responder_template": template_id, "matched": bool(was_matched),
+                    "route_source": facts.get("last_route_source"), "grounding": facts.get("last_grounding"),
+                    "answer": facts.get("client_qa_id") if was_matched else None}
         if needs_escalation:
             # A registry miss stays on Instagram even when the wording looks
             # purchase-shaped (for example, a 200-box wedding enquiry). Only
@@ -1156,6 +1160,9 @@ def _process_instagram_event(
             source_route and source_route.get("active", True)
         )
         trace["source_referential_intent"] = facts.get("source_referential_intent")
+        if needs_escalation:
+            decision["handoff"] = handoff["handoff_ref"] + " · " + reason
+        trace["decision_reason"] = json.dumps({key: value for key, value in decision.items() if value not in (None, "")})
         logged_response = response_text
         if template_id == "order_intake_draft":
             logged_response = re.sub(

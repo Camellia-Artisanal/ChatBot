@@ -1132,6 +1132,9 @@ class Database:
                 ("source_referential_intent", "TEXT"),
                 ("source_media_present", "INTEGER DEFAULT 0"),
                 ("customer_text_accompanied_media", "INTEGER DEFAULT 0"),
+                # Why the bot answered or handed off (18 Oct: a 9:54 PM handoff
+                # could not be explained afterwards).
+                ("decision_reason", "TEXT"),
             ):
                 self._ensure_column(cursor, "conversations", column, declaration)
 
@@ -4097,6 +4100,7 @@ class Database:
         source_referential_intent: Optional[str] = None,
         source_media_present: bool = False,
         customer_text_accompanied_media: bool = False,
+        decision_reason: Optional[str] = None,
     ):
         """Log message exchange and increment analytics counters."""
         with self.get_connection() as conn:
@@ -4107,15 +4111,15 @@ class Database:
                 message_source, ad_id, ad_title, source_routing_id, source_match_method,
                 source_type, shortcode, media_id, routing_topic, source_context_used,
                 source_context_available, source_referential_intent, source_media_present,
-                customer_text_accompanied_media
+                customer_text_accompanied_media, decision_reason
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 user_id, channel, user_message, bot_response, 1 if was_matched else 0, template_id,
                 message_source, ad_id, ad_title, source_routing_id, source_match_method,
                 source_type, shortcode, media_id, routing_topic, int(bool(source_context_used)),
                 int(bool(source_context_available)), source_referential_intent,
-                int(bool(source_media_present)), int(bool(customer_text_accompanied_media)),
+                int(bool(source_media_present)), int(bool(customer_text_accompanied_media)), decision_reason,
             ))
             conversation_id = int(cursor.lastrowid)
             
