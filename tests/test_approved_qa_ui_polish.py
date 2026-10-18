@@ -12,7 +12,7 @@ def test_edit_dialog_is_explicitly_centered():
 def test_question_variations_are_visible_not_just_counted():
     assert 'accepted question variation' in SCRIPT
     assert 'click to view' in SCRIPT
-    assert 'Built-in question variations (read-only)' in SCRIPT
+    assert 'Built-in question variations' in SCRIPT and 'data-aq-hide-variation' in SCRIPT  # editable since 18 Oct
     assert 'Additional Admin question variations (one per line)' in SCRIPT
     assert 'aqVariationList' in SCRIPT
 

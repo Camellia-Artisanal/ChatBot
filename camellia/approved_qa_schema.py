@@ -19,6 +19,13 @@ def initialize(cursor):
         changed_by TEXT NOT NULL, change_reason TEXT NOT NULL
     )""")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_approved_qa_versions ON approved_qa_versions(qa_id, id)")
+    # Admin-set reply sequence (text + catalogue menu blocks) and built-in
+    # question variations the client removed (18 Oct).
+    columns = {row[1] for row in cursor.execute("PRAGMA table_info(approved_qa_overrides)")}
+    if "blocks_json" not in columns:
+        cursor.execute("ALTER TABLE approved_qa_overrides ADD COLUMN blocks_json TEXT")
+    if "hidden_aliases_json" not in columns:
+        cursor.execute("ALTER TABLE approved_qa_overrides ADD COLUMN hidden_aliases_json TEXT NOT NULL DEFAULT '[]'")
     # Categories the client adds in Admin (e.g. "Kolkata Bengali Home Table").
     cursor.execute("""CREATE TABLE IF NOT EXISTS approved_qa_contexts (
         value TEXT PRIMARY KEY, label TEXT NOT NULL,

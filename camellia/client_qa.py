@@ -628,8 +628,15 @@ def _match_base_unchecked(message: str, facts: Optional[Dict[str, Any]] = None) 
     return ApprovedMatch(entry, "semantic_alias", entry.asset_keys)
 
 
+def _hidden_aliases() -> Dict[str, set]:
+    """Built-in variations removed in Admin; approved_qa replaces this."""
+    return {}
+
+
 def _match_base(message: str, facts: Optional[Dict[str, Any]] = None) -> Optional[ApprovedMatch]:
     candidate = _match_base_unchecked(message, facts)
+    if candidate and _normalise_match_text(message) in _hidden_aliases().get(candidate.entry.qa_id, ()):
+        return None
     # Preserve clause boundaries before the existing spelling/alias normalization.
     if (candidate and not evaluate_turn_authority(message).blocks_shortcut
             and can_candidate_own_turn(_normalise_match_text(message), candidate.entry.qa_id)):

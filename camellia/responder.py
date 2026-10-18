@@ -3874,6 +3874,9 @@ class DeterministicResponder:
                     ordered_response_blocks.append({"kind": "TEXT", "text": block.value})
                     continue
                 values = [value for value in asset_map.get(block.value, []) if value]
+                if block.value.startswith("catalogue:"):
+                    # A menu block set on the answer in Approved Q&A.
+                    values = [url for url in [current_menu_image(block.value.split(":", 1)[1])] if url]
                 if mapped_image and block.value == "subscription_rate_chart":
                     values = [mapped_image]
                 if not values:

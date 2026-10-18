@@ -24,6 +24,9 @@ MENU_TOPIC_DEFAULTS = {
     "SONDESH": "Sondesh", "SAVOURY": "Savoury", "BENTO_MEAL": "Bento / Meal",
     "GIFT_EVENT": "Gift / Event", "WEEKLY_SAVOURY": "Weekly Savoury",
     "SUBSCRIPTION": "Subscription", "HOME_TABLE": "Home Table",
+    # Usable on the posts/ads it is mapped to and in answer blocks, but never
+    # sent on a general "<topic> menu" request (18 Oct: a Kolkata-only menu).
+    "MAPPED_ONLY": "Mapped posts/ads only",
 }
 
 

@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 _snapshots = {}
 _lock = threading.RLock()
 _preview_secret = secrets.token_bytes(32)
-EDIT_FIELDS = {"question", "answer", "context", "aliases", "valid_from", "valid_until"}
+EDIT_FIELDS = {"question", "answer", "context", "aliases", "valid_from", "valid_until", "blocks", "hidden_aliases"}
 CANONICAL_CONTEXTS = {
     "general": "General", "savoury_deliveries": "Savoury Deliveries",
     "sondesh": "Sondesh", "bengali_home_table": "Bengali Home Table",
@@ -169,6 +169,28 @@ def _edited_blocks(base, answer):
 
 
 def _entry(qa_id, row):
+    entry = _base_entry(qa_id, row)
+    sequence = json.loads(row.get("blocks_json") or "null") or []
+    if sequence:
+        # "catalogue:<menu_id>" is resolved to the menu's current image at send time.
+        entry = replace(entry, blocks=tuple(
+            client_qa.ResponseBlock("TEXT", block["text"]) if block["type"] == "text"
+            else client_qa.ResponseBlock("MENU", "catalogue:" + block["menu_id"]) for block in sequence))
+    return entry
+
+
+def hidden_aliases(rows):
+    """Built-in question variations the client removed, normalised, per answer."""
+    return {key: {client_qa._normalise_match_text(v) for v in json.loads(row.get("hidden_aliases_json") or "[]")}
+            for key, row in rows.items() if row.get("hidden_aliases_json") not in (None, "", "[]")}
+
+
+def _builtin_aliases(qa_id, rows):
+    hidden = hidden_aliases(rows).get(qa_id, set())
+    return [v for v in client_qa._PARAPHRASE_ALIASES.get(qa_id, ()) if client_qa._normalise_match_text(v) not in hidden]
+
+
+def _base_entry(qa_id, row):
     base = client_qa.REGISTRY_BY_ID.get(qa_id)
     if base is None:
         return client_qa.ApprovedQA(qa_id, row["question"], row["answer"], row["context"] or "general",
@@ -222,7 +244,7 @@ def match(message, facts=None, *, rows=None, allowed_qa_ids=None, product_fallba
         # Reuse canonical questions/source aliases, with the same whole-turn
         # ownership guard. All matching selected IDs participate in ambiguity.
         for key, entry in active.items():
-            words = [entry.question, *client_qa._PARAPHRASE_ALIASES.get(key, ())]
+            words = [entry.question, *_builtin_aliases(key, rows)]
             if (any(client_qa._normalise_match_text(word) == text for word in words)
                     and client_qa.can_candidate_own_turn(message, key)):
                 exact.add(key)
@@ -261,6 +283,8 @@ def match(message, facts=None, *, rows=None, allowed_qa_ids=None, product_fallba
     if len(exact) != 1:
         return None
     key = exact.pop()
+    if text in hidden_aliases(rows).get(key, ()):
+        return None  # The client removed this exact wording from this answer.
     entry = active[key]
     kind = "story_bundle" if allowed_qa_ids is not None else original.match_kind if original and original.entry.qa_id == key else "admin_exact"
     assets = original.asset_keys if original and original.entry.qa_id == key else entry.asset_keys
@@ -272,8 +296,10 @@ def _record(entry, row):
     end = parse_date(row.get("valid_until"))
     return {"qa_id": entry.qa_id, "question": entry.question, "answer": entry.answer,
             "context": entry.context, "aliases": json.loads(row.get("aliases_json", "[]")),
-            "source_aliases": list(client_qa._PARAPHRASE_ALIASES.get(entry.qa_id, ())),
-            "variation_count": len({client_qa._normalise_match_text(v) for v in [*client_qa._PARAPHRASE_ALIASES.get(entry.qa_id, ()), *json.loads(row.get("aliases_json", "[]"))]}),
+            "source_aliases": _builtin_aliases(entry.qa_id, {entry.qa_id: row}),
+            "hidden_aliases": json.loads(row.get("hidden_aliases_json") or "[]"),
+            "sequence": json.loads(row.get("blocks_json") or "null") or [],
+            "variation_count": len({client_qa._normalise_match_text(v) for v in [*_builtin_aliases(entry.qa_id, {entry.qa_id: row}), *json.loads(row.get("aliases_json", "[]"))]}),
             "asset_keys": list(entry.asset_keys), "blocks": [vars(block) for block in entry.blocks],
             "status": derived, "expiring_soon": bool(derived == "ACTIVE" and end and end <= now_utc() + timedelta(days=7)),
             "valid_from": row.get("valid_from"), "valid_until": row.get("valid_until"),
@@ -308,7 +334,7 @@ def _digest(rows):
 
 def _candidate(body, rows):
     if not isinstance(body, dict) or set(body) - EDIT_FIELDS - {"qa_id", "preview_token", "test_message", "create"}:
-        raise ValueError("Only question, answer, context, aliases and validity may be edited")
+        raise ValueError("Only question, answer, context, variations, reply sequence and validity may be edited")
     qa_id = body.get("qa_id") or "admin_" + uuid.uuid4().hex
     if not isinstance(qa_id, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,99}", qa_id):
         raise ValueError("Invalid Q&A ID")
@@ -321,7 +347,8 @@ def _candidate(body, rows):
     result = {"qa_id": qa_id, "record_type": "BASE_OVERRIDE" if base else "ADMIN_ADDED",
               "status": existing.get("status", "ACTIVE"), "aliases_json": existing.get("aliases_json", "[]"),
               "question": existing.get("question"), "answer": existing.get("answer"), "context": existing.get("context"),
-              "valid_from": existing.get("valid_from"), "valid_until": existing.get("valid_until")}
+              "valid_from": existing.get("valid_from"), "valid_until": existing.get("valid_until"),
+              "blocks_json": existing.get("blocks_json"), "hidden_aliases_json": existing.get("hidden_aliases_json") or "[]"}
     for key in ("question", "answer", "context"):
         if key in body:
             value = body[key]
@@ -343,6 +370,16 @@ def _candidate(body, rows):
         if not all(normal) or len(set(normal)) != len(normal):
             raise ValueError("Duplicate question variations")
         result["aliases_json"] = json.dumps(aliases, ensure_ascii=False)
+    if "blocks" in body:
+        from camellia import custom_response_sequence
+        blocks = custom_response_sequence.validate(body["blocks"])
+        result["blocks_json"] = json.dumps(blocks, ensure_ascii=False) if blocks else None
+    if "hidden_aliases" in body:
+        builtin = {client_qa._normalise_match_text(v): v for v in client_qa._PARAPHRASE_ALIASES.get(qa_id, ())}
+        hidden = body["hidden_aliases"]
+        if not isinstance(hidden, list) or any(not isinstance(v, str) or client_qa._normalise_match_text(v) not in builtin for v in hidden):
+            raise ValueError("Only built-in question variations can be removed")
+        result["hidden_aliases_json"] = json.dumps(sorted({builtin[client_qa._normalise_match_text(v)] for v in hidden}), ensure_ascii=False)
     for key in ("valid_from", "valid_until"):
         if key in body:
             date = parse_date(body[key])
@@ -431,7 +468,7 @@ def _save(conn, candidate, rows, actor, reason):
                          (key, json.dumps(snapshot, ensure_ascii=False), now, actor, label))
     candidate = {**candidate, "created_at": (old or {}).get("created_at") or now,
                  "created_by": (old or {}).get("created_by") or actor, "updated_at": now, "updated_by": actor}
-    columns = ("qa_id", "record_type", "question", "answer", "context", "aliases_json", "status", "valid_from", "valid_until", "created_at", "updated_at", "created_by", "updated_by")
+    columns = ("qa_id", "record_type", "question", "answer", "context", "aliases_json", "status", "valid_from", "valid_until", "created_at", "updated_at", "created_by", "updated_by", "blocks_json", "hidden_aliases_json")
     conn.execute("INSERT INTO approved_qa_overrides (" + ",".join(columns) + ") VALUES (" + ",".join("?" for _ in columns) + ") ON CONFLICT(qa_id) DO UPDATE SET " + ",".join(key + "=excluded." + key for key in columns if key != "qa_id"),
                  tuple(candidate[key] for key in columns))
     conn.execute("INSERT INTO approved_qa_versions (qa_id,snapshot_json,changed_at,changed_by,change_reason) VALUES (?,?,?,?,?)",
@@ -469,9 +506,14 @@ def archive_or_restore(qa_id, actor, *, restore=False, version_id=None):
             if not version:
                 raise KeyError(version_id)
             snapshot = json.loads(version[0])
-            candidate.update({key: snapshot.get(key) for key in candidate if key not in {"qa_id", "record_type"}})
+            defaults = {"hidden_aliases_json": "[]"}  # Versions saved before 18 Oct lack it.
+            candidate.update({key: snapshot.get(key, defaults.get(key)) for key in candidate if key not in {"qa_id", "record_type"}})
         candidate["status"] = "ACTIVE" if restore else "ARCHIVED"
         if restore:
             _conflicts(candidate, rows)
         _save(conn, candidate, rows, actor, "Restored version" if version_id is not None else "Restored" if restore else "Archived")
     return detail(qa_id)
+
+
+# Built-in rules beyond the variation list must not answer a removed wording either.
+client_qa._hidden_aliases = lambda: hidden_aliases(_snapshots.get(_database(), {}))

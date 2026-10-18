@@ -60,7 +60,7 @@ _MANAGER_KEYS = {
 # adding/renaming a topic never creates a second free-form intent router.
 CUSTOMER_TOPICS = (
     "SONDESH", "SAVOURY", "BENTO_MEAL", "GIFT_EVENT",
-    "WEEKLY_SAVOURY", "SUBSCRIPTION", "HOME_TABLE",
+    "WEEKLY_SAVOURY", "SUBSCRIPTION", "HOME_TABLE", "MAPPED_ONLY",
 )
 
 _CORE_TOPIC_LABELS = MENU_TOPIC_DEFAULTS

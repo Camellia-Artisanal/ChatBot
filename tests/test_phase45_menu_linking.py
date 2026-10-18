@@ -250,3 +250,18 @@ def test_additive_migration_grandfathers_previously_approved_custom_menu(tmp_pat
     assert "legacy_approved" in {version["menu_key"] for version in menu_review.customer_versions()}
     db.init_db()
     assert db.get_menu_catalogue_entry("legacy_approved")["legacy_customer_eligible"] == 1
+
+
+def test_mapped_only_menu_is_usable_but_never_sent_on_general_requests(workspace):
+    # 18 Oct: a Kolkata-only sondesh menu linked to Sondesh would have gone to
+    # every "send sondesh menu" request, Delhi included.
+    from camellia import menu_images
+    client, headers = workspace
+    kolkata = _create(client, headers, "Signature Mishti Kolkata", "MAPPED_ONLY")
+    _publish(kolkata["menu_id"])
+    assert menu_images.current_url(kolkata["menu_id"]) == f"/uploads/{kolkata['menu_id']}.jpg"
+    assert kolkata["menu_id"] not in {item["menu_id"] for item in menu_catalogue.eligible_topic_menus("SONDESH")}
+    session_memory.clear_session("phase45-mapped-only", "instagram")
+    _text, _matched, _template, images = responder.match_and_respond(
+        "Show me Sondesh menus", user_id="phase45-mapped-only", channel="instagram")
+    assert f"/uploads/{kolkata['menu_id']}.jpg" not in (images or [])
