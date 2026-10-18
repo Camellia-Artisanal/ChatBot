@@ -98,6 +98,39 @@ def test_needs_answers_view_lists_the_gaps_without_ad_ids(store, monkeypatch):
     assert ads.ads_workspace(store, "needs_answers")["items"] == []
 
 
+def test_an_ad_using_its_posts_answers_counts_as_mapped(store, monkeypatch):
+    # 18 Oct: the client mapped the post four times and the card kept saying
+    # "Not mapped", because only direct ad mappings counted.
+    _approved_post(store)
+    _live(store, monkeypatch)
+    result = ads.ads_workspace(store, "all")
+    assert result["counts"]["mapped"] == 1 and result["counts"]["unmapped"] == 0
+
+
+def test_card_says_it_uses_the_posts_answers(tmp_path):
+    import shutil, subprocess
+    import pytest
+    from camellia.admin_ads import SCRIPT
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node unavailable")
+    script = r'''
+const assert = require('assert'); const nodes = {};
+global.adminAuthenticated = true; global.getAuthHeaders = () => ({}); global.escapeHtml = v => String(v || '');
+global.document = {querySelectorAll:()=>[],getElementById:id=>nodes[id] ||= {innerHTML:'',textContent:'',value:'',style:{},querySelectorAll:()=>[],close:()=>{},showModal:()=>{}}};
+''' + SCRIPT.replace("<script>", "").replace("</script>", "") + r'''
+const post = {routing_id:125,source_type:'post',active:true,display_label:'Kolkata Sondesh Delivery'};
+adsWorkspace = {items:[{ad_id:'1',name:'MISHTI',mapped:false,history:[],answers_from:'post',effective_mapping:post,answer_status:'APPROVED'}],routes:[],counts:{},sync:{}};
+adsFilter = 'all'; renderAdsWorkspace();
+assert(nodes.adsList.innerHTML.includes("✅ Uses its Post/Reel's answers: <b>Kolkata Sondesh Delivery</b>"));
+assert(!nodes.adsList.innerHTML.includes('Not mapped'));
+'''
+    target = tmp_path / "uses-post.js"
+    target.write_text(script, encoding="utf-8")
+    result = subprocess.run([node, str(target)], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
 def test_media_item_endpoint_returns_the_editor_mapping(store, monkeypatch):
     saved = route(store)
     _live(store, monkeypatch)

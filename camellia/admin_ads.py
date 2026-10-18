@@ -116,9 +116,12 @@ function renderAdsWorkspace() {
     const list = document.getElementById('adsList');
     const exactId = document.getElementById('adsExactId').value?.trim() || '';
     const sourceLabel = route => route ? (route.display_label || route.routing_topic || route.source_type || 'Mapped source') : '';
+    // An ad with no mapping of its own answers from the Post/Reel it promotes.
+    const usesPost = ad => ad.answers_from === 'post' && ad.effective_mapping
+        ? `✅ Uses its Post/Reel's answers: <b>${escapeHtml(sourceLabel(ad.effective_mapping))}</b>` : '';
     const adStatus = ad => ad.mapped
-        ? (ad.mapping ? `✅ Mapped to: <b>${escapeHtml(sourceLabel(ad.mapping))}</b>${ad.binding_active ? '' : ' · answers paused'}` : '⚠ Mapped, but its Reel or Post is no longer available')
-        : '⚪ Not mapped';
+        ? (ad.mapping ? `✅ Mapped to: <b>${escapeHtml(sourceLabel(ad.mapping))}</b>${ad.binding_active ? '' : ' · answers paused'}` : usesPost(ad) || '⚠ Mapped, but its Reel or Post is no longer available')
+        : usesPost(ad) || '⚪ Not mapped';
     const renderAd = ad => {
         const badge = adsAnswerBadge(ad);
         const image = ad.thumbnail_url || ad.mapping?.preview_url;
@@ -146,8 +149,9 @@ function renderAdsWorkspace() {
             const preview = image ? `<img class="ig-media-thumb" loading="lazy" src="${escapeHtml(image)}" alt="Promoted creative preview">` : '<div class="ig-media-placeholder">Preview unavailable</div>';
             const displayName = members.find(ad => ad.name)?.name || 'Promoted creative';
             const running = adsFilter === 'running';
-            const mappedCount = members.filter(ad => ad.mapped).length;
-            const labels = [...new Set(members.filter(ad => ad.mapped).map(ad => sourceLabel(ad.mapping)))];
+            const covered = ad => ad.mapped || ad.answers_from === 'post';
+            const mappedCount = members.filter(covered).length;
+            const labels = [...new Set(members.filter(covered).map(ad => sourceLabel(ad.mapping || ad.effective_mapping)))];
             const status = mappedCount === members.length && labels.length === 1 && labels[0]
                 ? `✅ ${members.length === 1 ? '' : 'All ' + members.length + ' ads '}mapped to: <b>${escapeHtml(labels[0])}</b>`
                 : mappedCount ? `⚠ ${mappedCount} of ${members.length} ads mapped — open the list below to map the rest` : `⚪ Not mapped${members.length > 1 ? ' (' + members.length + ' ads)' : ''}`;

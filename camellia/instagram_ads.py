@@ -564,8 +564,10 @@ def ads_workspace(database, view="active"):
     delivery["unresolved_ad_ids"] = sorted(set(delivery["ads"]) - {row["ad_id"] for row in rows})
     for row in rows:
         row["delivery"] = delivery["ads"].get(row["ad_id"])
-    counts = {"active": len(active_groups), "raw_active": sum(row["active"] for row in rows), "unmapped": sum(not row["mapped"] for row in rows),
-              "mapped": sum(row["mapped"] for row in rows), "inactive": sum(not row["active"] and row["inventory_state"] != "OBSERVED" for row in rows), "all": len(rows),
+    # Mapped = answers from its own mapping or from the Post/Reel it promotes.
+    covered = lambda row: row["mapped"] or row["answers_from"] == "post"
+    counts = {"active": len(active_groups), "raw_active": sum(row["active"] for row in rows), "unmapped": sum(not covered(row) for row in rows),
+              "mapped": sum(covered(row) for row in rows), "inactive": sum(not row["active"] and row["inventory_state"] != "OBSERVED" for row in rows), "all": len(rows),
               "answer_gaps": sum(is_answer_gap(row, row["answer_status"], recent_ids) for row in rows)}
     counts["running"] = len(running_groups) if delivery["status"] == "available" else None
     if delivery["unresolved_ad_ids"]:
