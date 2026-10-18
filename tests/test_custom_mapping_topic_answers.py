@@ -90,3 +90,17 @@ def test_topic_answers_must_be_live_approved_qa(ad_customer):
         instagram_routing.update_topic(route["topic_id"], default_approved_qa_ids=["not_a_real_answer"])
     updated = instagram_routing.update_topic(route["topic_id"], default_approved_qa_ids=["sondesh_price_client"])
     assert instagram_routing.decode_topic(updated)["default_approved_qa_ids"] == ["sondesh_price_client"]
+
+
+@pytest.mark.parametrize("mapped", [False, True])
+def test_more_info_button_gets_the_general_answer_not_the_manager(ad_customer, mapped):
+    # 18 Oct 07:35: a new ad's post was unmapped and the button text was handed
+    # off; it still was after the client mapped the post to the general bundle.
+    if mapped:
+        _mapped_source(ad_customer, "post", AD, topic_name="General", response_mode="APPROVED_QA",
+                       approved_qa_ids=["general_price", "general_details", "price_is_high"],
+                       source_context="general")
+    sender, facts, db = ad_customer
+    _ask(ad_customer, "Hello, can I get more info on this?")
+    assert facts["client_qa_id"] == "general_details"
+    assert db.get_active_handoff("instagram", sender) is None

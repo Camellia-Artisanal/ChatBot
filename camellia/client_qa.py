@@ -349,6 +349,10 @@ def _match_existing(message: str, facts: Optional[Dict[str, Any]] = None) -> Opt
             _normalise_question("can you tell me more about this"),
             _normalise_question("tell me more about your food"),
             _normalise_question("what do you offer"),
+            # Meta's ad button text (18 Oct: it reached the manager even after
+            # the ad's post was mapped to an answer bundle with this answer).
+            _normalise_question("Hello, can I get more info on this?"),
+            _normalise_question("can I get more info on this"),
         }
         or re.search(r"\b(?:share|tell|explain|describe)\b.*\b(?:food|meal|format|offer|menu)\b", text, re.I)
     ):
