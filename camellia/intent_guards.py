@@ -157,6 +157,10 @@ def evaluate_turn_authority(message):
         return TurnAuthority("unsupported_business_request", "unknown_business_query")
     if re.search(r"\b(?:cater|catering|customi[sz]e)\b", text) and _REQUEST_RE.search(text):
         return TurnAuthority("unsupported_operational_request", "business_proposal")
+    # "Hii! Can you share the menu" is one request: a leading greeting is not
+    # a second clause (18 Oct, "Hii" was read as an unknown topic).
+    message = split_conversational_opener(message)[1] or message
+    text = normalize(message)
     clauses = semantic_fallback._clauses(message)
     sentence_request = bool(
         re.search(r"[.!?;]\s+", message or "")

@@ -257,7 +257,8 @@ def sibling_routes(inventory, bindings, route_by_id):
     for ad_id, binding in bindings.items():
         media = str((inventory.get(ad_id) or {}).get("effective_instagram_media_id") or "")
         route = route_by_id.get(binding["routing_id"]) if binding.get("active") else None
-        if media and route and route.get("source_type") in {"post", "reel"}:
+        # A disabled or archived mapping answers nothing, so twins cannot inherit it (19 Oct).
+        if media and route and route.get("active", True) and not route.get("archived_at") and route.get("source_type") in {"post", "reel"}:
             found.setdefault(media, {})[route["routing_id"]] = route
     return {media: next(iter(shared.values())) for media, shared in found.items() if len(shared) == 1}
 

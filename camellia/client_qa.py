@@ -324,7 +324,10 @@ def _match_existing(message: str, facts: Optional[Dict[str, Any]] = None) -> Opt
         return result("home_table_details", "exact" if normalized == _normalise_question("tell me more about this") else "paraphrase")
 
     # Specific product and flow questions precede the broad generic price.
-    if re.search(r"\b(?:minimum|multiples?\s+of\s+(?:nine|9)|9\s*pieces|250\s*g)\b", text, re.I) and re.search(r"\b(?:flavou?r|sondesh|order)\b", text, re.I):
+    if (re.search(r"\b(?:minimum|multiples?\s+of\s+(?:nine|9)|9\s*pieces|250\s*g)\b", text, re.I)
+            and re.search(r"\b(?:flavou?r|sondesh|order)\b", text, re.I)
+            # "minimum order for bento" is not the Sondesh 9-piece rule (19 Oct).
+            and not re.search(r"\b(?:bento|subscription|meal\s+plan|chicken|kosha|mangsho|home\s+table|savou?ry|meals?|combo|luchi)\b", text, re.I)):
         return result("minimum_sondesh_quantity_client")
     if re.search(r"\b(?:out\s+of\s+area|other\s+city|different\s+city|xyz\s+city|outside\s+(?:delhi|ncr)|deliver(?:\s+\w+){0,5}\s+to\s+(?:bangalore|bengaluru|mumbai|chennai|hyderabad|pune|kolkata))\b", text, re.I):
         return result("delivery_out_of_area_client")
@@ -339,6 +342,10 @@ def _match_existing(message: str, facts: Optional[Dict[str, Any]] = None) -> Opt
     if re.search(r"\bchicken\s+kosha\b", text, re.I) and has_price_intent(text):
         return result("chicken_kosha_price_client")
     if re.search(r"\bsondesh\b", text, re.I):
+        # "How long does sondesh stay fresh" is shelf life, which has no
+        # approved answer and goes to the manager (19 Oct).
+        if re.search(r"\b(?:fresh|last|keep|stay|store|shelf|fridge|refrigerat\w*|expire|expiry)\b", text, re.I):
+            return None
         if re.search(r"\b(?:how\s+much\s+time|how\s+long|delivery\s+time|dispatch|deliver)\b", text, re.I):
             return result("sondesh_delivery_time")
         if re.search(r"\b(?:price|cost|how\s+much|rate|pieces|box)\b", text, re.I):
@@ -392,7 +399,8 @@ def _match_existing(message: str, facts: Optional[Dict[str, Any]] = None) -> Opt
             if state.get("order_flow_context") or re.search(r"\bto\s+place\s+an\s+order\b", text, re.I)
             else "alacarte_prebook"
         )
-    if re.search(
+    # "I'm not ready to order yet" is not a finalised order (19 Oct).
+    if not re.search(r"\b(?:not|yet\s+to)\s+(?:\w+\s+){0,2}(?:ready|placed|finali[sz]ed?|confirm)|n'?t\s+(?:\w+\s+){0,2}(?:ready|placed|finali[sz]ed?|confirm)", text, re.I) and re.search(
         r"\b(?:ready\s+to\s+(?:place|order)|placed\s+(?:my|the)\s+order|"
         r"confirm\s+(?:my|the)\s+order|finali[sz]e\s+(?:it|my\s+order)|"
         r"(?:i\s*(?:'ve|have)\s+)?finali[sz]ed\s+(?:my\s+)?order|"

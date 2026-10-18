@@ -64,6 +64,14 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
 - **Menu customer topics** decide "send <topic> menu" replies. Use "Mapped posts/ads only"
   for region-specific menus (no city concept exists). A menu with no topic is not
   customer-eligible.
+- **A handoff mutes the customer, so handoff patterns must be narrow.** "Wants a person"
+  (`handoff._HUMAN_HELP_RE`) matches only phrases asking for a person, never bare
+  "someone"/"people"/"staff"/"support" (19 Oct: "sondesh for someone special" handed off).
+  Strip a leading greeting before compound-question checks ("Hii! share the menu").
+- **Handoffs on purpose:** photos/voice notes, catering/hosting quotes, shelf life, and the
+  client's always-forward words (complaint, discount) even on a Custom-note mapping.
+- **Every logged message carries `decision_reason`** (which answer/rule, or the handoff ref
+  and reason). Read it on `/admin/conversations` before guessing why a reply happened.
 - Kosha Mangsho / Mutton Bento folded into ₹600 Mangsho Bento on an inference — still
   unconfirmed by the client.
 

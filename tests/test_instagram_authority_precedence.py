@@ -341,3 +341,13 @@ def test_sentence_compound_exact_custom_authority_only(instagram):
     key = db.add_learned_knowledge("Whole-turn test", question, answer, source="client_admin",
         response_sequence=[{"type": "text", "text": answer}])
     assert reply(question)[:3] == (answer, True, f"learned_{key}")
+
+
+def test_a_long_greeting_is_not_a_second_question():
+    # 18 Oct: "Hii! Can you please share the menu for this week" went to the
+    # manager because "Hii" was read as an unknown second topic.
+    from camellia.intent_guards import evaluate_turn_authority, can_candidate_own_turn
+    for message in ("Hii! Can you please share the menu for this week", "Heyy! can you send the menu?"):
+        assert evaluate_turn_authority(message).reason == ""
+        assert can_candidate_own_turn(message, "approved_menu")
+    assert evaluate_turn_authority("Hii! what is the price? and do you deliver to Pune?").reason

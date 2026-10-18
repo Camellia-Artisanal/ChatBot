@@ -818,10 +818,15 @@ def _process_instagram_event(
             "message_source": entry.source,
             # The ad on this event, else the one this session arrived on.
             "ad_id": entry.ad_id or ad_id,
-            "ad_title": entry.ad_title or facts.get("ad_title"),
+            # A new ad click brings its own title (or none); an earlier ad's
+            # title must not pick the product for it (19 Oct).
+            "ad_title": entry.ad_title if entry.ad_id else (entry.ad_title or facts.get("ad_title")),
             "media_id": entry.media_id,
         }
-        if entry.ad_title and not facts.get("ad_title"):
+        if entry.ad_id:
+            facts["ad_title"] = entry.ad_title
+            facts["ad_product"] = None
+        elif entry.ad_title and not facts.get("ad_title"):
             facts["ad_title"] = entry.ad_title
         if entry.source == "story_reply" and entry.media_id and str(message_text or "").strip():
             exact_story_route, _ = route_for_inbound(
@@ -987,6 +992,8 @@ def _process_instagram_event(
                 and not facts.get("source_context_superseded")
                 and facts.get("source_note_sent_routing_id") != mapped.get("routing_id")
                 and not is_human_help_request(customer_message)
+                # The client's always-forward words ("complaint", "discount") win over the note (19 Oct).
+                and not responder.check_explicit_escalation_triggers(customer_message)
                 # A price for something not on the menu (e.g. paneer) needs a person, not the note.
                 and not responder_module._unknown_named_price(customer_message)):
             menu_id = mapped.get("menu_id")
@@ -1549,6 +1556,13 @@ def _finalize_expired_unmapped_posts() -> None:
     """Lazily finalize durable unpaired Post events after the ad-race window."""
     for event in db.claim_expired_pending_instagram_media(limit=100):
         try:
+            # A mapped Post whose job is only running late (queued behind the
+            # customer's earlier message) is answered by that job, not handed
+            # off as unmapped (19 Oct).
+            mapped, _ = route_for_inbound(ad_id=None, media_id=None, post_media_id=event["media_id"], source_type="post")
+            if mapped:
+                db.finish_pending_instagram_media(int(event["id"]))
+                continue
             _handoff_unmapped_shared_media(
                 event["sender_id"], source_type="post", media_id=event["media_id"],
             )
@@ -10752,7 +10766,7 @@ THIS WEEK'S BENGAL SPECIALS
         function switchIgRouteTab(tab) {
             igRouteTab = tab;
             document.getElementById('igRouteTabActiveBtn').classList.toggle('active', tab === 'active');
-            document.getElementById('igRouteTabArchivedBtn').classList.toggle('active', tab === 'archived');
+            document.getElementById('igRouteTabArchivedBtn')?.classList.toggle('active', tab === 'archived');
             loadAdRoutes();
         }
 
@@ -12155,7 +12169,7 @@ Non-Veg:
                             const isResolved = (e.status || '').toLowerCase() === 'resolved';
                             const actionBtn = isResolved
                                 ? '<span style="color: var(--success); font-size: 0.8rem; font-weight: 600;">✓ Resolved</span>'
-                                : `<button class="btn-secondary" style="padding: 4px 10px; font-size: 0.78rem;" onclick="openResolveModal(${e.id}, '${escapeHtml(e.user_message)}')">✨ Teach & Resolve</button>`;
+                                : `<button class="btn-secondary" style="padding: 4px 10px; font-size: 0.78rem;" data-user-msg="${escapeHtml(e.user_message)}" onclick="openResolveModal(${e.id}, this.dataset.userMsg)">✨ Teach & Resolve</button>`;
 
                             rows += `
                             <tr>
@@ -12681,7 +12695,7 @@ Non-Veg:
                     <td style="font-size: 0.82rem;">${escapeHtml(e.reason || '')}</td>
                     <td>—</td>
                     <td style="white-space: nowrap;">
-                        <button class="btn-secondary" style="padding: 4px 10px; font-size: 0.78rem;" onclick="openResolveModal(${e.id}, '${escapeHtml(e.user_message)}')">✨ Teach &amp; Resolve</button>
+                        <button class="btn-secondary" style="padding: 4px 10px; font-size: 0.78rem;" data-user-msg="${escapeHtml(e.user_message)}" onclick="openResolveModal(${e.id}, this.dataset.userMsg)">✨ Teach &amp; Resolve</button>
                     </td>
                 </tr>`;
             }

@@ -40,10 +40,15 @@ _PURCHASE_HANDOFF_RE = re.compile(
     r"event\s+(?:order|catering))\b",
     re.IGNORECASE,
 )
+# Only phrases that ask for a person. Bare "someone", "people", "staff",
+# "support", "get to" and "reach to" handed off (and muted) product questions
+# such as "sondesh for someone special" or "enough for 4 people" (19 Oct).
 _HUMAN_HELP_RE = re.compile(
-    r"\b(?:human\s+help|human|a\s+person|people|an?\s+agent|"
-    r"someone|somebody|your\s+team|support|staff)\b|"
-    r"\b(?:talk|speak|connect|put|reach|get)\s+(?:to|me|back|through)\b|"
+    r"\b(?:human\s+help|human|real\s+person|a\s+person|an?\s+agent|your\s+team|"
+    r"customer\s+(?:support|care|service)|support\s+team)\b|"
+    r"\b(?:talk|speak|chat)\s+(?:to|with)\s+(?:someone|somebody|anyone|a|an|the|your|staff|manager|human|person|team)\b|"
+    r"\bconnect\s+(?:me|us)\b|\bput\s+me\s+through\b|\breach\s+(?:out|you)\b|"
+    r"\bget\s+me\s+(?:someone|somebody|a\s+person|a\s+human|staff|the\s+manager|your\s+team)\b|"
     r"\b(?:can|could|would|will)\s+(?:someone|somebody|your\s+team|"
     r"a\s+person|an?\s+agent|staff)\b|\bget\s+back\s+to\s+me\b",
     re.IGNORECASE,
