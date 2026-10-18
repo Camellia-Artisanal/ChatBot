@@ -37,6 +37,7 @@ _TEST_ENV_KEYS = (
     "META_AD_ACCOUNT_ID",
     "META_APP_SECRET",
     "META_VERIFY_TOKEN",
+    "SLOW_REPLY_NOTICE_ENABLED",
 )
 _ORIGINAL_TEST_ENV = {key: os.environ.get(key) for key in _TEST_ENV_KEYS}
 _PYTEST_DB_DIR = tempfile.TemporaryDirectory(
@@ -57,6 +58,10 @@ os.environ.update({
     "LLM_ASSISTED_RESOLUTION_ENABLED": "false",
     "LLM_AUTO_RESOLVE_SIMULATION_ENABLED": "false",
     "ENABLE_WEB_TESTER": "true",
+    # The slow-reply notice prefixes any reply slower than 3 s. Under parallel
+    # workers some replies are, so unrelated copy tests failed; the tests that
+    # cover the notice switch it on themselves (test_bot.py).
+    "SLOW_REPLY_NOTICE_ENABLED": "false",
     "ADMIN_API_KEY": "pytest-only-admin-api-key-7f410b33",
     "INSTAGRAM_ACCESS_TOKEN": "",
     "META_MARKETING_ACCESS_TOKEN": "",

@@ -94,5 +94,5 @@ git checkout -- data/menu.json
 python -m pytest -q --lf -p no:randomly tests      # rerun failures serially = verdict
 ```
 
-~14 tests share files and collide under parallel workers, and some rewrite `data/menu.json`; restore it with
+Some tests rewrite `data/menu.json`; restore it with
 `git checkout -- data/menu.json` after a full run and re-run any failure alone.

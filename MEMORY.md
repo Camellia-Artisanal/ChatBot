@@ -32,6 +32,8 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
   file and run them; check the result (`\b` became a backspace once).
 - `data/qa_templates.json` is a seed: edits ship only when `seed_version` is bumped.
   `data/menu.json` has no seed_version on purpose (runtime rewrites it).
+- Parallel test failures that start with "Replies to Instagram messages may be slower than usual" were the
+  slow-reply notice firing under load; `tests/conftest.py` turns it off for tests (18 Oct).
 - Tests: some are order-dependent and rewrite `data/menu.json`. After a full run,
   `git checkout -- data/menu.json`; re-run any failure alone before calling it real.
 - SQLite cannot widen a CHECK constraint: rebuild the table (drop triggers, rename, create,
