@@ -52,6 +52,9 @@ def validate(context, qa_ids, rows):
         raise ValueError('Every selected Q&A must be effective')
     if any(effective[key].context not in {context, 'general'} for key in qa_ids):
         raise ValueError('Selected Q&A must belong to the exact context or explicit General group')
+    for question, answers in approved_qa.mapped_collisions(qa_ids, rows):
+        raise ValueError(f'"{question}" is used by both "{answers[0]}" and "{answers[1]}" on this post. '
+                         'Untick one, or remove that question from one answer in Approved Q&A.')
     return effective
 
 

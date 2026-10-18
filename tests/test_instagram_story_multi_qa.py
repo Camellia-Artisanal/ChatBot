@@ -311,7 +311,7 @@ const data={contexts:[{value:'general',label:'General'},{value:'sondesh',label:'
 {qa_id:'details',question:'Details?',context:'sondesh',answer:'Approved details.'},
 {qa_id:'payment',question:'Payment?',context:'general',answer:'Approved payment.'},
 {qa_id:'other',question:'Other product?',context:'bento',answer:'Other answer.'}]};
-const fetch=async()=>{requests++;return {ok:true,json:async()=>data}};
+const fetch=async(url)=>{if(!String(url).includes('answer-preview'))requests++;return {ok:true,json:async()=>data}};  // the 18 Oct preview table is a separate read
 function text(node){return String(node.textContent||'')+(node.children||[]).map(text).join('')}
 function inputs(node){return [...(node.tag==='input'?[node]:[]),...(node.children||[]).flatMap(inputs)]}
 '''

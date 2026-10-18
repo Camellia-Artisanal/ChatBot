@@ -52,6 +52,9 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
   (+ General); generic "Tell me more" / "How much does it cost?" pick its ticked
   details/price answer. No ad → general answers only. Use client categories (Approved Q&A →
   Category → Manage) to keep e.g. Kolkata and Gurgaon Home Table answers apart.
+- **Generic ad questions are per post, not variations.** Never add "How much does it cost?" as an
+  Approved Q&A variation (collides with General price or leaks to no-ad customers). Set the answer's
+  "On mapped posts/ads, use for" instead and tick it on the post.
 - **New Approved Q&A wording must not match an existing answer** (`_conflicts`); customers
   rarely type the question text, so pick a distinct label ("Kolkata lunch price").
 - **Weekly savoury menu is published as an image, no parsing.** Dish-level price questions

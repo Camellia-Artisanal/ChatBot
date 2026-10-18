@@ -29,9 +29,12 @@ Meta webhook (signed)  POST /webhook/instagram
 Rules that hold the flow together:
 - Approved Q&A text is sent word for word; blocks (TEXT / MENU / IMAGE_GROUP /
   `catalogue:<menu_id>`) are sent in order.
-- A mapping checklist only allows its ticked answers (+ General). Generic "Tell me more" /
-  "How much does it cost?" resolve to the checklist's ticked details/price answer
-  (`approved_qa.match(..., product_fallback=True)`).
+- A mapping checklist only allows its ticked answers (+ General). Each answer's
+  "On mapped posts/ads, use for" (Price / Details / Booking / Location / Date & time) and its
+  question list decide what "How much does it cost?", "Tell me more"… get on that post
+  (`approved_qa.mapped_settings`, `match(..., product_fallback=True)`). Saving a mapping where two
+  ticked answers claim one question is refused (`mapped_collisions`); the mapping editor shows a
+  "What customers on this post will get" table (`POST /admin/instagram-routes/answer-preview`).
 - Every handoff sends only `default_handoff_message()` (Admin-editable). Approved answers
   that themselves hand off keep their approved wording.
 - No ad context: generic price questions get `general_price`; nothing mapping-specific leaks.

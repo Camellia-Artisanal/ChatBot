@@ -19,7 +19,8 @@ log = logging.getLogger(__name__)
 _snapshots = {}
 _lock = threading.RLock()
 _preview_secret = secrets.token_bytes(32)
-EDIT_FIELDS = {"question", "answer", "context", "aliases", "valid_from", "valid_until", "blocks", "hidden_aliases"}
+EDIT_FIELDS = {"question", "answer", "context", "aliases", "valid_from", "valid_until", "blocks", "hidden_aliases",
+               "mapped_role", "mapped_questions"}
 CANONICAL_CONTEXTS = {
     "general": "General", "savoury_deliveries": "Savoury Deliveries",
     "sondesh": "Sondesh", "bengali_home_table": "Bengali Home Table",
@@ -217,7 +218,7 @@ def get(qa_id):
 
 _ROLES = {
     "price": {"general_price", "home_table_price", "sondesh_price_client", "subscription_price",
-              "bento_price_client", "chicken_kosha_price_client"},
+              "bento_price_client"},  # Chicken Kosha price names its dish; not a generic price answer.
     "details": {"general_details", "home_table_details", "sondesh_details_client",
                 "subscription_details_client", "bento_details_client"},
 }
@@ -236,6 +237,68 @@ def _role(entry):
         return None
     roles = [role for role, wording in _ROLE_WORDING.items() if wording.search(entry.question or "")]
     return roles[0] if len(roles) == 1 else None
+
+
+# "On mapped posts/ads, use for" (18 Oct). An answer ticked on a post/reel/ad
+# answers these customer questions there only; customers with no ad never see
+# them, so "How much does it cost?" can mean General price, Gurgaon or Kolkata
+# Home Table depending on the post. NULL settings fall back to these defaults.
+MAPPED_ROLES = {"price": "Price questions", "details": "Details questions", "booking": "Booking",
+                "location": "Location", "date": "Date & time"}
+DEFAULT_MAPPED_QUESTIONS = {
+    "price": ["How much does it cost?", "What is the price?", "What is the price per person?", "What's the price?",
+              "Price?", "Price please", "Rate?", "Cost?", "How much?", "How much is it?",
+              "How much per person?", "Pricing?", "Price details", "Price list", "Charges?", "Fees?"],
+    "details": ["Tell me more", "Tell me more about this", "Hello, can I get more info on this?", "Can I get more info?",
+                "More info", "More information please", "More details", "Details please", "Details?",
+                "Can you share details?", "Info?", "What is this?", "What is this about?", "Interested", "I am interested"],
+    "booking": ["How to book?", "How do I book?", "How can I book?", "I want to book", "How to reserve a seat?"],
+    "location": ["Where is it?", "Location?", "Address please", "Where are you located?", "How to reach?"],
+    "date": ["When is it?", "What is the date?", "What time does it start?", "Next date?", "Is this available?"],
+}
+PREVIEW_QUESTIONS = ["How much does it cost?", "What is the price per person?", "Tell me more",
+                     "Hello, can I get more info on this?", "How to book?", "Where is it?", "When is it?"]
+
+
+def mapped_settings(rows):
+    """qa_id -> (role or None, raw questions, normalised questions) for every answer."""
+    result = {}
+    for entry in registry(rows, active_only=False):
+        row = rows.get(entry.qa_id, {})
+        role = row.get("mapped_role")
+        role = None if role == "none" else role if role else _role(entry)
+        stored = row.get("mapped_questions_json")
+        questions = json.loads(stored) if stored is not None else list(DEFAULT_MAPPED_QUESTIONS.get(role, []))
+        result[entry.qa_id] = (role, questions, {client_qa._normalise_match_text(q) for q in questions})
+    return result
+
+
+def mapped_collisions(qa_ids, rows=None):
+    """Customer questions two ticked answers both claim on one post/ad."""
+    rows = overlays() if rows is None else rows
+    settings, names = mapped_settings(rows), {entry.qa_id: entry.question for entry in registry(rows, active_only=False)}
+    owners = {}
+    for key in dict.fromkeys(qa_ids):
+        mine = {client_qa._normalise_match_text(q): q for q in settings.get(key, (None, [], set()))[1]}
+        for normal, question in mine.items():
+            owners.setdefault(normal, (question, []))[1].append(names.get(key, key))
+    explicit = {names.get(key, key) for key in qa_ids if (rows.get(key) or {}).get("mapped_role")}
+    # Only a use the client set can clash at save time; two guessed ones simply
+    # never answer (the matcher refuses ambiguity), as before.
+    return [(question, keys) for question, keys in owners.values() if len(keys) > 1 and explicit & set(keys)]
+
+
+def preview_mapping(qa_ids, context):
+    """What common ad questions get from this checklist (matcher only)."""
+    rows = overlays()
+    facts = {"last_topic": {"bengali_home_table": "home_table", "savoury_deliveries": "savoury"}.get(context, context)}
+    facts["home_table_context"] = facts["last_topic"] == "home_table"
+    out = []
+    for question in PREVIEW_QUESTIONS:
+        found = match(question, facts, rows=rows, allowed_qa_ids=set(qa_ids), product_fallback=True)
+        out.append({"question": question, "answer": found.entry.question if found else None,
+                    "qa_id": found.entry.qa_id if found else None})
+    return {"rows": out, "collisions": [{"question": q, "answers": keys} for q, keys in mapped_collisions(qa_ids, rows)]}
 
 
 def match(message, facts=None, *, rows=None, allowed_qa_ids=None, product_fallback=False):
@@ -276,14 +339,19 @@ def match(message, facts=None, *, rows=None, allowed_qa_ids=None, product_fallba
         # one product's answer means "this" is that product (18 Oct: a
         # sondesh-only mapping handed Meta's ad button to the manager). Only
         # Approved Q&A checklists ask for this; a Custom mapping sends its note.
+        settings = mapped_settings(rows)
+        claimed = [key for key in active if text in settings.get(key, (None, [], set()))[2]]
+        if len(claimed) > 1:
+            return None  # Two ticked answers claim this question; the mapping save refuses this.
+        exact.update(claimed)
         asked = [name for name, wording in _ROLE_WORDING.items() if wording.search(message or "")]
         if set(asked) == {"price", "details"}:
             asked = ["price"]  # "Price details" / "price list info" ask for the price.
-        for base in (original, client_qa._match_base(message, {}), None):
+        for base in (() if exact else (original, client_qa._match_base(message, {}), None)):
             role = next((name for name, ids in _ROLES.items() if base and base.entry.qa_id in ids), None)
             if base is None and len(asked) == 1:
                 role = asked[0]  # "Tell me more" matches no built-in answer on its own.
-            same = [key for key, entry in active.items() if role and _role(entry) == role]
+            same = [key for key in active if role and settings.get(key, (None,))[0] == role]
             if len(same) == 1:
                 exact.add(same[0])
                 break
@@ -306,6 +374,7 @@ def _record(entry, row):
             "source_aliases": _builtin_aliases(entry.qa_id, {entry.qa_id: row}),
             "hidden_aliases": json.loads(row.get("hidden_aliases_json") or "[]"),
             "sequence": json.loads(row.get("blocks_json") or "null") or [],
+            **dict(zip(("mapped_role", "mapped_questions"), mapped_settings({entry.qa_id: row}).get(entry.qa_id, (None, []))[:2])),
             "variation_count": len({client_qa._normalise_match_text(v) for v in [*_builtin_aliases(entry.qa_id, {entry.qa_id: row}), *json.loads(row.get("aliases_json", "[]"))]}),
             "asset_keys": list(entry.asset_keys), "blocks": [vars(block) for block in entry.blocks],
             "status": derived, "expiring_soon": bool(derived == "ACTIVE" and end and end <= now_utc() + timedelta(days=7)),
@@ -319,7 +388,8 @@ def listing():
     records = [_record(entry, rows.get(entry.qa_id, {})) for entry in registry(rows, active_only=False)]
     counts = {key: sum(record["status"] == key for record in records) for key in ("ACTIVE", "SCHEDULED", "EXPIRED", "ARCHIVED")}
     counts["EXPIRING_SOON"] = sum(record["expiring_soon"] for record in records)
-    return {"records": records, "counts": counts, "timezone": "Asia/Kolkata", "contexts": context_options(rows)}
+    return {"records": records, "counts": counts, "timezone": "Asia/Kolkata", "contexts": context_options(rows),
+            "mapped_roles": [{"value": key, "label": label, "questions": DEFAULT_MAPPED_QUESTIONS[key]} for key, label in MAPPED_ROLES.items()]}
 
 
 def detail(qa_id):
@@ -355,7 +425,8 @@ def _candidate(body, rows):
               "status": existing.get("status", "ACTIVE"), "aliases_json": existing.get("aliases_json", "[]"),
               "question": existing.get("question"), "answer": existing.get("answer"), "context": existing.get("context"),
               "valid_from": existing.get("valid_from"), "valid_until": existing.get("valid_until"),
-              "blocks_json": existing.get("blocks_json"), "hidden_aliases_json": existing.get("hidden_aliases_json") or "[]"}
+              "blocks_json": existing.get("blocks_json"), "hidden_aliases_json": existing.get("hidden_aliases_json") or "[]",
+              "mapped_role": existing.get("mapped_role"), "mapped_questions_json": existing.get("mapped_questions_json")}
     for key in ("question", "answer", "context"):
         if key in body:
             value = body[key]
@@ -381,6 +452,19 @@ def _candidate(body, rows):
         from camellia import custom_response_sequence
         blocks = custom_response_sequence.validate(body["blocks"])
         result["blocks_json"] = json.dumps(blocks, ensure_ascii=False) if blocks else None
+    if "mapped_role" in body:
+        role = body["mapped_role"]
+        if role not in (None, "none", *MAPPED_ROLES):
+            raise ValueError("Choose what this answer is used for on mapped posts/ads")
+        result["mapped_role"] = role
+    if "mapped_questions" in body:
+        questions = body["mapped_questions"]
+        if not isinstance(questions, list) or len(questions) > 60 or any(not isinstance(q, str) or not q.strip() or len(q) > 200 for q in questions):
+            raise ValueError("Mapped post/ad questions must be a list of up to 60 short questions")
+        normal = [client_qa._normalise_match_text(q) for q in questions]
+        if not all(normal) or len(set(normal)) != len(normal):
+            raise ValueError("Duplicate mapped post/ad questions")
+        result["mapped_questions_json"] = json.dumps([q.strip() for q in questions], ensure_ascii=False)
     if "hidden_aliases" in body:
         builtin = {client_qa._normalise_match_text(v): v for v in client_qa._PARAPHRASE_ALIASES.get(qa_id, ())}
         hidden = body["hidden_aliases"]
@@ -475,7 +559,7 @@ def _save(conn, candidate, rows, actor, reason):
                          (key, json.dumps(snapshot, ensure_ascii=False), now, actor, label))
     candidate = {**candidate, "created_at": (old or {}).get("created_at") or now,
                  "created_by": (old or {}).get("created_by") or actor, "updated_at": now, "updated_by": actor}
-    columns = ("qa_id", "record_type", "question", "answer", "context", "aliases_json", "status", "valid_from", "valid_until", "created_at", "updated_at", "created_by", "updated_by", "blocks_json", "hidden_aliases_json")
+    columns = ("qa_id", "record_type", "question", "answer", "context", "aliases_json", "status", "valid_from", "valid_until", "created_at", "updated_at", "created_by", "updated_by", "blocks_json", "hidden_aliases_json", "mapped_role", "mapped_questions_json")
     conn.execute("INSERT INTO approved_qa_overrides (" + ",".join(columns) + ") VALUES (" + ",".join("?" for _ in columns) + ") ON CONFLICT(qa_id) DO UPDATE SET " + ",".join(key + "=excluded." + key for key in columns if key != "qa_id"),
                  tuple(candidate[key] for key in columns))
     conn.execute("INSERT INTO approved_qa_versions (qa_id,snapshot_json,changed_at,changed_by,change_reason) VALUES (?,?,?,?,?)",

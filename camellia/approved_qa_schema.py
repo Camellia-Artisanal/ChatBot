@@ -24,6 +24,12 @@ def initialize(cursor):
     columns = {row[1] for row in cursor.execute("PRAGMA table_info(approved_qa_overrides)")}
     if "blocks_json" not in columns:
         cursor.execute("ALTER TABLE approved_qa_overrides ADD COLUMN blocks_json TEXT")
+    # "On mapped posts/ads, use for": a role and the customer questions it
+    # answers only where the answer is ticked on a post/reel/ad (NULL = defaults).
+    if "mapped_role" not in columns:
+        cursor.execute("ALTER TABLE approved_qa_overrides ADD COLUMN mapped_role TEXT")
+    if "mapped_questions_json" not in columns:
+        cursor.execute("ALTER TABLE approved_qa_overrides ADD COLUMN mapped_questions_json TEXT")
     if "hidden_aliases_json" not in columns:
         cursor.execute("ALTER TABLE approved_qa_overrides ADD COLUMN hidden_aliases_json TEXT NOT NULL DEFAULT '[]'")
     # Categories the client adds in Admin (e.g. "Kolkata Bengali Home Table").

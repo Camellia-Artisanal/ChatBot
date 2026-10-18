@@ -3741,6 +3741,18 @@ def approved_source_options(x_admin_key: Optional[str] = Header(None), x_admin_p
         raise HTTPException(503, "Effective Approved Q&A is unavailable.")
 
 
+@app.post("/admin/instagram-routes/answer-preview")
+async def preview_mapping_answers(request: Request, x_admin_key: Optional[str] = Header(None), x_admin_pin: Optional[str] = Header(None)):
+    """Which ticked answer common ad questions get on this post (mapping editor table)."""
+    require_admin(x_admin_key, x_admin_pin)
+    from camellia import approved_qa
+    body = await request.json()
+    ids = body.get("approved_qa_ids")
+    if not isinstance(ids, list) or len(ids) > 50 or any(not isinstance(key, str) for key in ids):
+        raise HTTPException(400, "Send the ticked Approved Q&A IDs")
+    return approved_qa.preview_mapping(ids, str(body.get("context") or "general"))
+
+
 @app.get("/admin/instagram-routes")
 def list_instagram_routes(
     include_archived: bool = False,

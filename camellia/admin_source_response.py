@@ -128,7 +128,7 @@ function renderStoryQa(prefix='igStory'){
    if(query&&!searchable.includes(query))continue;
    const row=document.createElement('div');row.style.marginBottom='12px';
    const label=document.createElement('label');const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.style.width='auto';checkbox.value=record.qa_id;checkbox.checked=state.selectedIds.has(record.qa_id);
-   checkbox.onchange=()=>{if(checkbox.checked)state.selectedIds.add(record.qa_id);else state.selectedIds.delete(record.qa_id);document.getElementById(prefix+'QaCount').textContent='Selected: '+state.selectedIds.size;};
+   checkbox.onchange=()=>{if(checkbox.checked)state.selectedIds.add(record.qa_id);else state.selectedIds.delete(record.qa_id);document.getElementById(prefix+'QaCount').textContent='Selected: '+state.selectedIds.size;refreshAnswerTable(prefix);};
    label.append(checkbox,document.createTextNode(' '+record.question+' — '+record.qa_id));row.append(label);
    const details=document.createElement('details');const summary=document.createElement('summary');summary.textContent='Read-only approved answer preview';const answer=document.createElement('p');answer.style.whiteSpace='pre-wrap';answer.textContent=record.answer;details.append(summary,answer);row.append(details);group.append(row);
   }box.append(group);
@@ -137,5 +137,21 @@ function renderStoryQa(prefix='igStory'){
   const warning=document.createElement('p');warning.textContent=key+' — unavailable/expired or context changed. Remove it and choose a current Q&A before saving.';
   const remove=document.createElement('button');remove.type='button';remove.textContent='Remove selection';remove.onclick=()=>{state.selectedIds.delete(key);renderStoryQa(prefix);};warning.append(remove);box.append(warning);
  }
+ const table=document.createElement('div');table.id=prefix+'AnswerTable';table.style.marginTop='14px';box.append(table);refreshAnswerTable(prefix);
+}
+// What common ad questions get from the ticked answers (18 Oct): shows the
+// result before saving, and the questions two ticked answers both claim.
+async function refreshAnswerTable(prefix){
+ const state=sourceResponseState[prefix];const box=document.getElementById(prefix+'AnswerTable');if(!state||!box)return;
+ const ids=Array.from(state.selectedIds);const stamp=ids.join(',')+'|'+state.context;state.previewStamp=stamp;
+ if(!ids.length){box.textContent='Tick answers to see what customers will get.';return;}
+ try{
+  const response=await fetch('/admin/instagram-routes/answer-preview',{method:'POST',headers:{...getAuthHeaders(),'Content-Type':'application/json'},body:JSON.stringify({approved_qa_ids:ids,context:state.context})});
+  const data=await response.json();if(state.previewStamp!==stamp)return;if(!response.ok)throw new Error(data.detail||'Preview unavailable');
+  const rows=data.rows.map(row=>`<tr><td style="padding:4px 8px">${escapeHtml(row.question)}</td><td style="padding:4px 8px">${row.answer?'✅ '+escapeHtml(row.answer):'⚠ Not from these answers (bot rules or manager)'}</td></tr>`).join('');
+  const pairs={};for(const c of data.collisions){const key=c.answers.join(' and ');(pairs[key]=pairs[key]||[]).push(c.question);}
+  const clash=Object.entries(pairs).map(([answers,questions])=>`<li>${answers.split(' and ').map(a=>'“'+escapeHtml(a)+'”').join(' and ')} both answer “${escapeHtml(questions[0])}”${questions.length>1?' and '+(questions.length-1)+' more':''} — untick one of them.</li>`).join('');
+  box.innerHTML=`<b>What customers on this post will get</b><table style="border-collapse:collapse;margin-top:6px">${rows}</table>`+(clash?`<div role="alert" style="margin-top:8px;color:var(--danger)"><b>Fix before saving:</b><ul>${clash}</ul></div>`:'');
+ }catch(error){if(state.previewStamp===stamp)box.textContent=error.message;}
 }
 </script>""".replace("__SELECTOR__", json.dumps(SELECTOR_TEMPLATE)).replace("__STORY_SELECTOR__", json.dumps(selector_html('igStory'))).replace("__MEDIA_SELECTOR__", json.dumps(selector_html('igMedia'))).replace("__POST_SELECTOR__", json.dumps(selector_html('ig')))
