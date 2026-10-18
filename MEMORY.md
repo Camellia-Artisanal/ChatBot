@@ -36,6 +36,9 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
   slow-reply notice firing under load; `tests/conftest.py` turns it off for tests (18 Oct).
 - Tests: some are order-dependent and rewrite `data/menu.json`. After a full run,
   `git checkout -- data/menu.json`; re-run any failure alone before calling it real.
+- Outbound jobs are ordered per recipient: any job that never reaches SENT/FAILED blocks
+  every newer reply to that customer. Keep the 6-attempt cap and the batch abandon (19 Oct:
+  outside-window errors retried forever). `sent_steps` stops a retry repeating accepted chunks.
 - SQLite cannot widen a CHECK constraint: rebuild the table (drop triggers, rename, create,
   copy, recreate triggers) — see `instagram_source_qa.initialize`.
 - `<dialog>` elements draw above any page overlay. Opening a `display:flex` popup from inside

@@ -38,6 +38,10 @@ Rules that hold the flow together:
 - Every handoff sends only `default_handoff_message()` (Admin-editable). Approved answers
   that themselves hand off keep their approved wording.
 - No ad context: generic price questions get `general_price`; nothing mapping-specific leaks.
+- Outbound queue: a block retries at most 6 times, a terminal failure fails the rest of its
+  answer (so the customer's later replies are not held), a retry resumes after the Meta
+  messages already accepted (`sent_steps`), and a reply whose handoff opened after its answer
+  finished is dropped (`handoff_open`).
 
 ## 2. Ads tab (Admin → Ads)
 

@@ -1991,6 +1991,13 @@ def _process_instagram_outbound_jobs(*, inbound_job_id: Optional[int] = None) ->
                 # it to customers after the operator has switched modes.
                 db.complete_instagram_outbound_job(int(job["id"]), success=True, error="chatbot_test_only")
                 continue
+            if db.instagram_outbound_job_superseded_by_handoff(int(job["id"])):
+                # Staff took the chat over after this reply was written; a late
+                # bot message would talk over them.
+                db.complete_instagram_outbound_job(
+                    int(job["id"]), success=False, retryable=False, error="handoff_open",
+                )
+                continue
             payload = json.loads(job["payload"])
             delivery = payload.pop("_response_delivery", None)
             if delivery and delivery["url"] in _delivered_home_table_urls(job["recipient_id"], delivery["delivery_id"]):
@@ -2000,7 +2007,8 @@ def _process_instagram_outbound_jobs(*, inbound_job_id: Optional[int] = None) ->
             correlation = payload.get("inbound_message_id")
             result = send_instagram_reply(
                 job["recipient_id"], payload.pop("text"),
-                retry_count=max(0, int(job["attempts"]) - 1), **payload,
+                retry_count=max(0, int(job["attempts"]) - 1),
+                skip_steps=int(job.get("sent_steps") or 0), **payload,
             )
             if (isinstance(result, dict) and result.get("status") == "failed") or (
                 delivery and not _instagram_reel_accepted(result)
@@ -2010,7 +2018,7 @@ def _process_instagram_outbound_jobs(*, inbound_job_id: Optional[int] = None) ->
                     int(job["id"]), success=False,
                     retryable=result.get("delivery_status") != "PERMANENT_RECIPIENT_FAILURE",
                     error=str(result.get("delivery_status") or "Meta send failed"),
-                    abandon_batch=bool(delivery),
+                    sent_steps=result.get("sent_steps"),
                 )
                 return
             receipt = {
@@ -2555,8 +2563,13 @@ def send_instagram_reply(
     response_type: str = "text",
     retry_count: int = 0,
     native_media_id: Optional[str] = None,
+    skip_steps: int = 0,
 ) -> Dict[str, Any]:
-    """Sends text plus zero or more image cards via Meta Graph API to Instagram user."""
+    """Sends text plus zero or more image cards via Meta Graph API to Instagram user.
+
+    ``skip_steps`` is how many of this reply's Meta messages an earlier attempt
+    already delivered; a retry resumes after them instead of repeating them.
+    """
     # Instagram has no caption field on attachments, so a captioned card is sent
     # as the image followed by its own text message — same card, detail, card,
     # detail sequence the customer sees in the customer-facing continuation.
@@ -2636,6 +2649,7 @@ def send_instagram_reply(
     failed_chunk_number = None
     failure_classification = None
     delivery_mode = "URL_FALLBACK" if text in client_qa.HOME_TABLE_REEL_URLS else None
+    step = 0  # position of the Meta message being sent, counting skipped ones
 
     try:
         with httpx.Client(timeout=10.0) as client:
@@ -2649,9 +2663,12 @@ def send_instagram_reply(
                 total_chunks: Optional[int] = None,
                 character_count: Optional[int] = None,
             ):
-                nonlocal last
+                nonlocal last, step
                 nonlocal failure_classification
                 failure_classification = None
+                step += 1
+                if step <= skip_steps:
+                    return False
                 audit_id = None
                 try:
                     audit_id = db.create_instagram_outbound_audit(
@@ -2726,6 +2743,7 @@ def send_instagram_reply(
                         resp.raise_for_status()
                     if isinstance(payload, dict) and payload.get("error"):
                         raise RuntimeError(message or "Meta returned an error payload")
+                    return True
                 except Exception as exc:
                     # If the HTTP call itself failed, the pending row still
                     # records the exception and elapsed time for diagnosis.
@@ -2789,7 +2807,7 @@ def send_instagram_reply(
                 if native_media_id != home_table_native_reels.verified_media_id(text) or image_url:
                     return {"status": "failed", "delivery_status": "AUTH_FAILURE"}
                 try:
-                    send_request({
+                    sent = send_request({
                         "recipient": {"id": recipient_id},
                         "message": {"attachment": {"type": "MEDIA_SHARE", "payload": {"id": native_media_id}}},
                     }, kind="MEDIA_SHARE")
@@ -2798,7 +2816,7 @@ def send_instagram_reply(
                         raise
                     send_text_body(text)
                 else:
-                    if not last.json().get("message_id"):
+                    if sent and not last.json().get("message_id"):
                         raise RuntimeError("Native acceptance uncertain: message ID missing")
                     delivery_mode = "MEDIA_SHARE"
             elif text and not cards_first:
@@ -2865,6 +2883,8 @@ def send_instagram_reply(
             )
         return {
             "error": str(e), "status": "failed",
+            # The message that failed is `step`; everything before it was accepted.
+            "sent_steps": max(skip_steps, step - 1),
             "delivery_status": failure_classification or classify_instagram_delivery(
                 exception_class=type(e).__name__, exception_message=_safe_outbound_exception(e),
             ),

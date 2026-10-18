@@ -825,6 +825,8 @@ class Database:
             )
             """)
             self._ensure_column(cursor, "home_table_reel_receipts", "delivery_metadata", "TEXT")
+            # Meta messages of a job already accepted, so a retry resumes after them.
+            self._ensure_column(cursor, "instagram_outbound_jobs", "sent_steps", "INTEGER NOT NULL DEFAULT 0")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_ig_inbound_jobs_due ON instagram_inbound_jobs(status, next_attempt_at, id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_ig_outbound_jobs_due ON instagram_outbound_jobs(status, next_attempt_at, id)")
 
@@ -5999,7 +6001,7 @@ class Database:
 
     def complete_instagram_outbound_job(
         self, job_id: int, *, success: bool, error: str = "", retryable: bool = True,
-        reel_receipt: Optional[Dict[str, Any]] = None, abandon_batch: bool = False,
+        reel_receipt: Optional[Dict[str, Any]] = None, sent_steps: Optional[int] = None,
     ) -> None:
         with self.get_connection() as conn:
             row = conn.execute(
@@ -6008,26 +6010,47 @@ class Database:
             if not row:
                 return
             attempts = int(row["attempts"])
-            status = "SENT" if success else "RETRY" if retryable else "FAILED"
+            # Same cap as inbound jobs: a recipient Meta keeps refusing must not
+            # hold every newer reply for that customer behind this one forever.
+            status = "SENT" if success else "RETRY" if retryable and attempts < 6 else "FAILED"
             delay = min(1800, 5 * (2 ** min(max(0, attempts - 1), 9)))
             conn.execute(
                 "UPDATE instagram_outbound_jobs SET status = ?, "
                 "next_attempt_at = datetime('now', ?), locked_until = NULL, "
-                "last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                (status, f"+{delay} seconds", str(error)[:300] or None, job_id),
+                "last_error = ?, sent_steps = COALESCE(?, sent_steps), "
+                "updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (status, f"+{delay} seconds", str(error)[:300] or None, sent_steps, job_id),
             )
-            if not success and not retryable and abandon_batch:
-                # A terminal failure stops this answer's remaining blocks, but
-                # must not strand them ahead of a later missing-link retry.
+            if status == "FAILED":
+                # A terminal failure stops this answer's remaining blocks; left
+                # PENDING they would also block the customer's later replies.
                 conn.execute(
                     "UPDATE instagram_outbound_jobs SET status = 'FAILED', locked_until = NULL, "
-                    "last_error = 'prior_reel_terminal_failure', updated_at = CURRENT_TIMESTAMP "
+                    "last_error = 'prior_block_terminal_failure', updated_at = CURRENT_TIMESTAMP "
                     "WHERE inbound_job_id = ? AND id > ? AND status IN ('PENDING', 'RETRY')",
                     (row["inbound_job_id"], job_id),
                 )
             if success and reel_receipt:
                 self._insert_home_table_reel_receipt(conn, reel_receipt, job_id)
             conn.commit()
+
+    def instagram_outbound_job_superseded_by_handoff(self, job_id: int) -> bool:
+        """A handoff opened after this reply's answer was finished: staff own the chat now."""
+        with self.get_connection() as conn:
+            return conn.execute(
+                """
+                SELECT 1 FROM instagram_outbound_jobs AS job
+                JOIN instagram_inbound_jobs AS inbound ON inbound.id = job.inbound_job_id
+                JOIN cross_channel_handoffs AS handoff
+                  ON handoff.source_channel = 'instagram' AND handoff.source_user_id = job.recipient_id
+                WHERE job.id = ? AND inbound.status IN ('DONE', 'FAILED')
+                  AND handoff.created_at > inbound.updated_at
+                  AND handoff.status NOT IN ('RESOLVED', 'EXPIRED', 'RESUMED')
+                  AND (handoff.expires_at IS NULL OR handoff.expires_at > CURRENT_TIMESTAMP)
+                LIMIT 1
+                """,
+                (job_id,),
+            ).fetchone() is not None
 
     @staticmethod
     def _insert_home_table_reel_receipt(conn, receipt, job_id=None):

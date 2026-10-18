@@ -115,7 +115,9 @@ def classify_instagram_delivery(
         return "SUCCESS"
     code = str(meta_code) if meta_code is not None else ""
     subcode = str(meta_subcode) if meta_subcode is not None else ""
-    if code == "100" and subcode == "2534014":
+    # 2534014 no such user; 10/2534022 outside the messaging window; 551 user
+    # unavailable. Retrying any of them only repeats the refusal.
+    if (code, subcode) in {("100", "2534014"), ("10", "2534022")} or code == "551":
         return "PERMANENT_RECIPIENT_FAILURE"
     if http_status == 429 or code in {"4", "613"}:
         return "RATE_LIMIT"
