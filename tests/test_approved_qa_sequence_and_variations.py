@@ -26,8 +26,9 @@ def test_reply_sequence_becomes_the_answers_blocks(store, monkeypatch):
                                    {"type": "text", "text": "Payment at booking."}]))
     assert record["sequence"][1] == {"type": "menu", "menu_id": "kolkata_menu"}
     entry = approved_qa.get(record["qa_id"])
+    # The answer box goes first, then the blocks (18 Oct: the intro was skipped).
     assert [(b.kind, b.value) for b in entry.blocks] == [
-        ("TEXT", "Prices below."), ("MENU", "catalogue:kolkata_menu"), ("TEXT", "Payment at booking.")]
+        ("TEXT", "KOLKATA PRICE"), ("TEXT", "Prices below."), ("MENU", "catalogue:kolkata_menu"), ("TEXT", "Payment at booking.")]
     # Clearing the sequence restores the plain answer.
     cleared = _publish(dict(qa_id=record["qa_id"], blocks=[]))
     assert cleared["sequence"] == [] and [b.kind for b in approved_qa.get(record["qa_id"]).blocks] == ["TEXT"]

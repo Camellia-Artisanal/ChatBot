@@ -172,8 +172,11 @@ def _entry(qa_id, row):
     entry = _base_entry(qa_id, row)
     sequence = json.loads(row.get("blocks_json") or "null") or []
     if sequence:
+        # The answer box is sent first, then the blocks (18 Oct: the client put
+        # the intro in the answer box and it was silently skipped).
         # "catalogue:<menu_id>" is resolved to the menu's current image at send time.
-        entry = replace(entry, blocks=tuple(
+        lead = (client_qa.ResponseBlock("TEXT", entry.answer),) if (entry.answer or "").strip() else ()
+        entry = replace(entry, blocks=lead + tuple(
             client_qa.ResponseBlock("TEXT", block["text"]) if block["type"] == "text"
             else client_qa.ResponseBlock("MENU", "catalogue:" + block["menu_id"]) for block in sequence))
     return entry
@@ -218,8 +221,10 @@ _ROLES = {
     "details": {"general_details", "home_table_details", "sondesh_details_client",
                 "subscription_details_client", "bento_details_client"},
 }
-_ROLE_WORDING = {"price": re.compile(r"\b(?:price|prices|cost|costs|rate|rates|how\s+much|charges?)\b", re.I),
-                 "details": re.compile(r"\b(?:tell\s+me|more\s+(?:about|info|information|details)|details?)\b", re.I)}
+# Ad customers' short questions (18 Oct): "Pricing?", "Fees?", "Info?", "Interested".
+_ROLE_WORDING = {"price": re.compile(r"\b(?:price|prices|pricing|cost|costs|rate|rates|how\s+much|charges?|fees?)\b", re.I),
+                 "details": re.compile(r"\b(?:tell\s+me|more\s+(?:about|info|information|details)|details?|info|information"
+                                       r"|what\s+is\s+this(?:\s+about)?|(?:i\s+am\s+|i'?m\s+)?interested)\b", re.I)}
 
 
 def _role(entry):
@@ -272,6 +277,8 @@ def match(message, facts=None, *, rows=None, allowed_qa_ids=None, product_fallba
         # sondesh-only mapping handed Meta's ad button to the manager). Only
         # Approved Q&A checklists ask for this; a Custom mapping sends its note.
         asked = [name for name, wording in _ROLE_WORDING.items() if wording.search(message or "")]
+        if set(asked) == {"price", "details"}:
+            asked = ["price"]  # "Price details" / "price list info" ask for the price.
         for base in (original, client_qa._match_base(message, {}), None):
             role = next((name for name, ids in _ROLES.items() if base and base.entry.qa_id in ids), None)
             if base is None and len(asked) == 1:

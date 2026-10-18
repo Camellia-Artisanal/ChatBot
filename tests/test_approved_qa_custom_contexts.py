@@ -61,3 +61,21 @@ def test_generic_questions_get_the_checklists_kolkata_answers(store):
 def test_manage_button_is_on_the_category_field():
     from camellia.admin_approved_qa import HTML, SCRIPT
     assert 'onclick="aqManageContexts()">Manage</button>' in SCRIPT and 'id="aqContextDialog"' in HTML
+
+
+@pytest.mark.parametrize("message,role", [
+    ("Pricing?", "price"), ("Price details", "price"), ("Price list", "price"), ("Charges?", "price"), ("Fees?", "price"),
+    ("Info?", "details"), ("Information", "details"), ("What is this?", "details"), ("What is this about?", "details"),
+    ("Interested", "details"), ("I am interested", "details"), ("I'm interested", "details"),
+])
+def test_short_ad_questions_use_the_checklists_answers_only_inside_a_mapping(store, message, role):
+    # 18 Oct: these short ad replies went to the manager. Adding them as
+    # variations would collide or leak Kolkata answers to customers with no ad.
+    approved_qa.save_context("Kolkata Bengali Home Table", "test")
+    price = _publish("What is the price of the Kolkata lunch?", "KOLKATA PRICE", "kolkata_bengali_home_table")
+    details = _publish("Tell me more about the Kolkata Bengali Home Table", "KOLKATA DETAILS", "kolkata_bengali_home_table")
+    allowed = {price["qa_id"], details["qa_id"]}
+    found = approved_qa.match(message, {"last_topic": "kolkata_bengali_home_table"}, allowed_qa_ids=allowed, product_fallback=True)
+    assert found.entry.qa_id == (price if role == "price" else details)["qa_id"]
+    outside = approved_qa.match(message, {})
+    assert outside is None or outside.entry.qa_id not in allowed
