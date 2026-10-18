@@ -55,7 +55,12 @@ WEEKLY_HTML = r'''
     <div class="ws-drop-actions"><button id="wsChooseFile" type="button" class="btn-secondary" onclick="document.getElementById('wsFile').click()">Choose Menu File</button></div>
     <label id="wsFileLabel" class="ws-visually-hidden" for="wsFile">Weekly menu file to extract</label>
     <input id="wsFile" class="ws-visually-hidden" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" aria-labelledby="wsFileLabel" onchange="wsFileSelected()"></div>
-  <div class="ws-actions"><button type="button" class="btn-secondary" onclick="wsTogglePaste()">Paste Menu Text</button></div>
+  <div id="wsImage" class="ws-status" hidden><p><strong id="wsImageName"></strong></p>
+    <img id="wsImagePreview" alt="Menu to publish" style="max-width:100%;max-height:420px" hidden>
+    <div class="ws-actions"><button id="wsImagePublishButton" type="button" class="btn-primary" onclick="wsPublishImage()">Publish Menu</button>
+      <button type="button" class="btn-secondary" onclick="wsClearImage()">Cancel</button></div>
+    <div id="wsImageError" class="ws-issues" role="alert" tabindex="-1" hidden></div></div>
+  <div class="ws-actions" hidden><button type="button" class="btn-secondary" onclick="wsTogglePaste()">Paste Menu Text</button></div>
   <div id="wsPastePane" hidden><label for="wsText">Paste menu text</label>
     <textarea id="wsText" class="field-control" rows="6" maxlength="50000"></textarea>
     <button type="button" class="btn-primary" onclick="wsExtractText()">Extract pasted menu</button></div>
@@ -130,7 +135,7 @@ function wsOptions(){return {draft_id:wsDraft?.draft_id,revision:wsDraft?.revisi
   confirm_suspicious:document.getElementById('wsConfirmSuspicious').checked,
   replace_version_id:document.getElementById('wsConfirmOverlap').checked?wsAnalysis?.overlaps?.[0]?.id:null};}
 function wsVersionCard(version){const line=document.createElement('div');line.className='ws-version';
-  const label=document.createElement('p');label.textContent=(version.status==='CURRENT'?'LIVE / CURRENT':'PUBLISHED — UPCOMING')+' · '+(version.display_date_range||'Current menu')+' · '+version.item_count+' items';line.appendChild(label);
+  const label=document.createElement('p');label.textContent=(version.status==='CURRENT'?'LIVE / CURRENT':'PUBLISHED — UPCOMING')+' · '+(version.display_date_range||'Current menu')+(version.item_count?' · '+version.item_count+' items':'');line.appendChild(label);
   if(version.status==='UPCOMING'){const from=document.createElement('p');from.textContent='Customer-visible from '+version.valid_from;line.appendChild(from);}
   if(version.image_url){const preview=document.createElement('button');preview.type='button';preview.className='btn-secondary';preview.textContent='Preview flyer';preview.onclick=()=>mrPreviewMenuImage({name:'Weekly Savoury · '+version.display_date_range,image_url:version.image_url},preview);line.appendChild(preview);}
   return line;}
@@ -160,7 +165,21 @@ async function wsLoad(timelineOnly=false){
 function wsShowTimeline(pane){for(const [name,id] of [['current','wsTimelineCurrent'],['upcoming','wsTimelineUpcoming']])document.getElementById(id).hidden=name!==pane;document.querySelectorAll('[data-ws-pane]').forEach(button=>button.setAttribute('aria-selected',String(button.dataset.wsPane===pane)));}
 function wsTogglePaste(){const pane=document.getElementById('wsPastePane');pane.hidden=!pane.hidden;if(!pane.hidden)document.getElementById('wsText').focus();}
 async function wsFileSelected(file=document.getElementById('wsFile').files?.[0]){if(!file)return;const issue=mrUploadFileError(file);if(issue){wsMessage(issue);document.getElementById('wsFile').value='';return;}await wsExtractFile(file);}
-async function wsExtractFile(file){if(wsBusy)return;const issue=mrUploadFileError(file);if(issue){wsMessage(issue);return;}wsBusy=true;try{const form=new FormData();form.append('file',file);wsMessage('Extracting '+file.name+' ('+mrFormatFileSize(file.size)+'). Your published menu is unchanged.');const data=await mrRequest('/admin/weekly-savoury/extract-file','POST',form);wsDraft=data.draft;wsAnalysis=data.analysis;wsDirty=false;wsRenderReview();}catch(error){wsMessage(error.message||'We could not read that file. Try a JPG, PNG, WEBP, or PDF under 10 MB.');}finally{wsBusy=false;document.getElementById('wsFile').value='';}}
+// The client asked for upload → Publish with nothing read or checked (18 Oct):
+// a chosen, dropped or pasted file is only shown here until Publish Menu.
+let wsImageFile=null,wsImageUrl=null;
+async function wsExtractFile(file){if(wsBusy)return;const issue=mrUploadFileError(file);if(issue){wsMessage(issue);return;}
+  wsImageFile=file;if(wsImageUrl)URL.revokeObjectURL(wsImageUrl);const preview=document.getElementById('wsImagePreview');
+  wsImageUrl=file.type.startsWith('image/')?URL.createObjectURL(file):null;preview.hidden=!wsImageUrl;if(wsImageUrl)preview.src=wsImageUrl;
+  document.getElementById('wsImageName').textContent=file.name;wsIssue('wsImageError','',[]);wsMessage('');
+  document.getElementById('wsSuccess').hidden=true;const box=document.getElementById('wsImage');box.hidden=false;box.scrollIntoView({block:'center'});}
+function wsClearImage(){wsImageFile=null;document.getElementById('wsFile').value='';document.getElementById('wsFile').value='';if(wsImageUrl)URL.revokeObjectURL(wsImageUrl);wsImageUrl=null;document.getElementById('wsImage').hidden=true;}
+async function wsPublishImage(){if(!wsImageFile||wsBusy)return;wsBusy=true;const button=document.getElementById('wsImagePublishButton');button.disabled=true;
+  try{const form=new FormData();form.append('file',wsImageFile);await mrRequest('/admin/weekly-savoury/publish-image','POST',form);
+    wsClearImage();await wsLoad();wsShowTimeline('current');
+    const success=document.getElementById('wsSuccess');success.textContent='LIVE — Customers asking for the menu now get this one.';success.hidden=false;success.scrollIntoView({block:'center'});
+  }catch(error){wsIssue('wsImageError','Menu was not published',[error.message],true);}
+  finally{wsBusy=false;button.disabled=false;}}
 async function wsExtractText(){if(wsBusy)return;const value=document.getElementById('wsText').value.trim();if(!value){wsMessage('Paste menu text first.');return;}wsBusy=true;try{wsMessage('Extracting menu details. Your published menu is unchanged.');const data=await mrRequest('/admin/weekly-savoury/extract-text','POST',{text:value});wsDraft=data.draft;wsAnalysis=data.analysis;wsDirty=false;wsRenderReview();}catch(error){wsMessage(error.message);}finally{wsBusy=false;}}
 async function wsRetryExtraction(){if(!wsDraft||wsBusy||!confirm('Read the original source again? Corrections will be replaced, not published.'))return;wsBusy=true;try{const data=await mrRequest('/admin/weekly-savoury/retry-extraction','POST',{draft_id:wsDraft.draft_id,revision:wsDraft.revision});wsDraft=data.draft;wsAnalysis=data.analysis;wsDirty=false;wsRenderReview();wsMessage('Review the source again before approving.');}catch(error){wsMessage(error.message);}finally{wsBusy=false;}}
 function wsRenderReview(options){

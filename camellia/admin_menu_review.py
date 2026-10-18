@@ -244,6 +244,16 @@ def weekly_publish(body: dict = Body(...), actor=Depends(reviewer)):
     return {"draft": draft, "weekly": _weekly_view()}
 
 
+@weekly_router.post("/publish-image")
+async def weekly_publish_image(file: UploadFile = File(...), actor=Depends(reviewer)):
+    data = await file.read(menu_review.MAX_BYTES + 1)
+    if len(data) > menu_review.MAX_BYTES:
+        raise HTTPException(413, "Menu files must be at most 10MB.")
+    version = await run_in_threadpool(call, menu_review.publish_weekly_image, data, file.content_type,
+                                      file.filename or "", actor)
+    return {"version": version, "weekly": _weekly_view()}
+
+
 @weekly_router.post("/versions/{version_id}/restore")
 def weekly_restore(version_id: int, actor=Depends(reviewer)):
     version = menu_review.db.get_menu_version(version_id)

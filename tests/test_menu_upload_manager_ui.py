@@ -37,7 +37,7 @@ def test_menu_catalogue_and_selected_menu_are_the_only_primary_views():
     assert 'aria-labelledby="wsFileLabel"' in WEEKLY_HTML
     assert 'mrPreviewMenuImage(menu,trigger)' in REVIEW_SCRIPT
     assert "mrFileSelected(event.dataTransfer.files[0])" in REVIEW_SCRIPT
-    assert "Extracting '+file.name+' (" in WEEKLY_SCRIPT
+    assert "/admin/weekly-savoury/publish-image" in WEEKLY_SCRIPT
     assert 'Scan Flyer & Update Menu' not in REVIEW_HTML
     assert "Upload this week's menu" not in REVIEW_HTML
 
@@ -166,7 +166,8 @@ vm.runInThisContext(SOURCE);
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is needed for the Admin JavaScript test")
-def test_weekly_file_drop_starts_extraction_and_shows_transient_file_status():
+def test_weekly_file_drop_waits_for_publish_and_sends_the_image_as_is():
+    # 18 Oct: the client asked for upload -> Publish with nothing read or checked.
     review_source = REVIEW_SCRIPT.split("<script>", 1)[1].split("</script>", 1)[0]
     weekly_source = WEEKLY_SCRIPT.split("<script>", 1)[1].split("</script>", 1)[0]
     scenario = r"""
@@ -178,7 +179,7 @@ function node(tag='div') {
     tag,value:'',textContent:'',hidden:false,disabled:false,open:false,children:[],dataset:{},style:{},files:[],listeners:{},
     classList:{add(value){classes.add(value);},remove(value){classes.delete(value);},contains(value){return classes.has(value);}},
     replaceChildren(){this.children=[];},appendChild(child){this.children.push(child);},setAttribute(name,value){this[name]=value;},
-    addEventListener(name,listener){this.listeners[name]=listener;},showModal(){this.open=true;},close(){this.open=false;},focus(){},click(){},
+    addEventListener(name,listener){this.listeners[name]=listener;},showModal(){this.open=true;},close(){this.open=false;},focus(){},click(){},scrollIntoView(){},
   };
 }
 function element(id){if(!elements[id])elements[id]=node(id==='mrMenu'||id==='mrMenuCategory'?'select':'div');return elements[id];}
@@ -190,13 +191,15 @@ global.fetch=(path)=>{requestPath=path;return new Promise(resolve=>{pendingResol
 vm.runInThisContext(REVIEW_SOURCE);vm.runInThisContext(WEEKLY_SOURCE);
 (async()=>{
  const file={name:'weekly-menu.pdf',type:'application/pdf',size:1536};
- const upload=wsFileSelected(file);
- const transient={message:element('wsMessage').textContent,path:requestPath};
+ await wsFileSelected(file);
+ const staged={shown:!element('wsImage').hidden,name:element('wsImageName').textContent,path:requestPath};
+ const publish=wsPublishImage();
+ const sent=requestPath;
  pendingResolve({ok:false,status:422,json:async()=>({detail:'The PDF could not be read. Try another file.'})});
- await upload;
- const final={message:element('wsMessage').textContent,cleared:element('wsFile').value===''};
+ await publish;
+ const final={path:sent,error:element('wsImageError').hidden?null:'shown',stillStaged:!element('wsImage').hidden};
  const before=requestPath;await wsFileSelected({name:'unsafe.exe',type:'application/x-msdownload',size:5});
- console.log(JSON.stringify({transient,final,invalid:{message:element('wsMessage').textContent,noRequest:requestPath===before}}));
+ console.log(JSON.stringify({staged,final,invalid:{message:element('wsMessage').textContent,noRequest:requestPath===before}}));
 })().catch(error=>{console.error(error);process.exitCode=1;});
 """
     completed = subprocess.run(
@@ -205,9 +208,6 @@ vm.runInThisContext(REVIEW_SOURCE);vm.runInThisContext(WEEKLY_SOURCE);
     )
     assert completed.returncode == 0, completed.stderr
     result = json.loads(completed.stdout.strip())
-    assert result["transient"] == {
-        "message": "Extracting weekly-menu.pdf (1.5 KB). Your published menu is unchanged.",
-        "path": "/admin/weekly-savoury/extract-file",
-    }
-    assert result["final"] == {"message": "The PDF could not be read. Try another file.", "cleared": True}
+    assert result["staged"] == {"shown": True, "name": "weekly-menu.pdf", "path": ""}
+    assert result["final"] == {"path": "/admin/weekly-savoury/publish-image", "error": "shown", "stillStaged": True}
     assert result["invalid"] == {"message": "Choose a JPG, PNG, WEBP, or PDF menu file.", "noRequest": True}

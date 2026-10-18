@@ -855,6 +855,77 @@ def publish_approved_menu(key, draft_id, revision, actor, weekly_options=None):
     return draft
 
 
+def publish_weekly_image(data, mime, filename, actor):
+    """Publish the uploaded Weekly Savoury menu image as it is (client, 18 Oct).
+
+    Nothing is read from it: customers asking for the menu get this image,
+    and a question about one dish's price goes to the team because the
+    version has no rows. It runs 7 days and replaces any week it overlaps.
+    """
+    key = weekly_savoury.WEEKLY_KEY
+    if mime == "application/pdf":
+        import pypdfium2 as pdfium
+        if not data.startswith(b"%PDF-"):
+            raise ValueError("Not a valid PDF.")
+        with pdfium.PdfDocument(data) as document, closing(document[0]) as page:
+            width, height = page.get_size()
+            with closing(page.render(scale=min(2, 1800 / max(width, height)), may_draw_forms=False)) as bitmap:
+                output = io.BytesIO()
+                bitmap.to_pil().convert("RGB").save(output, format="PNG")
+        image, extension = output.getvalue(), "png"
+    elif mime in menu_images.ALLOWED_TYPES:
+        image, extension = _safe_image(data, mime)
+    else:
+        raise ValueError("Use JPG, PNG, WEBP or PDF.")
+    name = uuid.uuid4().hex + "." + extension
+    with (Path(menu_images._dir()) / name).open("wb") as target:
+        target.write(image)
+        target.flush()
+        import os
+        os.fsync(target.fileno())
+    asset_url = "/uploads/menu-images/" + name
+    start = menu_dates.today_ist()
+    end = start + timedelta(days=6)
+    keys = weekly_savoury.LEGACY_WEEKLY_KEYS
+    placeholders = ",".join("?" for _ in keys)
+    with db.get_connection() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        # An open draft would block the weekly menu for customers.
+        draft = get_draft(key, conn)
+        if draft and draft["status"] not in ("PUBLISHED", "REJECTED"):
+            draft.update(status="REJECTED", revision=draft["revision"] + 1)
+            _store(conn, draft, actor)
+            _audit(conn, draft, "draft_rejected", actor, {"replaced_by_image": True})
+        for old in weekly_savoury.overlap_versions(start, end, conn):
+            conn.execute("UPDATE menu_versions SET weekly_state='SUPERSEDED',is_current=0 WHERE id=?", (old["id"],))
+            conn.execute("UPDATE menu_image_versions SET status='archived',archived_at=CURRENT_TIMESTAMP WHERE review_version_id=?", (old["id"],))
+        conn.execute(f"UPDATE menu_image_versions SET status='archived',archived_at=CURRENT_TIMESTAMP WHERE menu_key IN ({placeholders}) AND status='current'", keys)
+        conn.execute(f"UPDATE menu_versions SET is_current=0 WHERE menu_key IN ({placeholders})", keys)
+        image_version = conn.execute("SELECT COALESCE(MAX(version),0)+1 FROM menu_image_versions WHERE menu_key=?", (key,)).fetchone()[0]
+        conn.execute("""INSERT INTO menu_image_versions(menu_key,image_path,status,version,uploaded_by,published_at)
+            VALUES(?,?,'current',?,?,CURRENT_TIMESTAMP)""", (key, asset_url, image_version, actor))
+        approval = {"draft_id": uuid.uuid4().hex, "menu_key": key, "weekly_mode": True, "source_type": "image",
+                    "original_filename": str(filename).replace("\\", "/").rsplit("/", 1)[-1][:160],
+                    "rows": [], "image_path": asset_url, "approved_by": actor,
+                    "approved_at": datetime.now(timezone.utc).isoformat(),
+                    "weekly_dates": {"valid_from": start.isoformat(), "valid_until": end.isoformat(),
+                                     "date_source": "IMAGE_ONLY",
+                                     "display_date_range": weekly_savoury.display_range(start, end)}}
+        cursor = conn.execute("""INSERT INTO menu_versions
+            (menu_key,snapshot_json,action,changed_by,approval_json,is_current,
+             valid_from,valid_until,date_provenance,weekly_state,fallback_until_at)
+            VALUES(?,?,'weekly_publish',?,?,0,?,?,'IMAGE_ONLY',NULL,NULL)""",
+            (key, _dump([]), actor, _dump(approval), start.isoformat(), end.isoformat()))
+        approval["version_id"] = cursor.lastrowid
+        conn.execute("UPDATE menu_versions SET approval_json=? WHERE id=?", (_dump(approval), cursor.lastrowid))
+        conn.execute("UPDATE menu_image_versions SET review_version_id=? WHERE menu_key=? AND version=?",
+                     (cursor.lastrowid, key, image_version))
+        _audit(conn, approval, "menu_published", actor, {"version_id": cursor.lastrowid, "image_only": True})
+        conn.commit()
+    reload_knowledge()
+    return approval
+
+
 def reload_knowledge():
     from camellia.responder import responder
     from camellia.rag_fallback import rag_fallback_engine
