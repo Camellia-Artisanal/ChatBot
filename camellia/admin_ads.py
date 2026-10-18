@@ -155,7 +155,10 @@ function renderAdsWorkspace() {
             const status = mappedCount === members.length && labels.length === 1 && labels[0]
                 ? `✅ ${members.length === 1 ? '' : 'All ' + members.length + ' ads '}mapped to: <b>${escapeHtml(labels[0])}</b>`
                 : mappedCount ? `⚠ ${mappedCount} of ${members.length} ads mapped — open the list below to map the rest` : `⚪ Not mapped${members.length > 1 ? ' (' + members.length + ' ads)' : ''}`;
-            const groupButton = running ? `<button class="btn-primary" data-ads-group-map="${escapeHtml(first.ad_id)}">Map Ad</button>` : '';
+            // Open the ad that still needs answers, not the oldest (18 Oct: that
+            // opened an already-mapped twin and the new ad stayed unmapped).
+            const target = members.find(ad => ['NONE', 'NOTE'].includes(ad.answer_status)) || first;
+            const groupButton = running ? `<button class="btn-primary" data-ads-group-map="${escapeHtml(target.ad_id)}">Map Ad</button>` : '';
             const gaps = members.filter(ad => ['NONE', 'NOTE'].includes(ad.answer_status)).length;
             const groupBadge = gaps ? adsAnswerBadge({answer_status: members.find(ad => ad.answer_status === 'NONE') ? 'NONE' : 'NOTE'}) : adsAnswerBadge(first);
             const technical = `<details><summary>Technical details</summary><p style="overflow-wrap:anywhere;">Permalink: ${first.instagram_permalink_url ? `<a href="${escapeHtml(first.instagram_permalink_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(first.instagram_permalink_url)}</a>` : 'Unavailable'}<br>Instagram media ID: ${escapeHtml(first.effective_instagram_media_id || 'Unavailable')}</p>${running ? `<p style="overflow-wrap:anywhere;">WITHIN META SCHEDULE + DELIVERED TODAY + currently Meta ACTIVE · Evidence IDs: ${group.delivering_ad_ids.map(id => escapeHtml(id)).join(', ')}. ${members.length} exact member IDs. Mapping: ${mappedCount}/${members.length} bound.${group.verified_identity ? '' : ' Incomplete/conflicting identity: individual mapping only.'}</p>` : ''}</details>`;

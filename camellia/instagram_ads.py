@@ -221,21 +221,41 @@ def binding_disabled(binding):
     return bool(binding and binding.get("status") == "BOUND" and not binding.get("active"))
 
 
-def inherited_route(item, routes, binding=None):
+def inherited_route(item, routes, binding=None, siblings=None):
     """The Post/Reel mapping an ad answers with when it has no live binding.
 
     An ad promotes one exact Post or Reel, so it answers like that content:
     renewed and duplicated ads of the same creative are covered with no Map
     Ad step. Stories are excluded (they expire within a day) and an ambiguous
-    identity inherits nothing.
+    identity inherits nothing. When the Post/Reel itself is not mapped, the
+    mapping its already-mapped twin ads share is used (``sibling_routes``).
     """
     if not item or binding_disabled(binding):
         return None
     candidates = [route for route in routes if route.get("source_type") in {"post", "reel"}]
     routing_id, status = exact_route_suggestion(item, candidates)
-    if status != "EXACT_MATCH":
+    if status == "EXACT_MATCH":
+        return next((route for route in candidates if route.get("routing_id") == routing_id), None)
+    if status == "AMBIGUOUS":
         return None
-    return next((route for route in candidates if route.get("routing_id") == routing_id), None)
+    return (siblings or {}).get(str(item.get("effective_instagram_media_id") or "")) or None
+
+
+def sibling_routes(inventory, bindings, route_by_id):
+    """Creative media ID -> the one Post/Reel mapping its mapped ads share.
+
+    Meta gives every renewed or duplicated ad a new ID. 18 Oct: a renewed
+    YOU HOST ad reached the manager while its older twin was mapped, because
+    the twin was mapped to a Reel rather than to the promoted post itself.
+    Twins mapped to different mappings settle nothing.
+    """
+    found = {}
+    for ad_id, binding in bindings.items():
+        media = str((inventory.get(ad_id) or {}).get("effective_instagram_media_id") or "")
+        route = route_by_id.get(binding["routing_id"]) if binding.get("active") else None
+        if media and route and route.get("source_type") in {"post", "reel"}:
+            found.setdefault(media, {})[route["routing_id"]] = route
+    return {media: next(iter(shared.values())) for media, shared in found.items() if len(shared) == 1}
 
 
 PRICE_PROBE = "How much does it cost?"
@@ -301,10 +321,10 @@ def answer_media_item(database, route, item):
     return None
 
 
-def effective_routes(item, binding, route_by_id, routes):
+def effective_routes(item, binding, route_by_id, routes, siblings=None):
     """(live binding route, inherited Post/Reel route) — at most one is set."""
     live = route_by_id.get(binding["routing_id"]) if binding and binding.get("active") else None
-    return live, None if live else inherited_route(item, routes, binding)
+    return live, None if live else inherited_route(item, routes, binding, siblings)
 
 
 def is_answer_gap(item, status, recent_ids):
@@ -326,22 +346,25 @@ def ad_answer_gaps(database, days=7):
     route_by_id = {route["routing_id"]: route for route in routes}
     bindings = {row["ad_id"]: row for row in database.list_instagram_ad_bindings()}
     inventory = {row["ad_id"]: row for row in database.list_instagram_ads_inventory(ad_account_id())}
+    siblings = sibling_routes(inventory, bindings, route_by_id)
     cache, gaps = {}, 0
     for ad_id in recent:
         item = inventory.get(ad_id) or {"ad_id": ad_id, "inventory_state": "OBSERVED"}
         binding = bindings.get(ad_id)
         if binding_disabled(binding):
             continue
-        live, inherited = effective_routes(item if ad_id in inventory else {}, binding, route_by_id, routes)
+        live, inherited = effective_routes(item if ad_id in inventory else {}, binding, route_by_id, routes, siblings)
         gaps += is_answer_gap(item, price_answer_status(database, live or inherited, cache), recent)
     return gaps
 
 
 def inherited_route_for_ad(database, ad_id):
+    routes = [decode_route(row) for row in database.list_instagram_source_routes()]
+    bindings = {row["ad_id"]: row for row in database.list_instagram_ad_bindings()}
+    inventory = {row["ad_id"]: row for row in database.list_instagram_ads_inventory(ad_account_id())}
     return inherited_route(
-        database.get_instagram_ad_inventory_row(ad_id),
-        [decode_route(row) for row in database.list_instagram_source_routes()],
-        database.get_instagram_ad_binding(ad_id),
+        database.get_instagram_ad_inventory_row(ad_id), routes, database.get_instagram_ad_binding(ad_id),
+        sibling_routes(inventory, bindings, {route["routing_id"]: route for route in routes}),
     )
 
 
@@ -534,6 +557,7 @@ def ads_workspace(database, view="active"):
     inventory = {row["ad_id"]: row for row in database.list_instagram_ads_inventory(ad_account_id())}
     observed = {row["ad_id"]: row for row in database.list_observed_instagram_ads()}
     rows, status_cache = [], {}
+    siblings = sibling_routes(inventory, bindings, route_by_id)
     recent_ids = database.recently_messaged_ad_ids()
     for ad_id in sorted(inventory.keys() | observed.keys() | bindings.keys()):
         item = dict(inventory.get(ad_id) or {})
@@ -549,7 +573,7 @@ def ads_workspace(database, view="active"):
                     mapping=route, suggested_routing_id=suggestion, identity_status=identity_status,
                     source_type=normalize_instagram_url(source)["source_type"] if source else route.get("source_type", "unknown") if route else "unknown",
                     history=[{key: event.get(key) for key in ("routing_id", "action", "occurred_at")} for event in database.list_instagram_ad_binding_history(ad_id)])
-        live, inherited = effective_routes(item, binding, route_by_id, routes)
+        live, inherited = effective_routes(item, binding, route_by_id, routes, siblings)
         media = answer_media_item(database, live or inherited, item)
         item.update(answers_from="mapping" if live else "post" if inherited else None,
                     effective_mapping=live or inherited,

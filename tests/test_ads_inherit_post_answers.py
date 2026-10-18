@@ -151,3 +151,61 @@ def test_media_item_endpoint_returns_the_editor_mapping(store, monkeypatch):
     assert row["answer_media_item_id"] == media["id"]
     body = TestClient(app_module.app).get(f"/admin/instagram-media/{media['id']}", headers=HEADERS).json()
     assert body["item"]["mapping_route"]["routing_id"] == saved["routing_id"]
+
+
+OLD_TWIN, NEW_TWIN = "120246579208900540", "120246622870690540"
+
+
+def _twins(store, monkeypatch):
+    # The promoted post itself is unmapped; the older twin is mapped to a Reel.
+    monkeypatch.setattr("camellia.database.db", store)
+    sync(store, monkeypatch, [item(OLD_TWIN), item(NEW_TWIN)])
+    return route(store, code="TwinReel", media_id="190009", response_mode="APPROVED_QA",
+                 approved_qa_id="sondesh_price_client", source_type="reel",
+                 canonical_url="https://www.instagram.com/reel/TwinReel/")
+
+
+def test_renewed_ad_uses_its_mapped_twins_mapping(store, monkeypatch):
+    # 18 Oct: a renewed YOU HOST ad reached the manager while its twin was mapped.
+    reel = _twins(store, monkeypatch)
+    store.bind_instagram_ad(OLD_TWIN, reel["routing_id"])
+    found, method = route_for_inbound(ad_id=NEW_TWIN, media_id=None)
+    assert method == "ad_creative" and found["routing_id"] == reel["routing_id"]
+    row = next(r for r in ads.ads_workspace(store, "all")["items"] if r["ad_id"] == NEW_TWIN)
+    assert row["answers_from"] == "post" and row["answer_status"] == "APPROVED"
+
+
+def test_twins_on_different_mappings_settle_nothing(store, monkeypatch):
+    reel = _twins(store, monkeypatch)
+    other = route(store, code="OtherReel", media_id="190010", source_type="reel",
+                  canonical_url="https://www.instagram.com/reel/OtherReel/")
+    third = "120246622870690999"
+    sync(store, monkeypatch, [item(OLD_TWIN), item(NEW_TWIN), item(third)])
+    store.bind_instagram_ad(OLD_TWIN, reel["routing_id"])
+    store.bind_instagram_ad(third, other["routing_id"])
+    assert route_for_inbound(ad_id=NEW_TWIN, media_id=None) == (None, None)
+
+
+def test_group_map_ad_opens_the_ad_that_needs_answers(tmp_path):
+    import shutil, subprocess
+    import pytest
+    from camellia.admin_ads import SCRIPT
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node unavailable")
+    script = r'''
+const assert = require('assert'); const nodes = {};
+global.adminAuthenticated = true; global.getAuthHeaders = () => ({}); global.escapeHtml = v => String(v || '');
+global.document = {querySelectorAll:()=>[],getElementById:id=>nodes[id] ||= {innerHTML:'',textContent:'',value:'',style:{},querySelectorAll:()=>[],close:()=>{},showModal:()=>{}}};
+''' + SCRIPT.replace("<script>", "").replace("</script>", "") + r'''
+const mapped = {routing_id:98,source_type:'reel',active:true,display_label:'Savoury'};
+adsWorkspace = {items:[{ad_id:'1',name:'YOU HOST',mapped:true,mapping:mapped,binding_active:true,history:[],answer_status:'APPROVED'},
+                       {ad_id:'2',name:'YOU HOST',mapped:false,history:[],answer_status:'NONE'}],
+                routes:[],counts:{},sync:{},running_groups:[{member_ad_ids:['1','2'],delivering_ad_ids:['1','2']}]};
+adsFilter = 'running'; renderAdsWorkspace();
+assert(nodes.adsList.innerHTML.includes('data-ads-group-map="2"'));
+'''
+    target = tmp_path / "group-map.js"
+    target.write_text(script, encoding="utf-8")
+    result = subprocess.run([node, str(target)], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
