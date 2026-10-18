@@ -89,3 +89,17 @@ def test_map_ad_opens_the_form_for_an_ad_without_a_post_link():
     page = TestClient(app_module.app).get("/admin").text
     assert '<option value="ad" hidden>' in page
     assert "await openAdOnlyMapping(ad)" in SCRIPT and "document.getElementById('igAdId').value = ad.ad_id" in SCRIPT
+
+
+def test_card_reads_the_whole_checklist_not_its_first_answer(ad_customer):
+    # 18 Oct 16:01: the client ticked 7 answers, "tell me more" first. The
+    # card read only that one, said "Mapped to: Can you tell me more about
+    # this" and "Price questions go to the manager" while the bot answered.
+    sender, facts, db = ad_customer
+    db.observe_instagram_ad(AD, "YOU HOST _Group_1")
+    _ad_route(approved_qa_ids=["general_details", "price_is_high", "general_price"], source_context="savoury")
+    row = next(r for r in instagram_ads.ads_workspace(db, "all")["items"] if r["ad_id"] == AD)
+    assert row["answer_status"] == "APPROVED"
+    assert row["mapping"]["display_label"] == "3 approved answers"
+    _process(ad_customer, "How much does it cost?", _ad_entry(sender, AD, "How much does it cost?"))
+    assert facts["client_qa_id"] == "general_price"

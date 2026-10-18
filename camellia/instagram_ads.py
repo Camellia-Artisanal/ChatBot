@@ -36,10 +36,14 @@ def mapping_display(row):
     from camellia import approved_qa, instagram_source_qa
     from camellia.database import db
     route = decode_route(row)
-    if route.get("source_type") in {"post", "reel"}:
+    if route.get("source_type") in instagram_source_qa.SOURCE_TYPES:
         route = instagram_source_qa.route_contract(db, route)
     approved = resolve_effective_approved_qa_by_id(route.get("approved_qa_id")) if route.get("response_mode") == "APPROVED_QA" else None
-    route["display_label"] = route.get("routing_topic") or (approved.entry.question if approved else "Mapped source")
+    # A checklist is named by its size: its first question alone read as if
+    # it were the only answer (18 Oct, "Mapped to: Can you tell me more").
+    checklist = len(route.get("approved_qa_ids") or []) if route.get("qa_bundle") else 0
+    route["display_label"] = route.get("routing_topic") or (
+        f"{checklist} approved answers" if checklist > 1 else approved.entry.question if approved else "Mapped source")
     route["display_description"] = route.get("source_description") or (approved.entry.answer[:500] if approved else "Approved Q&A unavailable" if route.get("response_mode") == "APPROVED_QA" else "No description added.")
     selected_ids = route.get("approved_qa_ids") or ([route.get("approved_qa_id")] if route.get("approved_qa_id") else [])
     eligible_ids = set(selected_ids)
