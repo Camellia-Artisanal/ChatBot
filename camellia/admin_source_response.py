@@ -54,7 +54,7 @@ function setSourceResponseMode(prefix) {
  const approved=sourceResponseFields(prefix).response_mode==='APPROVED_QA';
  document.getElementById(prefix+'QaFields').hidden=!approved;
  if(prefix!=='igStory'){const multi=sourceQaMultiple(prefix);document.getElementById(prefix+'QaBundleFields').hidden=!multi;document.getElementById(prefix+'ApprovedQaId').hidden=multi;document.getElementById(prefix+'QaSingleLabel').hidden=multi;}
- const ids={ig:['igTopicPicker','igSourceDescription','igTopicDescription','igMenuPicker'],igStory:['igStoryTopicPicker','igStorySourceDescription','igStoryMenuPicker'],igMedia:['igMediaTopic','igMediaDescription','igMediaMenu']}[prefix];
+ const ids={ig:['igTopicPicker','igSourceDescription','igTopicDescription','igMenuPicker'],igStory:['igStoryTopicPicker','igStorySourceDescription','igStoryMenuPicker'],igMedia:['igMediaTopic','igMediaTopicAnswers','igMediaDescription','igMediaMenu']}[prefix];
  for(const id of ids){const element=document.getElementById(id); if(element)element.closest('.source-map-field')?.toggleAttribute('hidden',approved);}
  previewSourceQa(prefix);
 }

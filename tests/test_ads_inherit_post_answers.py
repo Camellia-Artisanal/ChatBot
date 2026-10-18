@@ -131,6 +131,17 @@ assert(!nodes.adsList.innerHTML.includes('Not mapped'));
     assert result.returncode == 0, result.stderr
 
 
+def test_custom_editor_offers_price_answers_without_manage_topics():
+    # 18 Oct: setting answers via Manage Topics was too many steps; the
+    # Posts & Reels editor (which Map Ad opens) now carries the checklist,
+    # hidden for Approved Q&A, and saves it to the Topic with the mapping.
+    from camellia.admin_source_response import SCRIPT as RESPONSE_SCRIPT
+    page = TestClient(app_module.app).get("/admin").text
+    assert 'id="igMediaTopicAnswersField"' in page and "function renderMediaTopicAnswers" in page
+    assert "await saveMediaTopicAnswers();" in page
+    assert "'igMediaTopicAnswers'" in RESPONSE_SCRIPT
+
+
 def test_media_item_endpoint_returns_the_editor_mapping(store, monkeypatch):
     saved = route(store)
     _live(store, monkeypatch)

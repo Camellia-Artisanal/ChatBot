@@ -9674,7 +9674,8 @@ THIS WEEK'S BENGAL SPECIALS
                 const menuOptions = `<option value="__none__">No attachment</option>${selectedMenu === '__inherit__' ? '<option value="__inherit__" selected>Use existing Topic-linked menu</option>' : ''}${igMenus.map(menu => `<option value="${escapeHtml(menu.menu_id)}" ${menu.menu_id === selectedMenu ? 'selected' : ''}>${escapeHtml(menu.name)}</option>`).join('')}`;
                 document.getElementById('contentDetailsActions').innerHTML = `<div class="source-map-form">
                     ${sourceResponseHtml('igMedia')}
-                    <div class="source-map-field"><label class="field-label" for="igMediaTopic">Topic</label><select class="field-control" id="igMediaTopic" onchange="renderSourceAssetCard('igMediaMenu','igMediaMenuSelected')">${topicOptions}</select><div class="source-secondary-actions"><button class="btn-secondary" type="button" onclick="openTopicModal('', 'igMediaTopic')">+ Add Topic</button><button class="btn-secondary" type="button" onclick="openManageTopics('igMediaTopic')">Manage Topics</button></div></div>
+                    <div class="source-map-field"><label class="field-label" for="igMediaTopic">Topic</label><select class="field-control" id="igMediaTopic" onchange="renderSourceAssetCard('igMediaMenu','igMediaMenuSelected'); renderMediaTopicAnswers()">${topicOptions}</select><div class="source-secondary-actions"><button class="btn-secondary" type="button" onclick="openTopicModal('', 'igMediaTopic')">+ Add Topic</button><button class="btn-secondary" type="button" onclick="openManageTopics('igMediaTopic')">Manage Topics</button></div></div>
+                    <div class="source-map-field" id="igMediaTopicAnswersField"><label class="field-label">When customers ask the price or details, reply with</label><p class="source-map-help">Approved answers, sent word for word. Your Custom response is still used for “tell me more”. These apply to every Post/Reel in this Topic.</p><div id="igMediaTopicAnswers" style="max-height:220px;overflow-y:auto;border:1px solid #e5e5e5;border-radius:8px;padding:8px;"></div></div>
                     <div class="source-map-field"><label class="field-label" for="igMediaDescription">Description for this ${item.source_type}</label><p class="source-map-help">Used when someone asks what this ${item.source_type} is about.</p><textarea class="field-control" id="igMediaDescription" rows="5">${escapeHtml(item.source_description || '')}</textarea></div>
                     <div class="source-map-field"><label class="field-label" for="igMediaMenu">Menu / Image <span class="ig-media-muted">Optional</span></label><select class="field-control" id="igMediaMenu" onchange="renderSourceAssetCard('igMediaMenu','igMediaMenuSelected')">${menuOptions}</select><div class="source-secondary-actions"><button class="btn-secondary" type="button" onclick="openMenuModal('igMediaMenu')">+ Add Menu / Image</button></div><div class="source-asset-card" id="igMediaMenuSelected"></div></div>
                     <div class="source-map-field"><b>Use as chatbot context</b><div class="source-switch-row"><span class="source-map-help">Use this mapped Story, Post or Reel to understand short follow-up messages like “tell me more” or “price?”. This does not send a message automatically.</span><label class="source-switch"><input type="checkbox" id="igMediaAutoReply" aria-label="Use as chatbot context" ${item.mapping_route?.active || (!item.mapping_route && item.route_mode !== 'DISABLED') ? 'checked' : ''}><span></span></label></div></div>
@@ -9684,6 +9685,7 @@ THIS WEEK'S BENGAL SPECIALS
                 </div>`;
                 initSourceResponse('igMedia', item.mapping_route || {});
                 renderSourceAssetCard('igMediaMenu', 'igMediaMenuSelected');
+                renderMediaTopicAnswers();
                 drawer.classList.add('open', 'source-mapping-drawer'); backdrop.classList.add('open'); drawer.setAttribute('aria-hidden', 'false'); backdrop.setAttribute('aria-hidden', 'false'); return;
             }
             const isStory = kind === 'story'; const route = isStory ? item : item; const drawer = document.getElementById('contentDetailsDrawer'); const backdrop = document.getElementById('contentDetailsBackdrop');
@@ -9708,12 +9710,46 @@ THIS WEEK'S BENGAL SPECIALS
             document.getElementById('contentDetailsActions').innerHTML = actions.join(''); drawer.classList.add('open'); backdrop.classList.add('open'); drawer.setAttribute('aria-hidden', 'false'); backdrop.setAttribute('aria-hidden', 'false'); document.getElementById('contentDetailsClose').focus();
         }
 
+        // Custom mappings answer price/details with their Topic's approved
+        // answers; the client sets them here instead of in Manage Topics.
+        let mediaTopicAnswerRecords = null;
+        async function renderMediaTopicAnswers() {
+            const box = document.getElementById('igMediaTopicAnswers'); if (!box) return;
+            const topic = igTopics.find(t => t.topic_id === document.getElementById('igMediaTopic')?.value);
+            box.dataset.topic = topic ? topic.topic_id : '';
+            if (!topic) { box.innerHTML = '<p class="source-map-help">Choose a Topic first.</p>'; return; }
+            try {
+                if (!mediaTopicAnswerRecords) {
+                    const data = await fetch('/admin/instagram-routes/approved-qa-options', { headers: getAuthHeaders() }).then(r => r.json());
+                    mediaTopicAnswerRecords = data.records || [];
+                }
+            } catch (error) { box.innerHTML = '<p class="source-map-help">Approved answers are unavailable right now.</p>'; return; }
+            if (box.dataset.topic !== topic.topic_id) return;
+            const selected = new Set(topic.default_approved_qa_ids || []);
+            const records = [...mediaTopicAnswerRecords].sort((a, b) => selected.has(b.qa_id) - selected.has(a.qa_id));
+            box.innerHTML = records.map(record => `<label style="display:flex;gap:8px;align-items:flex-start;margin:4px 0;font-size:0.85rem;"><input type="checkbox" style="width:auto;" data-topic-answer="${escapeHtml(record.qa_id)}" ${selected.has(record.qa_id) ? 'checked' : ''}><span>${escapeHtml(record.question || record.qa_id)}</span></label>`).join('') || '<p class="source-map-help">No approved answers yet.</p>';
+        }
+        async function saveMediaTopicAnswers() {
+            const field = document.getElementById('igMediaTopicAnswersField');
+            const box = document.getElementById('igMediaTopicAnswers');
+            const topicId = box?.dataset.topic;
+            if (!field || field.hidden || !topicId || topicId !== document.getElementById('igMediaTopic')?.value) return;
+            const boxes = [...box.querySelectorAll('[data-topic-answer]')]; if (!boxes.length) return;
+            const ids = boxes.filter(b => b.checked).map(b => b.dataset.topicAnswer);
+            const topic = igTopics.find(t => t.topic_id === topicId);
+            if ([...(topic?.default_approved_qa_ids || [])].sort().join(',') === [...ids].sort().join(',')) return;
+            const response = await fetch(`/admin/instagram-topics/${encodeURIComponent(topicId)}`, { method: 'PATCH', headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ default_approved_qa_ids: ids }) });
+            if (!response.ok) { const data = await response.json().catch(() => ({})); alert(data.detail || 'Mapping saved, but the price/details answers could not be saved.'); return; }
+            await loadTopicsAndMenus();
+        }
+
         async function saveInstagramMediaRoute(id) {
             const menu = document.getElementById('igMediaMenu').value;
             const menuChoice = menuChoiceParts(menu);
             const payload = { ...sourceResponseFields('igMedia'), topic_id: document.getElementById('igMediaTopic').value, source_description: document.getElementById('igMediaDescription').value.trim(), menu_id: menuChoice.menu_id, menu_mode: menuChoice.menu_mode, auto_reply_enabled: document.getElementById('igMediaAutoReply').checked };
             const response = await fetch(`/admin/instagram-media/${id}/mapping`, { method: 'PUT', headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             if (!response.ok) { const data = await response.json().catch(() => ({})); alert(data.detail || 'Could not save mapping.'); return; }
+            await saveMediaTopicAnswers();
             closeContentDetails(); await loadInstagramContentGallery();
             // Ads answer from their Post/Reel, so their status changes with it.
             const adsList = document.getElementById('adsList');
