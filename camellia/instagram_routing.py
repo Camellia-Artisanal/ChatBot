@@ -343,8 +343,10 @@ def prepare_source_response(payload, existing=None):
         if any(key in payload for key in ("answer", "answers", "qa_answers", "blocks")):
             raise ValueError("Submit stable Q&A IDs, never copied answers")
         source = merged.get("source_type")
-        if source not in {"story", "post", "reel"}:
-            raise ValueError("Multiple Approved Q&As require a Story, Post or Reel")
+        if source not in {"story", "post", "reel", "ad"}:
+            raise ValueError("Multiple Approved Q&As require a Story, Post, Reel or Ad")
+        if source == "ad" and (merged.get("canonical_url") or merged.get("url") or merged.get("shortcode")):
+            raise ValueError("An ad with a Post/Reel link answers from that Post/Reel")
         if str(merged.get("response_mode") or "CUSTOM").upper() != "APPROVED_QA":
             raise ValueError("Custom Stories cannot select an Approved Q&A bundle")
         context_field = "story_context" if source == "story" else "source_context"
@@ -522,8 +524,8 @@ def validate_route_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     if len(clean["routing_topic"]) > 160:
         raise ValueError("Routing topic must be 160 characters or fewer.")
     if "approved_qa_ids" in payload:
-        if source_type not in {"story", "post", "reel"} or response_mode != "APPROVED_QA":
-            raise ValueError("Approved Q&A bundles require a Story, Post or Reel")
+        if source_type not in {"story", "post", "reel", "ad"} or response_mode != "APPROVED_QA":
+            raise ValueError("Approved Q&A bundles require a Story, Post, Reel or Ad")
         clean["approved_qa_ids"] = payload["approved_qa_ids"]
         context_field = "story_context" if source_type == "story" else "source_context"
         clean[context_field] = payload.get(context_field)

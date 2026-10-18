@@ -201,7 +201,7 @@ async function openAdAnswers(ad) {
     let itemId = ad.answer_media_item_id;
     try {
         if (!itemId) {
-            if (!ad.instagram_permalink_url) { openAdsMapping(ad); return; }
+            if (!ad.instagram_permalink_url) { await openAdOnlyMapping(ad); return; }
             const added = await fetch('/admin/instagram-media/manual-link', {method:'POST', headers:{...getAuthHeaders(), 'Content-Type':'application/json'}, body:JSON.stringify({url: ad.instagram_permalink_url})});
             const addedData = await added.json().catch(() => ({}));
             if (!added.ok || !addedData.item) throw Error(addedData.detail || 'Could not open this ad’s Post/Reel.');
@@ -215,6 +215,20 @@ async function openAdAnswers(ad) {
     } catch (error) {
         alert(error.message || 'Could not open this ad’s Post/Reel.');
     }
+}
+// Meta sent this ad with no Post/Reel link (18 Oct, "_Group_1"), so its
+// answers live on a mapping of the ad itself, set in the Posts & Reels form.
+async function openAdOnlyMapping(ad) {
+    const own = ad.mapping && ad.mapping.source_type === 'ad' ? ad.mapping : null;
+    setInstagramContentSubview('routing');
+    if (!igTopics.length) await loadTopicsAndMenus();
+    await loadAdRoutes();
+    if (own) { editInstagramRoute(Number(own.routing_id)); return; }
+    resetInstagramRouteForm();
+    document.getElementById('igSourceType').value = 'ad';
+    document.getElementById('igAdId').value = ad.ad_id;
+    onInstagramSourceTypeChange();
+    document.getElementById('igRouteIdentity').textContent = `Ad: ${ad.name} · Meta Ad ID ${ad.ad_id}`;
 }
 function openAdsMapping(ad, suggestedOnly = false) {
     if (adsMutationBusy) return;

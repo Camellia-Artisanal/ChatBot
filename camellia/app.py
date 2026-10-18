@@ -8037,7 +8037,7 @@ def get_admin_dashboard():
                 <div>
                     <label class="field-label" for="igSourceType">Source</label>
                     <select class="field-control" id="igSourceType" onchange="onInstagramSourceTypeChange()">
-                        <option value="post">Post</option><option value="reel">Reel</option>
+                        <option value="post">Post</option><option value="reel">Reel</option><option value="ad" hidden>Ad (no Post/Reel link)</option>
                     </select>
                 </div>
                 <div id="igRouteUrlWrap">
@@ -10327,8 +10327,10 @@ THIS WEEK'S BENGAL SPECIALS
             // Story capture, mapping, and lifecycle live only in the dedicated
             // Instagram Stories tab. This form handles post/reel/ad URLs.
             const url = document.getElementById('igRouteUrl');
-            if (url) url.required = true;
             const type = document.getElementById('igSourceType').value;
+            // An ad Meta sends with no Post/Reel link is mapped by its Ad ID (Ads → Map Ad).
+            if (url) url.required = type !== 'ad';
+            document.getElementById('igRouteUrlWrap').hidden = type === 'ad';
             const label = type === 'reel' ? 'reel' : type === 'ad' ? 'ad' : 'post';
             document.getElementById('igSourceDescriptionLabel').innerText = `Description for this ${label}`;
             document.getElementById('igSourceDescriptionHelp').innerText = `Used when someone asks what this ${label} is about.`;
@@ -10390,7 +10392,7 @@ THIS WEEK'S BENGAL SPECIALS
             const saved = data.route || {};
             const topic = igTopics.find(item => item.topic_id === saved.topic_id) || {};
             const menu = igMenus.find(item => item.menu_id === (saved.menu_id || payload.menu_id)) || {};
-            const content = saved.source_type === 'reel' ? 'Reel' : saved.source_type === 'post' ? 'Post' : saved.source_type === 'story' ? 'Story' : 'Instagram Ad';
+            const content = saved.source_type === 'reel' ? 'Reel' : saved.source_type === 'post' ? 'Post' : saved.source_type === 'story' ? 'Story' : 'Ad';
             const label = saved.shortcode ? `${content} ${saved.shortcode}` : content;
             resetInstagramRouteForm();
             result.style.display='block'; result.className='result-box success';

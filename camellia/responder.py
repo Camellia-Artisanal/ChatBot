@@ -2802,7 +2802,7 @@ class DeterministicResponder:
                 and not re.search(r"\b(?:it|this|that)\b", normalized))
 
         if (channel == "instagram" and isinstance(source_for_qa, dict)
-                and source_for_qa.get("source_type") in {"story", "post", "reel"} and source_for_qa.get("routing_id")
+                and source_for_qa.get("source_type") in {"story", "post", "reel", "ad"} and source_for_qa.get("routing_id")
                 and source_for_qa.get("active", True) and not facts.get("source_context_superseded")
                 and source_for_qa.get("response_mode") == "APPROVED_QA"):
             from camellia import approved_qa, instagram_story_qa, instagram_source_qa
@@ -2819,7 +2819,8 @@ class DeterministicResponder:
                                     and current_route.get("media_id") == source_for_qa.get("media_id")
                                     and current_route.get("response_mode") == "APPROVED_QA")
                 if not is_story:
-                    bundle_valid = bundle_valid and all(current_route.get(key) == source_for_qa.get(key) for key in instagram_source_qa.IDENTITY_FIELDS)
+                    fields = instagram_source_qa.AD_IDENTITY_FIELDS if source_for_qa.get("source_type") == "ad" else instagram_source_qa.IDENTITY_FIELDS
+                    bundle_valid = bundle_valid and all(current_route.get(key) == source_for_qa.get(key) for key in fields)
                 selected_count = len((bundle or source_for_qa).get("approved_qa_ids") or [])
                 wording = semantic_remainder or user_message
                 if not independent_of_source(wording):
@@ -2886,7 +2887,7 @@ class DeterministicResponder:
                             legacy_source_match = None
                             legacy_source_unavailable = True
         elif (channel == "instagram" and isinstance(source_for_qa, dict)
-                and source_for_qa.get("source_type") in {"story", "post", "reel"} and source_for_qa.get("routing_id")
+                and source_for_qa.get("source_type") in {"story", "post", "reel", "ad"} and source_for_qa.get("routing_id")
                 and source_for_qa.get("active", True) and not facts.get("source_context_superseded")
                 and source_for_qa.get("response_mode", "CUSTOM") == "CUSTOM" and source_for_qa.get("topic_id")):
             # A Custom mapping carries only the client's note. Its Topic's
@@ -2924,7 +2925,7 @@ class DeterministicResponder:
         mapped_qa_reference = bool(
             channel == "instagram" and isinstance(source_for_qa, dict)
             and source_for_qa.get("routing_id") and source_for_qa.get("active", True)
-            and source_for_qa.get("source_type") in {"story", "post", "reel"}
+            and source_for_qa.get("source_type") in {"story", "post", "reel", "ad"}
             and source_for_qa.get("response_mode") == "APPROVED_QA"
             and re.fullmatch(
                 r"\s*(?:tell\s+me\s+(?:more(?:\s+about\s+(?:this|that)(?:\s+(?:story|post|reel))?)?|about\s+(?:this|that)(?:\s+(?:story|post|reel))?)|"

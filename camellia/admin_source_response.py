@@ -40,7 +40,7 @@ def selector_html(prefix):
 SCRIPT = r"""<script>
 const sourceResponseState = {};
 function sourceResponseHtml(prefix) { return prefix==='igStory' ? __STORY_SELECTOR__ : prefix==='igMedia' ? __MEDIA_SELECTOR__ : __POST_SELECTOR__; }
-function sourceQaMultiple(prefix){return prefix==='igStory'||prefix==='igMedia'||(prefix==='ig'&&['post','reel'].includes(document.getElementById('igSourceType')?.value||'post'));}
+function sourceQaMultiple(prefix){return prefix==='igStory'||prefix==='igMedia'||(prefix==='ig'&&['post','reel','ad'].includes(document.getElementById('igSourceType')?.value||'post'));}
 function sourceResponseFields(prefix) {
  const mode=document.querySelector(`input[name="${prefix}ResponseMode"]:checked`)?.value || 'CUSTOM';
  if(sourceQaMultiple(prefix) && mode==='APPROVED_QA'){

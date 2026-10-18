@@ -1977,8 +1977,8 @@ class Database:
                     values = values[:8] + (legacy["approved_opening_message"],) + values[9:]
             if bundle_write:
                 conn.execute("BEGIN IMMEDIATE")
-                if route["source_type"] not in {"story", "post", "reel"} or route.get("response_mode") != "APPROVED_QA":
-                    raise ValueError("Approved Q&A bundles require a Story, Post or Reel")
+                if route["source_type"] not in {"story", "post", "reel", "ad"} or route.get("response_mode") != "APPROVED_QA":
+                    raise ValueError("Approved Q&A bundles require a Story, Post, Reel or Ad")
                 if routing_id is not None:
                     old_identity = conn.execute("SELECT * FROM instagram_source_routes WHERE routing_id=?", (routing_id,)).fetchone()
                     if not old_identity or (route["source_type"] == "story" and (old_identity["source_type"] != "story" or old_identity["media_id"] != route.get("media_id"))) or (route["source_type"] != "story" and not instagram_source_qa.compatible_identity(conn, old_identity, route)):
@@ -2078,7 +2078,7 @@ class Database:
             if route["source_type"] == "story" and route.get("response_mode", "CUSTOM") == "CUSTOM":
                 conn.execute("DELETE FROM instagram_story_qa_bundle_items WHERE routing_id=?", (routing_id,))
                 conn.execute("DELETE FROM instagram_story_qa_bundles WHERE routing_id=?", (routing_id,))
-            if route["source_type"] in {"post", "reel"} and route.get("response_mode", "CUSTOM") == "CUSTOM":
+            if route["source_type"] in {"post", "reel", "ad"} and route.get("response_mode", "CUSTOM") == "CUSTOM":
                 from camellia.instagram_source_qa import clear
                 clear(conn, routing_id)
             if bundle_write:

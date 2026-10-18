@@ -565,7 +565,7 @@ def ads_workspace(database, view="active"):
         route = route_by_id.get(binding["routing_id"]) if binding else None
         suggestion, identity_status = exact_route_suggestion(item, routes)
         source = _permalink(item.get("instagram_permalink_url"))
-        item.update(ad_id=ad_id, name=item.get("name") or (observed.get(ad_id) or {}).get("display_title") or "Observed ad",
+        item.update(ad_id=ad_id, name=item.get("name") or (observed.get(ad_id) or binding or {}).get("display_title") or "Observed ad",
                     inventory_state="CURRENT" if ad_id in inventory else "OBSERVED",
                     active=bool(item.get("active")), effective_status=item.get("effective_status") or "UNKNOWN",
                     mapped=bool(binding), binding_status=database.instagram_ad_binding_status(ad_id),

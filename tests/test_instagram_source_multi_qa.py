@@ -374,7 +374,7 @@ function inputs(node){return [...(node.tag==='input'?[node]:[]),...(node.childre
  if(sourceResponseState.igStory.selectedIds.size!==1||sourceResponseState.igStory.context!=='sondesh')throw Error('Story state leakage');
  const story=sourceResponseFields('igStory');if(story.story_context!=='sondesh'||'source_context' in story)throw Error('Story contract');
  document.getElementById('igSourceType').value='ad';setSourceResponseMode('ig');filterSourceQa('ig');
- const ad=sourceResponseFields('ig');if('approved_qa_ids' in ad||document.getElementById('igApprovedQaId').hidden||!document.getElementById('igQaBundleFields').hidden)throw Error('Ad became multi');
+ const ad=sourceResponseFields('ig');if(!('approved_qa_ids' in ad)||!document.getElementById('igApprovedQaId').hidden||document.getElementById('igQaBundleFields').hidden)throw Error('An ad without a Post/Reel link gets the Posts & Reels checklist (18 Oct)');
  document.getElementById('igSourceType').value='reel';setSourceResponseMode('ig');filterSourceQa('ig');if(!sourceQaMultiple('ig'))throw Error('Reel not multi');
  modes.igMedia='CUSTOM';if('approved_qa_ids' in sourceResponseFields('igMedia'))throw Error('Custom leak');
  if(requests!==3)throw Error('unexpected write');console.log('PASS');

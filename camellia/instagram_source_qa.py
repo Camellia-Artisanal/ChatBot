@@ -1,8 +1,14 @@
-"""Additive Post/Reel references; accepted Story storage stays intact."""
+"""Additive Post/Reel/Ad references; accepted Story storage stays intact.
+
+An "ad" route is for an ad Meta sends with no Post/Reel link (18 Oct,
+"YOU HOST ... _Group_1"); its exact identity is its Meta Ad ID.
+"""
 from datetime import datetime, timezone
 from camellia import approved_qa, instagram_story_qa
 
 IDENTITY_FIELDS = ('source_type', 'media_id', 'canonical_url', 'shortcode')
+AD_IDENTITY_FIELDS = ('source_type', 'ad_id')
+SOURCE_TYPES = {'post', 'reel', 'ad'}
 validate = instagram_story_qa.validate
 OWNED_IDENTITY_SQL = '''SELECT 1 FROM instagram_media m
     JOIN instagram_media_inventory_syncs s ON s.owner_account_id=m.owner_instagram_account_id
@@ -12,10 +18,20 @@ OWNED_IDENTITY_SQL = '''SELECT 1 FROM instagram_media m
 
 
 def initialize(cursor):
+    existing = cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='instagram_source_qa_bundles'").fetchone()
+    if existing and "IN ('post','reel'))" in (existing[0] or ''):
+        # SQLite cannot widen a CHECK, so this small table is rebuilt with its
+        # rows to admit 'ad'; the triggers are recreated below.
+        cursor.execute('DROP TRIGGER IF EXISTS source_qa_route_deleted')
+        cursor.execute('DROP TRIGGER IF EXISTS source_qa_identity_guard')
+        cursor.execute('ALTER TABLE instagram_source_qa_bundles RENAME TO instagram_source_qa_bundles_post_reel')
     cursor.execute('''CREATE TABLE IF NOT EXISTS instagram_source_qa_bundles (
-        routing_id INTEGER PRIMARY KEY, source_type TEXT NOT NULL CHECK(source_type IN ('post','reel')),
+        routing_id INTEGER PRIMARY KEY, source_type TEXT NOT NULL CHECK(source_type IN ('post','reel','ad')),
         context TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
         created_by TEXT NOT NULL, updated_by TEXT NOT NULL)''')
+    if cursor.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='instagram_source_qa_bundles_post_reel'").fetchone():
+        cursor.execute('INSERT INTO instagram_source_qa_bundles SELECT * FROM instagram_source_qa_bundles_post_reel')
+        cursor.execute('DROP TABLE instagram_source_qa_bundles_post_reel')
     cursor.execute('''CREATE TABLE IF NOT EXISTS instagram_source_qa_bundle_items (
         routing_id INTEGER NOT NULL, qa_id TEXT NOT NULL, position INTEGER NOT NULL,
         created_at TEXT NOT NULL, created_by TEXT NOT NULL,
@@ -42,12 +58,23 @@ def initialize(cursor):
         BEGIN SELECT RAISE(ABORT,'Post/Reel bundle identity cannot change'); END''')
 
 
+def eligible(route):
+    """Posts and Reels; an ad only by its Ad ID with no Post/Reel link (one
+    with a link answers from that Post/Reel instead)."""
+    if not route or route['source_type'] not in SOURCE_TYPES:
+        return False
+    return route['source_type'] != 'ad' or bool(route['ad_id'] and not route['canonical_url'] and not route['shortcode'])
+
+
 def identity(route):
-    return {key: route[key] for key in IDENTITY_FIELDS}
+    fields = AD_IDENTITY_FIELDS if route['source_type'] == 'ad' else IDENTITY_FIELDS
+    return {key: route[key] for key in fields}
 
 
 def compatible_identity(conn, current, candidate):
     """Keep exact links fixed; allow existing verified owned-media enrichment."""
+    if current['source_type'] == 'ad' or candidate.get('source_type') == 'ad':
+        return current['source_type'] == candidate.get('source_type') and current['ad_id'] == candidate.get('ad_id')
     if any(current[key] != candidate.get(key) for key in ('source_type', 'canonical_url', 'shortcode')):
         return False
     return current['media_id'] == candidate.get('media_id') or bool(conn.execute(
@@ -55,7 +82,7 @@ def compatible_identity(conn, current, candidate):
 
 
 def read(conn, route):
-    if not route or route['source_type'] not in {'post', 'reel'}:
+    if not eligible(route):
         return None
     bundle = conn.execute('SELECT * FROM instagram_source_qa_bundles WHERE routing_id=?', (route['routing_id'],)).fetchone()
     ids = [row['qa_id'] for row in conn.execute(
@@ -74,9 +101,9 @@ def clear(conn, routing_id):
 def replace(conn, routing_id, exact_identity, context, qa_ids, actor):
     """Caller owns BEGIN IMMEDIATE and the existing QA publication lock."""
     route = conn.execute('SELECT * FROM instagram_source_routes WHERE routing_id=?', (routing_id,)).fetchone()
-    if (not route or route['source_type'] not in {'post', 'reel'} or identity(route) != exact_identity
+    if (not eligible(route) or identity(route) != exact_identity
             or route['response_mode'] != 'APPROVED_QA' or route['archived_at']
-            or not (route['media_id'] or route['canonical_url'] or route['shortcode'])):
+            or not (route['media_id'] or route['canonical_url'] or route['shortcode'] or route['ad_id'])):
         raise ValueError('An unchanged exact Post/Reel Approved Q&A route is required')
     validate(context, qa_ids, approved_qa._read(conn))
     now = datetime.now(timezone.utc).isoformat()
@@ -98,7 +125,7 @@ def effective(database, bundle):
 
 
 def route_contract(database, route):
-    if route and route.get('source_type') in {'post', 'reel'}:
+    if route and route.get('source_type') in SOURCE_TYPES and eligible({key: route.get(key) for key in ('source_type', 'ad_id', 'canonical_url', 'shortcode')}):
         return {**route, **(database.get_instagram_source_qa_bundle(route['routing_id']) or {})}
     return route
 
