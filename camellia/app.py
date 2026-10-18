@@ -1312,6 +1312,7 @@ def _handoff_unmapped_shared_media(
     if active:
         db.log_conversation(
             sender_id, "instagram", customer_message, "", False, "waiting_for_human",
+            decision_reason=json.dumps({"silent": "open handoff " + str(active.get("handoff_ref") or "")}),
             message_source=message_source, source_type=source_type, media_id=media_id,
             shortcode=shortcode, source_match_method=match_method,
             source_context_available=False, source_context_used=False,
@@ -1343,6 +1344,7 @@ def _handoff_unmapped_shared_media(
     session_memory.add_turn(sender_id, "instagram", customer_message, notice)
     conversation_id = db.log_conversation(
         sender_id, "instagram", customer_message, notice, True, "shared_media_handoff",
+        decision_reason=json.dumps({"handoff": handoff["handoff_ref"] + " · " + reason}),
         message_source=message_source, source_type=source_type, media_id=media_id,
         shortcode=shortcode, source_match_method=match_method,
         source_context_available=False, source_context_used=False,

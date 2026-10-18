@@ -374,3 +374,21 @@ class TestUnreadableAttachments:
             app_module._dispatch_instagram_payload(event, tasks)
 
         assert not tasks.add_task.called
+
+
+def test_shared_media_handoff_logs_why(tmp_path, monkeypatch):
+    from camellia.database import Database
+    from camellia import handoff as handoff_module
+    database = Database(str(tmp_path / "shared-why.db"))
+    monkeypatch.setattr(app_module, "db", database)
+    monkeypatch.setattr(handoff_module, "db", database)
+    uid = "shared_why"
+    session_memory.clear_session(uid, "instagram")
+    with patch.object(app_module.instagram_chatbot_control, "is_sender_allowed", return_value=True), \
+         patch.object(app_module, "send_instagram_reply"), \
+         patch.object(app_module.escalator, "handle_escalation"):
+        app_module._handoff_unmapped_shared_media(uid, source_type="reel", shortcode="abc")
+        app_module._handoff_unmapped_shared_media(uid, source_type="reel", shortcode="abc")
+    rows = sorted(database.get_conversations(limit=5), key=lambda r: r["id"])
+    assert "Unmapped shared Instagram Reel" in rows[0]["decision_reason"]
+    assert "open handoff" in rows[1]["decision_reason"]
