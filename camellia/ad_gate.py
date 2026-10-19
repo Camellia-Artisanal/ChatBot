@@ -84,6 +84,14 @@ def describe_entry_point(messaging_event: Dict[str, Any]) -> EntryPoint:
     reply_to = message_obj.get("reply_to") or {}
     story = reply_to.get("story") if isinstance(reply_to, dict) else None
     media_id = str(story.get("id")) if isinstance(story, dict) and story.get("id") else None
+    # A customer sharing our Story into the DM arrives as an ``ig_story``
+    # attachment with ``payload.story_media_id`` (seen in production 19 Oct);
+    # it names the same Story a reply would, so it routes the same way.
+    attachments = message_obj.get("attachments") if isinstance(message_obj.get("attachments"), list) else []
+    shared_story = next((str(item["payload"]["story_media_id"]) for item in attachments
+                         if isinstance(item, dict) and item.get("type") == "ig_story"
+                         and isinstance(item.get("payload"), dict) and item["payload"].get("story_media_id")), None)
+    media_id = media_id or shared_story
     story_mention = message_obj.get("story_mention") or messaging_event.get("story_mention")
     sender_obj = messaging_event.get("sender") or messaging_event.get("from") or {}
     sender_id = sender_obj.get("id") if isinstance(sender_obj, dict) else None
@@ -97,7 +105,7 @@ def describe_entry_point(messaging_event: Dict[str, Any]) -> EntryPoint:
         # A tap, not typing. Which kind of tap is the whole question, so the
         # raw payload is kept even when it does not match a known shape.
         source = "ice_breaker" if payload and _ICE_BREAKER_PAYLOAD_RE.search(str(payload)) else "postback"
-    elif isinstance(message_obj.get("reply_to"), dict) and message_obj["reply_to"].get("story"):
+    elif (isinstance(message_obj.get("reply_to"), dict) and message_obj["reply_to"].get("story")) or shared_story:
         source = "story_reply"
     elif story_mention:
         # A customer mentioning the business in their own Story is a

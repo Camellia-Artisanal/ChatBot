@@ -512,3 +512,26 @@ def test_unmapped_story_always_uses_existing_human_handoff(story_db, monkeypatch
     assert not facts.get("source_context_used")
     assert not facts.get("last_entities") and not facts.get("ad_product")
     assert "bengali_bento" not in notify.call_args.kwargs["context_data"]["handoff_summary"]
+
+
+def test_a_shared_story_is_read_like_a_story_reply():
+    # 19 Oct: a customer shared our "Mishti for Pujo" Story; Meta sent it as an
+    # ``ig_story`` attachment, which was treated as a photo and handed off.
+    entry = describe_entry_point({
+        "sender": {"id": "customer"},
+        "message": {"mid": "m1", "attachments": [{"type": "ig_story", "payload": {
+            "story_media_id": "18112552994136332", "story_media_url": "https://lookaside.example/x"}}]},
+    })
+    assert entry.source == "story_reply" and entry.media_id == "18112552994136332"
+
+
+def test_shared_mapped_story_gives_the_next_question_its_answers(story_db):
+    story_db.save_instagram_source_route(_mapped_media_route("story", media_id="1790000000000555"))
+    uid = "story-share-" + uuid.uuid4().hex[:8]
+    event = {"sender": {"id": uid}, "message": {"mid": "m-" + uid, "attachments": [
+        {"type": "ig_story", "payload": {"story_media_id": "1790000000000555"}}]}}
+    with patch.object(app_module, "send_instagram_reply") as send:
+        app_module._process_instagram_event(uid, "", None, describe_entry_point(event))
+    send.assert_not_called()  # a share alone stays silent, like a mapped Post/Reel
+    route = session_memory.get_facts(uid, "instagram")["source_route"]
+    assert route and route["media_id"] == "1790000000000555"

@@ -1601,6 +1601,17 @@ class DeterministicResponder:
                 and not re.search(r"\b(?:again|resend|re-?send|it|that)\b", str(message or ""), re.I)
             ):
                 return None
+            # "Can I see the menu" in a Sondesh conversation (or "send sondesh
+            # menu") means both collection menus, which the Sondesh route
+            # sends; asking "which asset?" left the customer with none (19 Oct).
+            if re.search(r"\bmenu\b", str(message or ""), re.I) and (
+                re.search(r"\b(?:sondesh|sandesh|mishti|sweets?)\b", str(message or ""), re.I)
+                or "sondesh" in str(facts.get("active_topic") or facts.get("last_topic") or "")
+                or (isinstance(facts.get("source_route"), dict)
+                    and facts["source_route"].get("source_context") == "sondesh"
+                    and not facts.get("source_context_superseded"))
+            ):
+                return None
             # On the very first turn of a mapped Story/Post/Reel flow, the
             # source route is the only available owner. Let that route answer
             # the opening request and establish active state; later generic
@@ -3080,7 +3091,13 @@ class DeterministicResponder:
                 and str(source.get("routing_topic") or "").casefold() in {"subscription", "everyday meal subscription"}
                 and client_qa.effective_entry("subscription_details_client")
             )
-            if home_menu or (source_menu_request and not legacy_subscription_request and (menu_request or menu_id or mode == "SELECTED" or not str(source.get("source_description") or "").strip())):
+            # A Sondesh post with no menu set cannot answer "can I see the menu"
+            # with its note again; the Sondesh menu reply sends both collection
+            # cards (19 Oct). Other no-menu posts keep answering with their own copy.
+            no_menu_to_send = (menu_request and mode == "NONE" and not source_image
+                               and (source.get("source_context") == "sondesh"
+                                    or re.search(r"\b(?:sondesh|sandesh|mishti)\b", str(source.get("routing_topic") or ""), re.I)))
+            if home_menu or (source_menu_request and not no_menu_to_send and not legacy_subscription_request and (menu_request or menu_id or mode == "SELECTED" or not str(source.get("source_description") or "").strip())):
                 menu = source_menu if menu_id and not home_menu else None
                 image = source_image if not home_menu else None
                 description = str(source.get("source_description") or "").strip()
@@ -3777,13 +3794,15 @@ class DeterministicResponder:
             lowered_text,
         ):
             requested_topic = None
-            if re.search(r"\b(?:sondesh|sandesh|mishti)\b", lowered_text):
+            if re.search(r"\b(?:sondesh|sandesh|mishti|sweets?)\b", lowered_text):
                 requested_topic = "SONDESH"
             elif re.search(r"\b(?:savoury|savory)\b", lowered_text):
                 requested_topic = "WEEKLY_SAVOURY" if re.search(r"\b(?:this\s+week|weekly)\b", lowered_text) else "SAVOURY"
             elif re.search(r"\bbento\b", lowered_text):
                 requested_topic = "BENTO_MEAL"
-            menu_query = lowered_text.rstrip(" ?.!").strip()
+            # "sondesh menu please" / "sweets menu pls" are the same request (19 Oct).
+            menu_query = re.sub(r"[\s,]+(?:please|pls|plz)$", "", lowered_text.rstrip(" ?.!").strip())
+            menu_query = re.sub(r"\bsweets?\b", "mishti", menu_query)
             menu_request = bool(re.fullmatch(
                 r"(?:please\s+)?(?:show|share|send)(?:\s+me|\s+us)?"
                 r"(?:\s+the|\s+your|\s+current)?\s+(?:this\s+week(?:'s)?\s+)?"
