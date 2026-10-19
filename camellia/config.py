@@ -291,6 +291,9 @@ class Config:
     # account has been verified for the documented owned-Stories edge.
     INSTAGRAM_STORY_AUTO_SYNC_ENABLED: bool = os.getenv("INSTAGRAM_STORY_AUTO_SYNC_ENABLED", "false").lower() in ("true", "1", "t", "yes")
     INSTAGRAM_STORY_SYNC_INTERVAL_SECONDS: int = max(300, int(os.getenv("INSTAGRAM_STORY_SYNC_INTERVAL_SECONDS", "900")))
+    # Ads + Posts/Reels sync on their own so a new ad is ready to map minutes after it starts (19 Oct).
+    INSTAGRAM_ADS_AUTO_SYNC_ENABLED: bool = os.getenv("INSTAGRAM_ADS_AUTO_SYNC_ENABLED", "true").lower() in ("true", "1", "t", "yes")
+    INSTAGRAM_ADS_SYNC_INTERVAL_SECONDS: int = max(300, int(os.getenv("INSTAGRAM_ADS_SYNC_INTERVAL_SECONDS", "900")))
 
     # --- Channel policy: Instagram is the only AI chatbot channel -----------
     INSTAGRAM_CHATBOT_ENABLED: bool = os.getenv("INSTAGRAM_CHATBOT_ENABLED", "true").lower() in ("true", "1", "t", "yes")

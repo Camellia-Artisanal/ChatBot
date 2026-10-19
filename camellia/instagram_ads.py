@@ -1,8 +1,10 @@
 """Admin-only, read-only Marketing inventory. Local PR #58 aliases stay authoritative."""
+import asyncio
+import logging
 import re
 import time
 import json
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from urllib.parse import parse_qs, urlsplit
 
@@ -10,6 +12,8 @@ import httpx
 
 from camellia.config import config
 from camellia.instagram_routing import decode_route, normalize_instagram_url
+
+log = logging.getLogger(__name__)
 
 _BASE_FIELDS = "id,name,status,effective_status,created_time,updated_time,campaign_id,adset_id"
 _CREATIVE_FIELDS = (
@@ -558,6 +562,63 @@ def running_presentation_groups(rows, evidence):
     return [group for _, group in sorted(groups.items()) if group["delivering_ad_ids"]]
 
 
+# 19 Oct: three ads 10-20 minutes old were in Meta review, so "Running Now"
+# hid them and the client thought sync took hours. Recent ads that are not yet
+# delivering are listed too, labelled, so they can be mapped straight away.
+_WAITING_LABELS = {"PENDING_REVIEW": "In review", "IN_PROCESS": "In review", "PREAPPROVED": "In review",
+                   "ACTIVE": "Not delivering yet", "WITH_ISSUES": "Meta reports an issue"}
+NEW_AD_WINDOW = timedelta(hours=48)
+
+
+def _parse_meta_time(value):
+    for fmt in ("%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%d %H:%M:%S"):
+        try:
+            stamp = datetime.strptime(str(value or "")[:24].replace("+00:00", "+0000"), fmt)
+        except ValueError:
+            continue
+        return stamp if stamp.tzinfo else stamp.replace(tzinfo=timezone.utc)
+    try:
+        stamp = datetime.fromisoformat(str(value or ""))
+    except ValueError:
+        return None
+    return stamp if stamp.tzinfo else stamp.replace(tzinfo=timezone.utc)
+
+
+def waiting_for_meta(row, delivery_known=False, now=None, schedule=None):
+    """Label for a recent ad Meta has not started delivering, else None.
+
+    "Not delivering yet" needs today's delivery evidence; without it an ACTIVE
+    ad's delivery is unknown, not missing."""
+    if row.get("inventory_state") != "CURRENT" or (schedule or {}).get("eligibility") == "ENDED":
+        return None
+    status = str(row.get("effective_status") or "")
+    label = None if status == "ACTIVE" and not delivery_known else _WAITING_LABELS.get(status)
+    # Meta's own creation time only: our first-seen time is "now" for every
+    # old ad after a fresh database, which would make them all look new.
+    born = _parse_meta_time(row.get("created_time"))
+    if not label or not born:
+        return None
+    return label if (now or datetime.now(timezone.utc)) - born < NEW_AD_WINDOW else None
+
+
+async def ads_sync_loop(stop_event, database):
+    """Sync ads, then Posts/Reels, every few minutes so a new ad is ready to map without Sync Now."""
+    from camellia.instagram_media import sync_instagram_media
+    delay = 60  # let startup finish first
+    while not stop_event.is_set():
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=delay)
+            return
+        except asyncio.TimeoutError:
+            pass
+        delay = config.INSTAGRAM_ADS_SYNC_INTERVAL_SECONDS
+        for job in (sync_instagram_ads, sync_instagram_media):
+            try:
+                await asyncio.to_thread(job, database)
+            except Exception:
+                log.exception("Automatic %s failed.", job.__name__)
+
+
 def ads_workspace(database, view="active"):
     routes = [mapping_display(row) for row in database.list_instagram_source_routes()]
     route_by_id = {row["routing_id"]: row for row in routes}
@@ -596,6 +657,10 @@ def ads_workspace(database, view="active"):
     delivery["unresolved_ad_ids"] = sorted(set(delivery["ads"]) - {row["ad_id"] for row in rows})
     for row in rows:
         row["delivery"] = delivery["ads"].get(row["ad_id"])
+        schedule = (delivery.get("schedules") or {}).get(row["ad_id"])
+        row["waiting_for_meta"] = None if row["ad_id"] in running_ids else waiting_for_meta(
+            row, delivery["status"] == "available", schedule=schedule)
+    new_ad_ids = [row["ad_id"] for row in rows if row["waiting_for_meta"]]
     # Mapped = answers from its own mapping or from the Post/Reel it promotes.
     covered = lambda row: row["mapped"] or row["answers_from"] == "post"
     counts = {"active": len(active_groups), "raw_active": sum(row["active"] for row in rows), "unmapped": sum(not covered(row) for row in rows),
@@ -606,10 +671,11 @@ def ads_workspace(database, view="active"):
         counts["running"] = None
         delivery["resolved_group_count"] = len(running_groups)
     counts["raw_running"] = delivery.get("raw_running")
+    counts["new_waiting"] = len(new_ad_ids)
     filtered = [row for row in rows if view == "all" or (view == "active" and row["active"]) or
-                (view == "running" and row["ad_id"] in running_ids) or
+                (view == "running" and (row["ad_id"] in running_ids or row["waiting_for_meta"])) or
                 (view == "inactive" and not row["active"] and row["inventory_state"] != "OBSERVED") or (view == "mapped" and row["mapped"]) or
                 (view == "unmapped" and not row["mapped"]) or
                 (view == "needs_answers" and is_answer_gap(row, row["answer_status"], recent_ids))]
-    return {"status": "success", "items": filtered, "active_groups": active_groups, "running_groups": running_groups, "delivery": delivery, "counts": counts, "sync": sync_status(database),
+    return {"status": "success", "items": filtered, "active_groups": active_groups, "running_groups": running_groups, "new_ad_ids": new_ad_ids, "delivery": delivery, "counts": counts, "sync": sync_status(database),
             "routes": [row for row in routes if row.get("active") and row.get("source_type") in {"post", "reel"}]}

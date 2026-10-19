@@ -38,6 +38,7 @@ _TEST_ENV_KEYS = (
     "META_APP_SECRET",
     "META_VERIFY_TOKEN",
     "SLOW_REPLY_NOTICE_ENABLED",
+    "INSTAGRAM_ADS_AUTO_SYNC_ENABLED",
 )
 _ORIGINAL_TEST_ENV = {key: os.environ.get(key) for key in _TEST_ENV_KEYS}
 _PYTEST_DB_DIR = tempfile.TemporaryDirectory(
@@ -62,6 +63,8 @@ os.environ.update({
     # workers some replies are, so unrelated copy tests failed; the tests that
     # cover the notice switch it on themselves (test_bot.py).
     "SLOW_REPLY_NOTICE_ENABLED": "false",
+    # Tests never poll Meta in the background.
+    "INSTAGRAM_ADS_AUTO_SYNC_ENABLED": "false",
     "ADMIN_API_KEY": "pytest-only-admin-api-key-7f410b33",
     "INSTAGRAM_ACCESS_TOKEN": "",
     "META_MARKETING_ACCESS_TOKEN": "",

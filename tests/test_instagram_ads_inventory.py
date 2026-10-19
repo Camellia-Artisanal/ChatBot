@@ -169,7 +169,7 @@ def test_observed_inventory_binding_union_deduplicates_and_counts(store, monkeyp
     assert len(result["items"]) == 2
     # Gaps count only ads customers messaged from recently; nobody has here.
     assert result["counts"] == {"active": 1, "raw_active": 1, "mapped": 1, "unmapped": 1, "inactive": 0, "all": 2,
-                                "answer_gaps": 0, "running": None, "raw_running": None}
+                                "answer_gaps": 0, "running": None, "raw_running": None, "new_waiting": 0}
     assert ads.ads_workspace(store, "mapped")["items"][0]["name"] == "Norom Pak Sondesh"
 
 

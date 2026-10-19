@@ -4,6 +4,7 @@ HTML = r'''
   <div class="admin-page-heading"><div><h2>Ads</h2><p>Choose which Reel or Post each ad belongs to. The bot then answers customers who come from that ad using that Reel or Post's answers.</p></div>
     <button id="adsSyncButton" class="btn-secondary" type="button" onclick="syncAdsNow()">↻ Sync Now</button></div>
   <div id="adsSummary" class="gallery-toolbar" aria-label="Ads summary"></div>
+  <p id="adsSyncNotice" role="status" style="font-size:1rem;margin:6px 0;"></p>
   <div class="gallery-toolbar" role="group" aria-label="Ads filters">
     <button class="btn-secondary active" data-ads-filter="running" onclick="setAdsFilter('running')">Running Now</button>
     <button class="btn-secondary" data-ads-filter="needs_answers" onclick="setAdsFilter('needs_answers')">⚠ Needs answers</button>
@@ -86,17 +87,38 @@ async function loadAdsWorkspace() {
         if (generation === adsRequestGeneration) document.getElementById('adsSyncStatus').textContent = 'Could not refresh Ads. Previously loaded inventory is retained.';
     }
 }
+// 19 Oct: Sync Now also brings in new Posts/Reels and Stories, so the post a
+// new ad promotes is ready to map in the same click, and says what came in.
+const ADS_SYNC_WARNINGS = {busy: 'A sync is already running. Try again in a minute.', error: 'Meta did not answer this sync. The ads already shown are kept.'};
+async function adsSyncStep(url) {
+    const response = await fetch(url, {method:'POST', headers:getAuthHeaders()});
+    if (!response.ok) throw Error('Sync unavailable');
+    return response.json();
+}
 async function syncAdsNow() {
     if (adsSyncBusy) return;
     adsSyncBusy = true;
+    const notice = document.getElementById('adsSyncNotice');
     const button = document.getElementById('adsSyncButton'); button.disabled = true; button.textContent = 'Syncing…';
+    const before = Number(adsWorkspace.counts?.all || 0);
+    const parts = [], warnings = [];
     try {
-        const response = await fetch('/admin/instagram-ads/sync', {method:'POST',headers:getAuthHeaders()});
-        if (!response.ok) throw Error('Sync unavailable');
-        const result = await response.json();
+        notice.textContent = 'Syncing ads, posts/reels and stories…';
+        const ads = await adsSyncStep('/admin/instagram-ads/sync');
+        if (ads.status !== 'success') warnings.push('Ads: ' + (ADS_SYNC_WARNINGS[ads.status] || ADS_SYNC_WARNINGS.error) + (ads.error_category ? ` (${ads.error_category})` : ''));
+        const media = await adsSyncStep('/admin/instagram-media/sync').catch(() => ({status: 'FAILED'}));
+        if (media.status === 'COMPLETED') parts.push(`${Number(media.discovered || 0)} new post(s)/reel(s)`);
+        else warnings.push('Posts/Reels: ' + (media.failure_category || media.failure?.category || 'sync failed'));
+        const stories = await adsSyncStep('/admin/instagram-story-sources/sync').catch(() => ({status: 'error'}));
+        if (stories.status === 'busy') warnings.push('Stories: a sync is already running');
+        else if (stories.failure && stories.status !== 'partial') warnings.push('Stories: ' + (stories.failure.category || 'sync failed'));
         await loadAdsWorkspace();
-        if (result.status === 'busy') document.getElementById('adsSyncStatus').textContent += ' · A sync is already running.';
-    } catch (_) { document.getElementById('adsSyncStatus').textContent = 'Sync unavailable. Last complete inventory and bindings are retained.'; }
+        const counts = adsWorkspace.counts || {};
+        const added = Math.max(0, Number(counts.all || 0) - before);
+        const waiting = Number(counts.new_waiting || 0);
+        parts.unshift(`${added} new ad(s)${waiting ? ` · ${waiting} waiting for Meta (listed below, you can map them now)` : ''}`);
+        notice.textContent = `Synced: ${parts.join(' · ')}${warnings.length ? ' ⚠ ' + warnings.join(' · ') : ''}`;
+    } catch (_) { notice.textContent = '⚠ Sync unavailable. The ads already shown are kept. Try again in a minute.'; }
     finally { adsSyncBusy = false; button.disabled = false; button.textContent = '↻ Sync Now'; }
 }
 function renderAdsWorkspace() {
@@ -110,6 +132,8 @@ function renderAdsWorkspace() {
         : gaps ? `<div style="width:100%;font-size:1rem;margin-bottom:6px;">⚠ <b>${gaps}</b> ad(s) customers messaged from this week can't answer price questions. <button class="btn-secondary" type="button" onclick="setAdsFilter('needs_answers')">Show them</button></div>` : '';
     document.getElementById('adsSummary').innerHTML = `${gapBanner}${plain}<details style="width:100%;" class="ig-media-muted"><summary>Counts</summary><div style="width:100%;">Running Now: <b>${counts.running == null ? 'Not checked / unavailable' : Number(counts.running)}</b> creative groups · Meta-reported active creative groups: <b>${Number(counts.active || 0)}</b></div><div style="width:100%;"><b>Raw Meta Ad ID counts</b> · ${rawCounts.map(([key,label]) => `${label}: ${counts[key] == null ? 'Not checked' : Number(counts[key])}`).join(' · ')}</div></details>`;
     const sync = adsWorkspace.sync || {};
+    const notice = document.getElementById('adsSyncNotice');
+    if (sync.error_category && !adsSyncBusy && !notice.textContent.startsWith('Synced')) notice.textContent = `⚠ The last ads sync failed (${sync.error_category}). The ads shown are from ${sync.last_success_at || 'an earlier sync'}. Tap Sync Now to retry.`;
     document.getElementById('adsSyncStatus').textContent = `Last successful sync: ${sync.last_success_at || 'Never'}${sync.error_category ? ' · Sync warning: ' + sync.error_category + ' · Last complete inventory retained.' : ''}${sync.optional_fields_reduced ? ' · Some creative fields are unavailable.' : ''}`;
     const delivery = adsWorkspace.delivery || {};
     if (adsFilter === 'running') document.getElementById('adsSyncStatus').textContent += delivery.status === 'available' ? ` · Delivery window: ${delivery.reporting_date} (${delivery.account_timezone}) · Checked: ${delivery.checked_at}${delivery.unresolved_ad_ids?.length ? ' · Some delivering IDs lack inventory; Sync Now to resolve discovery.' : ''}` : ` · Delivery evidence unavailable: ${delivery.error_category || 'Not checked'}. Use Meta Active / All for retained inventory.`;
@@ -137,7 +161,8 @@ function renderAdsWorkspace() {
         const suggested = ad.suggested_routing_id && !ad.mapped && ad.answers_from !== 'post' && suggestedRoute ? `<button class="btn-secondary" data-ads-action="suggestion">Use Existing Mapping: ${escapeHtml(sourceLabel(suggestedRoute))}</button>` : '';
         const more = ad.mapped ? '<button class="btn-secondary" data-ads-action="edit">Edit Mapping</button><button class="btn-secondary" data-ads-action="toggle">' + (ad.binding_active ? 'Disable Binding' : 'Enable Binding') + '</button><button class="btn-secondary" data-ads-action="history">History</button>' : '';
         const details = `<details><summary>More details</summary><div class="ig-media-summary">Meta Ad ID: ${escapeHtml(ad.ad_id)}</div><div class="ig-media-facts"><span>${ad.inventory_state === 'OBSERVED' ? 'OBSERVED' : ad.active ? 'ACTIVE' : 'INACTIVE'} · ${escapeHtml(ad.effective_status)}</span><span>${ad.mapped ? 'MAPPED ✓' : 'UNMAPPED'} · ${escapeHtml(ad.binding_status)}</span><span>Linked source: ${escapeHtml(ad.source_type || 'unknown')}</span></div><p style="overflow-wrap:anywhere;">${escapeHtml(identity)}</p><p>${escapeHtml(linked)}</p>${description ? `<p style="white-space:pre-wrap;">${escapeHtml(description)}</p>` : ''}${inherited}<small>Last synced: ${escapeHtml(ad.last_synced_at || 'Not yet synced')}</small>${more ? `<div class="ig-media-actions" style="margin-top:8px;">${more}</div>` : ''}</details>`;
-        return `<article class="ig-media-card" data-ad-id="${escapeHtml(ad.ad_id)}"><div class="ig-media-preview">${preview}</div><div class="ig-media-main"><b>AD · ${escapeHtml(ad.name)}</b><p style="font-size:1rem;">${adStatus(ad)}</p>${badge}${details}</div><div class="ig-media-actions">${primary}${suggested}${choose}</div></article>`;
+        const waiting = ad.waiting_for_meta ? `<p style="font-size:0.95rem;margin:4px 0;">🆕 New: waiting for Meta · ${escapeHtml(ad.waiting_for_meta)}${!ad.instagram_permalink_url && !ad.effective_instagram_media_id ? ' · Meta is still processing this ad, Sync again in a few minutes to see its Post/Reel' : ''}</p>` : '';
+        return `<article class="ig-media-card" data-ad-id="${escapeHtml(ad.ad_id)}"><div class="ig-media-preview">${preview}</div><div class="ig-media-main"><b>AD · ${escapeHtml(ad.name)}</b><p style="font-size:1rem;">${adStatus(ad)}</p>${waiting}${badge}${details}</div><div class="ig-media-actions">${primary}${suggested}${choose}</div></article>`;
     };
     const groups = adsFilter === 'running' ? adsWorkspace.running_groups : adsWorkspace.active_groups;
     if ((adsFilter === 'active' || adsFilter === 'running') && groups) {
@@ -165,6 +190,8 @@ function renderAdsWorkspace() {
             const technical = `<details><summary>Technical details</summary><p style="overflow-wrap:anywhere;">Permalink: ${first.instagram_permalink_url ? `<a href="${escapeHtml(first.instagram_permalink_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(first.instagram_permalink_url)}</a>` : 'Unavailable'}<br>Instagram media ID: ${escapeHtml(first.effective_instagram_media_id || 'Unavailable')}</p>${running ? `<p style="overflow-wrap:anywhere;">WITHIN META SCHEDULE + DELIVERED TODAY + currently Meta ACTIVE · Evidence IDs: ${group.delivering_ad_ids.map(id => escapeHtml(id)).join(', ')}. ${members.length} exact member IDs. Mapping: ${mappedCount}/${members.length} bound.${group.verified_identity ? '' : ' Incomplete/conflicting identity: individual mapping only.'}</p>` : ''}</details>`;
             return `<section class="ig-media-card" data-active-group="true"><div class="ig-media-preview">${preview}</div><div class="ig-media-main"><b>AD · ${escapeHtml(displayName)}</b><p style="font-size:1rem;">${status}</p>${groupBadge}${groupButton}${technical}<details${exactId ? ' open' : ''}><summary>${members.length} Meta Ad IDs ▾</summary>${members.map(renderAd).join('')}</details></div></section>`;
         }).join('');
+        const fresh = adsFilter === 'running' ? (adsWorkspace.new_ad_ids || []).map(id => adsWorkspace.items.find(ad => ad.ad_id === id)).filter(ad => ad && (!exactId || ad.ad_id === exactId)) : [];
+        if (fresh.length) list.innerHTML += `<section style="width:100%;"><h3 style="margin:12px 0 4px;">🆕 New: waiting for Meta (${fresh.length})</h3><p class="ig-media-muted">Started in the last 48 hours and not delivering yet. Map them now; answers start as soon as Meta delivers them.</p>${fresh.map(renderAd).join('')}</section>`;
     } else {
         list.innerHTML = (adsWorkspace.items || []).filter(ad => !exactId || ad.ad_id === exactId).map(renderAd).join('');
     }

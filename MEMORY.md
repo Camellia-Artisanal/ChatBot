@@ -75,6 +75,11 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
   client's always-forward words (complaint, discount) even on a Custom-note mapping.
 - **Every logged message carries `decision_reason`** (which answer/rule, or the handoff ref
   and reason). Read it on `/admin/conversations` before guessing why a reply happened.
+- **New ads are mappable before Meta delivers them.** Sync has no delay; "Running Now"
+  needs ACTIVE + impressions today, so ads under 48 h old that are in review / not delivering
+  are listed under "New: waiting for Meta" (Meta `created_time` only). Sync Now also syncs
+  Posts/Reels and Stories; ads + Posts/Reels auto-sync every 15 min
+  (`INSTAGRAM_ADS_AUTO_SYNC_ENABLED`, off in tests).
 - Kosha Mangsho / Mutton Bento folded into ₹600 Mangsho Bento on an inference — still
   unconfirmed by the client.
 

@@ -316,6 +316,13 @@ async def lifespan(app: FastAPI):
             config.INSTAGRAM_STORY_SYNC_INTERVAL_SECONDS,
         )
 
+    ads_sync_stop = asyncio.Event()
+    ads_sync_task = None
+    if config.INSTAGRAM_ADS_AUTO_SYNC_ENABLED:
+        from camellia.instagram_ads import ads_sync_loop
+        ads_sync_task = asyncio.create_task(ads_sync_loop(ads_sync_stop, db))
+        log.info("Ads + Posts/Reels auto-sync enabled; interval=%ss.", config.INSTAGRAM_ADS_SYNC_INTERVAL_SECONDS)
+
     notification_stop = asyncio.Event()
     notification_task = asyncio.create_task(
         _human_notification_loop(notification_stop),
@@ -343,6 +350,13 @@ async def lifespan(app: FastAPI):
             story_sync_task.cancel()
             try:
                 await story_sync_task
+            except asyncio.CancelledError:
+                pass
+        ads_sync_stop.set()
+        if ads_sync_task is not None:
+            ads_sync_task.cancel()
+            try:
+                await ads_sync_task
             except asyncio.CancelledError:
                 pass
 
