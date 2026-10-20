@@ -1566,6 +1566,20 @@ def _handle_shared_attachment(
     _reply_to_unreadable_attachment(sender_id)
 
 
+def _answered_since(sender_id: str, since_epoch: float) -> bool:
+    """True when the bot answered this customer (not a handoff) after `since_epoch`."""
+    from datetime import datetime, timezone
+    for row in db.get_conversations(limit=5, channel="instagram", user_id=sender_id):
+        try:
+            stamp = datetime.strptime(str(row["timestamp"])[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc).timestamp()
+        except ValueError:
+            continue
+        if stamp >= since_epoch and row.get("was_matched") and "handoff" not in str(row.get("template_id") or "") \
+                and row.get("template_id") != "waiting_for_human":
+            return True
+    return False
+
+
 def _finalize_expired_unmapped_posts() -> None:
     """Lazily finalize durable unpaired Post events after the ad-race window."""
     for event in db.claim_expired_pending_instagram_media(limit=100):
@@ -1574,7 +1588,10 @@ def _finalize_expired_unmapped_posts() -> None:
             # customer's earlier message) is answered by that job, not handed
             # off as unmapped (19 Oct).
             mapped, _ = route_for_inbound(ad_id=None, media_id=None, post_media_id=event["media_id"], source_type="post")
-            if mapped:
+            # The question typed with the share was already answered (20 Oct:
+            # "What is the price of a box?" got the Sondesh price, then this
+            # late handoff opened mid-reply and the Signature menu was dropped).
+            if mapped or _answered_since(event["sender_id"], float(event["received_at"]) - 120):
                 db.finish_pending_instagram_media(int(event["id"]))
                 continue
             _handoff_unmapped_shared_media(

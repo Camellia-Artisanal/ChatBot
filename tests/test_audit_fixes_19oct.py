@@ -120,3 +120,23 @@ def test_admin_resolve_button_and_route_tab_survive_odd_input():
     assert "openResolveModal(${e.id}, this.dataset.userMsg)" in source
     # The Archived button was removed; the Active tab must not throw on it.
     assert "getElementById('igRouteTabArchivedBtn').classList" not in source
+
+
+@pytest.mark.parametrize("answered", [True, False])
+def test_an_unmapped_share_whose_question_was_answered_is_not_handed_off(ad_customer, answered):
+    # 20 Oct, real_shagun0707: shared an unmapped post + "What is the price of a
+    # box?"; the price was answered, then the share's timer handed off mid-reply.
+    sender, facts, db = ad_customer
+    event = {"sender": {"id": sender}, "timestamp": 1700000000500,
+             "message": {"mid": "share-" + sender, "attachments": [{"type": "ig_post", "payload": {"ig_post_media_id": "unmapped-77"}}]}}
+    app_module._dispatch_instagram_payload({"entry": [{"id": "acct", "messaging": [event]}]},
+                                           app_module._DurableInstagramTasks(_Deferred()))
+    if answered:
+        db.log_conversation(sender, "instagram", "What is the price of a box?", "Sondesh price…", True, "sondesh_price_detailed")
+    with db.get_connection() as conn:
+        conn.execute("UPDATE instagram_pending_media_events SET expires_at=0")
+        conn.commit()
+    with patch.object(app_module, "send_instagram_reply", return_value={"status": "sent", "message_id": "m"}), \
+         patch.object(app_module.escalator, "handle_escalation"):
+        app_module._finalize_expired_unmapped_posts()
+    assert bool(db.get_active_handoff("instagram", sender)) is (not answered)
