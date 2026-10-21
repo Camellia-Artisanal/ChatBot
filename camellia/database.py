@@ -948,6 +948,17 @@ class Database:
             );
             """)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_ig_pending_media_expiry ON instagram_pending_media_events(status, expires_at)")
+            # Short WhatsApp links (21 Oct): /w/<code> redirects to the full
+            # wa.me link, whose prefilled text can hold an order summary.
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS whatsapp_short_links (
+                code TEXT PRIMARY KEY,
+                handoff_ref TEXT NOT NULL,
+                url TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_whatsapp_short_links_ref ON whatsapp_short_links(handoff_ref)")
             # Migrate only unambiguous legacy exact bindings. Existing fields
             # remain intact and duplicate legacy IDs fail closed at lookup.
             cursor.execute("""
@@ -5616,6 +5627,27 @@ class Database:
                 "match_rate_percent": round(match_rate, 2)
             }
 
+    def save_whatsapp_short_link(self, handoff_ref: str, url: str, code: str) -> str:
+        """Store one short code per (reference, full link); a resend reuses it."""
+        with self.get_connection() as conn:
+            row = conn.execute(
+                "SELECT code FROM whatsapp_short_links WHERE handoff_ref=? AND url=?",
+                (handoff_ref, url),
+            ).fetchone()
+            if row:
+                return row["code"]
+            conn.execute(
+                "INSERT INTO whatsapp_short_links (code, handoff_ref, url) VALUES (?, ?, ?)",
+                (code, handoff_ref, url),
+            )
+            conn.commit()
+        return code
+
+    def get_whatsapp_short_link(self, code: str) -> Optional[str]:
+        with self.get_connection() as conn:
+            row = conn.execute("SELECT url FROM whatsapp_short_links WHERE code=?", (code,)).fetchone()
+        return row["url"] if row else None
+
     def purge_expired_data(self, retention_days: int = None) -> Dict[str, int]:
         """
         Deletes conversations, escalations and sessions older than the retention
@@ -5651,6 +5683,7 @@ class Database:
             )
             cursor.execute(f"DELETE FROM escalations WHERE {older_than('created_at')}", (cutoff,))
             removed_escalations = cursor.rowcount
+            cursor.execute("DELETE FROM whatsapp_short_links WHERE " + older_than("created_at"), (cutoff,))
             cursor.execute(f"DELETE FROM sessions WHERE {older_than('updated_at')}", (cutoff,))
             removed_sessions = cursor.rowcount
             conn.commit()

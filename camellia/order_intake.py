@@ -459,6 +459,11 @@ def whatsapp_draft_link(draft: dict, *, reference: str | None = None) -> str:
 
 
 
+def _short_link(url: str) -> str:
+    from camellia.handoff import short_whatsapp_link  # handoff imports this module
+    return short_whatsapp_link(None, url) or url
+
+
 def draft_fingerprint(draft: dict) -> str:
     """Hash only the normalized customer-visible fields, never internal state."""
     visible = " ".join(request_summary(draft).casefold().split())
@@ -519,7 +524,7 @@ def present_draft(facts: dict, draft: dict, message: str) -> str:
         + request_summary(draft)
         + "\n\nOur manager will review availability, delivery charges, "
         "and the final invoice.\n\n[Edit Order]\nReply with the change you want."
-        + f"\n\n[Continue on WhatsApp]\n{whatsapp_draft_link(draft)}"
+        + f"\n\n[Continue on WhatsApp]\n{_short_link(whatsapp_draft_link(draft))}"
     )
     facts["order_intake_last_presented_fingerprint"] = fingerprint
     facts["order_intake_whatsapp_link_sent_for_fingerprint"] = fingerprint

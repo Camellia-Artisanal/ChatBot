@@ -1187,7 +1187,7 @@ def _process_instagram_event(
         logged_response = response_text
         if template_id == "order_intake_draft":
             logged_response = re.sub(
-                r"https://wa\.me/[^\s]+", "https://wa.me/[prefilled-order-request]", logged_response,
+                r"https://wa\.me/[^\s]+|https?://[^\s]+/w/[A-Za-z0-9-]+", "https://wa.me/[prefilled-order-request]", logged_response,
             )
         if needs_escalation and link_message:
             logged_response = f"{response_text}\n\n{link_message}"
@@ -3343,6 +3343,20 @@ def instagram_token_status(force: bool = False) -> Dict[str, Any]:
             result.get("meta_code"),
         )
     return {**result, "checked_seconds_ago": 0.0}
+
+
+@app.get("/w/{code}")
+def whatsapp_short_link(code: str):
+    """Short WhatsApp link from a handoff message → the full wa.me chat link."""
+    url = db.get_whatsapp_short_link(code) if re.fullmatch(r"[A-Za-z0-9-]{1,60}", code or "") else None
+    if not url or not url.startswith("https://wa.me/"):
+        return HTMLResponse(
+            "<!doctype html><meta name=viewport content='width=device-width'><title>Camellia</title>"
+            "<p style='font-family:sans-serif;padding:24px'>This link has expired. "
+            "Please message us on Instagram and we will send a new one.</p>",
+            status_code=404,
+        )
+    return RedirectResponse(url, status_code=302)
 
 
 @app.get("/health")

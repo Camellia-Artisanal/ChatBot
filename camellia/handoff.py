@@ -332,7 +332,35 @@ def get_or_create_handoff(
     return handoff
 
 
+_SHORT_CODE_ALPHABET = "abcdefghijkmnpqrstuvwxyzACDEFGHJKLMNPQRTUVWXYZ2346789"
+
+
+def short_whatsapp_link(handoff_ref: Optional[str], url: Optional[str]) -> Optional[str]:
+    """`<public address>/w/<ref>-<6 random>` for a wa.me link (21 Oct).
+
+    The random part matters: references are only five digits, and the full
+    link can carry the customer's order, so `/w/CAM-12345` alone could be
+    guessed. Without a valid public address, or on any error, the full link
+    is returned unchanged so the customer is never left without one.
+    """
+    base = str(config.PUBLIC_BASE_URL or "").strip().rstrip("/")
+    if not url or not re.fullmatch(r"https?://[^\s/]+", base):
+        return url
+    try:
+        token = "".join(random.SystemRandom().choice(_SHORT_CODE_ALPHABET) for _ in range(6))
+        ref = re.sub(r"[^A-Za-z0-9-]", "", str(handoff_ref or "")) or "ORDER"
+        code = db.save_whatsapp_short_link(ref, url, f"{ref}-{token}")
+        return f"{base}/w/{code}"
+    except Exception:
+        log.exception("Could not shorten the WhatsApp link; sending the full link.")
+        return url
+
+
 def whatsapp_link(handoff_ref: str, order_summary: Optional[Dict[str, Any]] = None, *, customer_draft: Optional[Dict[str, Any]] = None) -> Optional[str]:
+    return short_whatsapp_link(handoff_ref, full_whatsapp_link(handoff_ref, order_summary, customer_draft=customer_draft))
+
+
+def full_whatsapp_link(handoff_ref: str, order_summary: Optional[Dict[str, Any]] = None, *, customer_draft: Optional[Dict[str, Any]] = None) -> Optional[str]:
     """A wa.me click-to-chat link to the client's own WhatsApp number.
 
     Returns None when WHATSAPP_BUSINESS_NUMBER is not yet configured — the

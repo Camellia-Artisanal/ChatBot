@@ -3991,7 +3991,8 @@ class DeterministicResponder:
                 facts["source_context_used"] = False
                 active_handoff = db.get_active_handoff(channel, user_id)
                 reference = (active_handoff or {}).get("handoff_ref")
-                action = "Continue on WhatsApp:\n" + order_intake.whatsapp_draft_link(draft, reference=reference)
+                from camellia.handoff import short_whatsapp_link
+                action = "Continue on WhatsApp:\n" + (short_whatsapp_link(reference, order_intake.whatsapp_draft_link(draft, reference=reference)) or "")
                 if ordered_response_blocks and ordered_response_blocks[-1]["kind"] == "TEXT":
                     ordered_response_blocks[-1]["text"] += "\n\n" + action
                 else:
