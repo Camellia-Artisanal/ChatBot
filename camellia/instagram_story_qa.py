@@ -44,7 +44,7 @@ def validate(context, qa_ids, rows):
         raise ValueError('Choose an allowed Approved Q&A context')
     if (not isinstance(qa_ids, list) or not 1 <= len(qa_ids) <= 50
             or any(not isinstance(key, str) or not key or len(key) > 100 for key in qa_ids)):
-        raise ValueError('Select 1 to 50 stable Approved Q&A IDs')
+        raise ValueError('Tick at least one Approved Q&A answer (up to 50) before saving.')
     if len(set(qa_ids)) != len(qa_ids):
         raise ValueError('Duplicate Approved Q&A IDs are not allowed')
     effective = {entry.qa_id: entry for entry in approved_qa.registry(rows)}

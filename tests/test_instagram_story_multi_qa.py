@@ -323,7 +323,7 @@ function inputs(node){return [...(node.tag==='input'?[node]:[]),...(node.childre
  if(checkboxes.find(c=>c.value==='payment').checked)throw Error('General auto-selected');
  if(checkboxes.find(c=>c.value==='other'))throw Error('cross context');
  if(!checkboxes.find(c=>c.value==='price').checked)throw Error('legacy not checked');
- if(!text(box).includes('General — select explicitly')||!text(box).includes('Price <unsafe>'))throw Error('groups/labels');
+ if(!text(box).includes('General / Savoury food')||!text(box).includes('Price <unsafe>'))throw Error('groups/labels');
  const payment=checkboxes.find(c=>c.value==='payment');payment.checked=true;payment.onchange();
  if(document.getElementById('igStoryQaCount').textContent!=='Selected: 2')throw Error('count');
  document.getElementById('igStoryQaSearch').value='details';filterSourceQa('igStory');
@@ -341,3 +341,31 @@ function inputs(node){return [...(node.tag==='input'?[node]:[]),...(node.childre
     assert result.returncode==0,result.stderr
     assert 'igStoryQaChecklist' in selector_html('igStory')
     assert 'igQaChecklist' in selector_html('ig') and 'igMediaQaChecklist' in selector_html('igMedia')
+
+
+def test_new_mappings_start_on_approved_qa_and_custom_is_optional():
+    # 21 Oct: Approved Q&A first and default; Custom response sits beside it.
+    html = selector_html('ig')
+    assert html.index('value="APPROVED_QA" checked') < html.index('value="CUSTOM"')
+    assert 'Custom response <span class="ig-media-muted">(optional)</span>' in html
+    assert "route.response_mode || 'APPROVED_QA'" in SCRIPT  # saved mappings keep their own mode
+
+
+def test_custom_reply_promising_a_menu_without_one_is_flagged():
+    node = shutil.which('node'); assert node
+    script = SCRIPT.split('<script>', 1)[1].split('</script>', 1)[0]
+    harness = r'''
+const elements={igSourceDescription:{value:'Sharing the menu below'},igMenuPicker:{value:'__none__'},igTopicPicker:{value:'t1'}};
+let mode='CUSTOM';const igTopics=[{topic_id:'t1',default_menu_id:null}];
+const document={getElementById(id){return elements[id]||{value:''}},querySelector(){return {value:mode}}};
+'''
+    check = r'''
+if(!sourceNoteMenuMissing('ig'))throw Error('none');
+elements.igMenuPicker.value='__inherit__';if(!sourceNoteMenuMissing('ig'))throw Error('inherit without topic menu');
+igTopics[0].default_menu_id='m1';if(sourceNoteMenuMissing('ig'))throw Error('inherit with topic menu');
+elements.igMenuPicker.value='aamar';if(sourceNoteMenuMissing('ig'))throw Error('menu chosen');
+elements.igMenuPicker.value='__none__';elements.igSourceDescription.value='Thanks for asking';if(sourceNoteMenuMissing('ig'))throw Error('no menu word');
+elements.igSourceDescription.value='menu below';mode='APPROVED_QA';if(sourceNoteMenuMissing('ig'))throw Error('approved mode');
+'''
+    result = subprocess.run([node, '-e', harness + script + check], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr

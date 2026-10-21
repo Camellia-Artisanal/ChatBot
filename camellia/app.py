@@ -9782,6 +9782,58 @@ THIS WEEK'S BENGAL SPECIALS
         // Custom mappings answer price/details with their Topic's approved
         // answers; the client sets them here instead of in Manage Topics.
         let mediaTopicAnswerRecords = null;
+        let mediaTopicAnswerContexts = [];
+        // 21 Oct: a Topic's answer list showed every approved answer from
+        // every category. It now shows the Topic's own category + General,
+        // with already-ticked answers always kept, and a switch for others.
+        const TOPIC_CATEGORY_HINTS = [
+            [/kolkata/i, /sondesh|sandesh|mishti|sweet/i, ['kolkata_sondesh', 'sondesh']],
+            [/kolkata/i, null, ['kolkata_bengali_home_table', 'home_table']],
+            [/home\s*table/i, null, ['bengali_home_table', 'home_table']],
+            [/sondesh|sandesh|mishti|sweet/i, null, ['sondesh']],
+            [/bento/i, null, ['bento']],
+            [/subscription|meal\s*plan|tiffin/i, null, ['subscription']],
+            [/savou?ry|meal|food|lunch|dinner/i, null, ['savoury_deliveries', 'savoury']],
+        ];
+        function topicAnswerCategory(topic, records) {
+            const name = String(topic?.name || '');
+            const has = value => records.some(record => record.context === value);
+            for (const [first, second, candidates] of TOPIC_CATEGORY_HINTS) {
+                if (!first.test(name) || (second && !second.test(name))) continue;
+                const found = candidates.find(has);
+                if (found) return found;
+            }
+            return 'general';
+        }
+        function topicAnswerListHtml(records, contexts, selected, category) {
+            if (!records.length) return '<p class="source-map-help">No approved answers yet.</p>';
+            const label = value => {
+                if (value === 'general') return 'General / Savoury food';
+                const text = ((contexts || []).find(c => c.value === value)?.label || value).replace(/ \(existing\)$/, '');
+                return /^[a-z0-9_]+$/.test(text) ? text.replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase()) : text;
+            };
+            const row = record => `<label style="display:flex;gap:8px;align-items:flex-start;margin:6px 0;font-size:0.9rem;"><input type="checkbox" style="width:auto;margin-top:3px;" data-topic-answer="${escapeHtml(record.qa_id)}" ${selected.has(record.qa_id) ? 'checked' : ''}><span>${escapeHtml(record.question || record.qa_id)}</span></label>`;
+            const inCategory = record => category === 'all' || record.context === category;
+            const own = records.filter(record => record.context !== 'general' && inCategory(record));
+            const general = records.filter(record => record.context === 'general');
+            const others = records.filter(record => record.context !== 'general' && !inCategory(record) && selected.has(record.qa_id));
+            const values = ['general', ...[...new Set(records.map(record => record.context))].filter(value => value !== 'general').sort((a, b) => label(a).localeCompare(label(b)))];
+            const picker = `<label style="display:flex;gap:8px;align-items:center;margin-bottom:6px;font-size:0.85rem;">Show answers for <select class="field-control" data-topic-answer-category style="max-width:260px;padding:4px 8px;">${values.map(value => `<option value="${escapeHtml(value)}" ${value === category ? 'selected' : ''}>${escapeHtml(label(value))}</option>`).join('')}<option value="all" ${category === 'all' ? 'selected' : ''}>All categories</option></select></label>`;
+            const group = (title, items) => items.length ? `<div style="font-weight:600;font-size:0.85rem;margin:8px 0 2px;">${escapeHtml(title)}</div>${items.map(row).join('')}` : '';
+            return picker
+                + (category === 'all' ? group('All categories', own) : category === 'general' ? '' : group(label(category), own))
+                + group('General / Savoury food', general)
+                + group('Already ticked from other categories', others);
+        }
+        function wireTopicAnswerList(box, render) {
+            const select = box.querySelector('[data-topic-answer-category]');
+            if (!select) return;
+            select.onchange = () => {
+                // Keep what is ticked while switching category.
+                const ticked = new Set([...box.querySelectorAll('[data-topic-answer]')].filter(input => input.checked).map(input => input.dataset.topicAnswer));
+                render(select.value, ticked);
+            };
+        }
         async function renderMediaTopicAnswers() {
             const box = document.getElementById('igMediaTopicAnswers'); if (!box) return;
             const topic = igTopics.find(t => t.topic_id === document.getElementById('igMediaTopic')?.value);
@@ -9791,12 +9843,16 @@ THIS WEEK'S BENGAL SPECIALS
                 if (!mediaTopicAnswerRecords) {
                     const data = await fetch('/admin/instagram-routes/approved-qa-options', { headers: getAuthHeaders() }).then(r => r.json());
                     mediaTopicAnswerRecords = data.records || [];
+                    mediaTopicAnswerContexts = data.contexts || [];
                 }
             } catch (error) { box.innerHTML = '<p class="source-map-help">Approved answers are unavailable right now.</p>'; return; }
             if (box.dataset.topic !== topic.topic_id) return;
-            const selected = new Set(topic.default_approved_qa_ids || []);
-            const records = [...mediaTopicAnswerRecords].sort((a, b) => selected.has(b.qa_id) - selected.has(a.qa_id));
-            box.innerHTML = records.map(record => `<label style="display:flex;gap:8px;align-items:flex-start;margin:4px 0;font-size:0.85rem;"><input type="checkbox" style="width:auto;" data-topic-answer="${escapeHtml(record.qa_id)}" ${selected.has(record.qa_id) ? 'checked' : ''}><span>${escapeHtml(record.question || record.qa_id)}</span></label>`).join('') || '<p class="source-map-help">No approved answers yet.</p>';
+            const records = mediaTopicAnswerRecords;
+            const render = (category, selected) => {
+                box.innerHTML = topicAnswerListHtml(records, mediaTopicAnswerContexts, selected, category);
+                wireTopicAnswerList(box, render);
+            };
+            render(topicAnswerCategory(topic, records), new Set(topic.default_approved_qa_ids || []));
         }
         async function saveMediaTopicAnswers() {
             const field = document.getElementById('igMediaTopicAnswersField');
@@ -9813,6 +9869,7 @@ THIS WEEK'S BENGAL SPECIALS
         }
 
         async function saveInstagramMediaRoute(id) {
+            if (!confirmSourceNoteMenu('igMedia')) return;
             const menu = document.getElementById('igMediaMenu').value;
             const menuChoice = menuChoiceParts(menu);
             const payload = { ...sourceResponseFields('igMedia'), topic_id: document.getElementById('igMediaTopic').value, source_description: document.getElementById('igMediaDescription').value.trim(), menu_id: menuChoice.menu_id, menu_mode: menuChoice.menu_mode, auto_reply_enabled: document.getElementById('igMediaAutoReply').checked };
@@ -10454,6 +10511,7 @@ THIS WEEK'S BENGAL SPECIALS
             if (sourceResponseFields('ig').response_mode === 'CUSTOM' && updateMenuChoiceWarning('igMenuPicker', 'igMenuWarning')) { result.style.display='block'; result.className='result-box error'; result.innerText='Choose an active menu or No menu before saving.'; return; }
             const menuChoice=menuChoiceParts(document.getElementById('igMenuPicker').value);
             const sourceType=document.getElementById('igSourceType').value;
+            if (!confirmSourceNoteMenu('ig')) return;
             const payload={...sourceResponseFields('ig'),routing_id:igEditingId,source_type:sourceType,url:sourceType==='story'?'':document.getElementById('igRouteUrl').value.trim(),topic_id:document.getElementById('igTopicPicker').value,source_description:document.getElementById('igSourceDescription').value.trim(),menu_id:menuChoice.menu_id,menu_mode:menuChoice.menu_mode,media_id:document.getElementById('igMediaId').value.trim(),ad_id:document.getElementById('igAdId').value.trim(),campaign_id:document.getElementById('igCampaignId').value.trim(),preview_url:igMediaMetadata.preview_url,media_type:igMediaMetadata.media_type,escalation_policy:document.getElementById('igEscalationPolicy').value,priority_products:igPriority,knowledge_scope:Array.from(document.getElementById('igKnowledgeScope').selectedOptions).map(o=>o.value),active:document.getElementById('igActive').checked};
             const resp=await fetch('/admin/instagram-routes',{method:'POST',headers:{...getAuthHeaders(),'Content-Type':'application/json'},body:JSON.stringify(payload)});
             const data=await resp.json().catch(()=>({})); result.style.display='block';
@@ -10539,8 +10597,12 @@ THIS WEEK'S BENGAL SPECIALS
             list.innerHTML = 'Loading approved answers…';
             try {
                 const data = await fetch('/admin/instagram-routes/approved-qa-options', { headers: getAuthHeaders() }).then(r => r.json());
-                const selected = new Set(topic.default_approved_qa_ids || []);
-                list.innerHTML = (data.records || []).map(record => `<label style="display:flex;gap:8px;align-items:flex-start;margin:4px 0;font-size:0.85rem;"><input type="checkbox" data-topic-answer="${escapeHtml(record.qa_id)}" ${selected.has(record.qa_id) ? 'checked' : ''}><span>${escapeHtml(record.question || record.qa_id)}</span></label>`).join('') || '<p>No approved answers available.</p>';
+                const records = data.records || [];
+                const render = (category, selected) => {
+                    list.innerHTML = topicAnswerListHtml(records, data.contexts || [], selected, category);
+                    wireTopicAnswerList(list, render);
+                };
+                render(topicAnswerCategory(topic, records), new Set(topic.default_approved_qa_ids || []));
             } catch (err) {
                 list.innerHTML = '<p>Approved answers are unavailable right now.</p>';
             }
@@ -11253,6 +11315,7 @@ THIS WEEK'S BENGAL SPECIALS
             const topicId = document.getElementById('igStoryTopicPicker')?.value || '';
             if (!mediaId) return showInstagramStoryResult('error', 'Choose a captured Story before mapping it.');
             if (!topicId && sourceResponseFields('igStory').response_mode === 'CUSTOM') return showInstagramStoryResult('error', 'Select a Topic before saving the Story mapping.');
+            if (!confirmSourceNoteMenu('igStory')) return;
             if (sourceResponseFields('igStory').response_mode === 'CUSTOM' && updateMenuChoiceWarning('igStoryMenuPicker', 'igStoryMenuWarning')) return showInstagramStoryResult('error', 'Choose an active menu or No menu before saving.');
             const menuChoice = menuChoiceParts(document.getElementById('igStoryMenuPicker').value);
             const payload = {

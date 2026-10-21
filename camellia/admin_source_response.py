@@ -1,9 +1,9 @@
 """Shared read-only Approved Q&A selector for all Instagram source editors."""
 import json
 
-SELECTOR_TEMPLATE = r"""<style>[id$="QaFields"][hidden],.source-map-field[hidden]{display:none!important;} fieldset.source-map-field input[type="radio"]{width:auto;}</style><fieldset class="source-map-field" style="border:0;padding:0;margin:0 0 16px"><legend class="field-label">Response Source</legend>
-<label><input type="radio" name="__PREFIX__ResponseMode" value="CUSTOM" checked onchange="setSourceResponseMode('__PREFIX__')"> Custom Response</label>
-<label style="margin-left:16px"><input type="radio" name="__PREFIX__ResponseMode" value="APPROVED_QA" onchange="setSourceResponseMode('__PREFIX__')"> Approved Q&amp;A</label>
+SELECTOR_TEMPLATE = r"""<style>[id$="QaFields"][hidden],.source-map-field[hidden]{display:none!important;} fieldset.source-map-field input[type="radio"]{width:auto;} fieldset.source-map-field{min-width:0;max-width:100%;} [id$="QaFields"],[id$="QaBundleFields"],[id$="QaChecklist"]{min-width:0;max-width:100%;} .source-qa-card{box-sizing:border-box;max-width:100%;}</style><fieldset class="source-map-field" style="border:0;padding:0;margin:0 0 16px"><legend class="field-label">Response Source</legend>
+<div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap"><label><input type="radio" name="__PREFIX__ResponseMode" value="APPROVED_QA" checked onchange="setSourceResponseMode('__PREFIX__')"> Approved Q&amp;A</label>
+<label><input type="radio" name="__PREFIX__ResponseMode" value="CUSTOM" onchange="setSourceResponseMode('__PREFIX__')"> Custom response <span class="ig-media-muted">(optional)</span></label></div>
 <div id="__PREFIX__QaFields" hidden style="margin-top:12px">
 <label class="field-label" for="__PREFIX__QaSearch">Search Approved Q&amp;A</label>
 <input class="field-control" id="__PREFIX__QaSearch" type="search" placeholder="Question, QA ID or accepted variation" oninput="filterSourceQa('__PREFIX__')">
@@ -45,7 +45,7 @@ function sourceResponseFields(prefix) {
  const mode=document.querySelector(`input[name="${prefix}ResponseMode"]:checked`)?.value || 'CUSTOM';
  if(sourceQaMultiple(prefix) && mode==='APPROVED_QA'){
   const state=sourceResponseState[prefix];
-   return {response_mode:mode,approved_qa_ids:Array.from(state?.selectedIds||[]),[prefix==='igStory'?'story_context':'source_context']:state?.context??document.getElementById(prefix+'QaContext')?.value??'general'};
+   return {response_mode:mode,approved_qa_ids:Array.from(state?.selectedIds||[]),[prefix==='igStory'?'story_context':'source_context']:state?.context||document.getElementById(prefix+'QaContext')?.value||'general'};
  }
  return {response_mode:mode, approved_qa_id:mode==='APPROVED_QA' ? document.getElementById(prefix+'ApprovedQaId')?.value || '' : null};
 }
@@ -60,7 +60,7 @@ function setSourceResponseMode(prefix) {
 }
 async function initSourceResponse(prefix, route) {
  const state={selected:route.approved_qa_id || '',records:[],selectedIds:new Set(route.approved_qa_ids || (route.approved_qa_id?[route.approved_qa_id]:[])),context:(prefix==='igStory'?route.story_context:route.source_context)??null}; sourceResponseState[prefix]=state;
- document.querySelector(`input[name="${prefix}ResponseMode"][value="${route.response_mode || 'CUSTOM'}"]`).checked=true;
+ document.querySelector(`input[name="${prefix}ResponseMode"][value="${route.response_mode || 'APPROVED_QA'}"]`).checked=true;
  document.getElementById(prefix+'QaSearch').value='';
  const select=document.getElementById(prefix+'ApprovedQaId'); select.replaceChildren(new Option('Select Approved Q&A','')); select.disabled=true;
  setSourceResponseMode(prefix);
@@ -72,7 +72,7 @@ async function initSourceResponse(prefix, route) {
   {
    state.contexts=data.contexts||Array.from(new Set(['general',...state.records.map(r=>r.context)])).map(value=>({value,label:value}));
    if(state.context===null)state.context=state.records.find(r=>state.selectedIds.has(r.qa_id))?.context||'general';
-   const context=document.getElementById(prefix+'QaContext');context.replaceChildren(...state.contexts.map(o=>new Option(o.label,o.value)));context.value=state.context;
+   const context=document.getElementById(prefix+'QaContext');context.replaceChildren(...state.contexts.map(o=>new Option(o.value==='general'?'General / Savoury food':o.label,o.value)));context.value=state.context;
   }
   filterSourceQa(prefix);
  } catch(error) {
@@ -113,25 +113,56 @@ function previewSourceQa(prefix) {
  }box.append(list);
 }
 function changeStoryQaContext(prefix='igStory'){const state=sourceResponseState[prefix];if(!state)return;state.context=document.getElementById(prefix+'QaContext').value;renderStoryQa(prefix);}
+// 21 Oct: the checklist was "question — qa_id" rows with identical preview
+// links; each answer is now a card (question, what it answers, first line of
+// the answer), ticked answers show as chips on top, General is folded away.
+const SOURCE_QA_ROLE_LABELS={price:'Price',details:'Details',booking:'Booking',location:'Location',date:'Date'};
+function sourceQaCard(prefix,state,record){
+ const card=document.createElement('label');card.className='source-qa-card';const ticked=state.selectedIds.has(record.qa_id);
+ card.style.cssText='display:flex;gap:12px;align-items:flex-start;padding:12px;margin:8px 0;border:1px solid var(--border);border-radius:10px;cursor:pointer;background:'+(ticked?'var(--surface-2, rgba(0,0,0,.04))':'transparent');
+ const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.value=record.qa_id;checkbox.checked=ticked;checkbox.style.cssText='width:20px;height:20px;margin-top:2px;flex:none';
+ checkbox.onchange=()=>{if(checkbox.checked)state.selectedIds.add(record.qa_id);else state.selectedIds.delete(record.qa_id);renderStoryQa(prefix);};
+ const body=document.createElement('div');body.style.cssText='flex:1;min-width:0';
+ const title=document.createElement('div');title.style.cssText='font-weight:600;font-size:1rem';title.textContent=record.question;
+ const role=SOURCE_QA_ROLE_LABELS[record.mapped_role];
+ if(role){const tag=document.createElement('span');tag.textContent=role;tag.style.cssText='margin-left:8px;padding:1px 8px;border-radius:999px;font-size:.75rem;font-weight:500;border:1px solid var(--border)';title.append(tag);}
+ // Skip the greeting most answers open with; the next line tells them apart.
+ const lines=String(record.answer||'').split(/\n+/).map(line=>line.trim()).filter(Boolean);
+ const firstLine=lines.find(line=>!/^(?:hi|hello|hey|thank|thanks|namaste|greetings)\b/i.test(line))||lines[0]||'';
+ const snippet=document.createElement('div');snippet.style.cssText='opacity:.75;font-size:.9rem;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';snippet.textContent=firstLine;
+ const details=document.createElement('details');details.style.marginTop='4px';details.onclick=event=>event.stopPropagation();details.open=Boolean(state.openAnswers?.[record.qa_id]);details.ontoggle=()=>{if(state.openAnswers)state.openAnswers[record.qa_id]=details.open;};
+ const summary=document.createElement('summary');summary.textContent='View full answer';summary.style.fontSize='.85rem';
+ const answer=document.createElement('p');answer.style.whiteSpace='pre-wrap';answer.textContent=record.answer;
+ const id=document.createElement('small');id.style.opacity='.6';id.textContent='ID: '+record.qa_id;
+ details.append(summary,answer,id);body.append(title,snippet,details);card.append(checkbox,body);return card;
+}
 function renderStoryQa(prefix='igStory'){
  const state=sourceResponseState[prefix];if(!state)return;
- const box=document.getElementById(prefix+'QaChecklist');box.replaceChildren();
+ const box=document.getElementById(prefix+'QaChecklist');box.replaceChildren();box.style.maxHeight='none';state.openGroups=state.openGroups||{};state.openAnswers=state.openAnswers||{};
  document.getElementById(prefix+'QaCount').textContent='Selected: '+state.selectedIds.size;
  const query=document.getElementById(prefix+'QaSearch').value.trim().toLowerCase();
  const eligible=state.records.filter(r=>r.context===state.context||r.context==='general');
- const groups=[['Approved questions for this context',eligible.filter(r=>r.context===state.context)],['General — select explicitly',eligible.filter(r=>r.context==='general'&&state.context!=='general')]];
- for(const [title,records] of groups){
-  const group=document.createElement('fieldset');group.style.border='0';group.style.padding='0';
-  const legend=document.createElement('legend');legend.textContent=title;group.append(legend);
-  for(const record of records){
-   const searchable=[record.question,record.qa_id,...(record.aliases||[]),...(record.source_aliases||[])].join(' ').toLowerCase();
-   if(query&&!searchable.includes(query))continue;
-   const row=document.createElement('div');row.style.marginBottom='12px';
-   const label=document.createElement('label');const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.style.width='auto';checkbox.value=record.qa_id;checkbox.checked=state.selectedIds.has(record.qa_id);
-   checkbox.onchange=()=>{if(checkbox.checked)state.selectedIds.add(record.qa_id);else state.selectedIds.delete(record.qa_id);document.getElementById(prefix+'QaCount').textContent='Selected: '+state.selectedIds.size;refreshAnswerTable(prefix);};
-   label.append(checkbox,document.createTextNode(' '+record.question+' — '+record.qa_id));row.append(label);
-   const details=document.createElement('details');const summary=document.createElement('summary');summary.textContent='Read-only approved answer preview';const answer=document.createElement('p');answer.style.whiteSpace='pre-wrap';answer.textContent=record.answer;details.append(summary,answer);row.append(details);group.append(row);
-  }box.append(group);
+ const byId=Object.fromEntries(state.records.map(r=>[r.qa_id,r]));
+ const chips=document.createElement('div');chips.style.cssText='display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px';
+ for(const key of state.selectedIds){const record=byId[key];if(!record||!eligible.includes(record))continue;
+  const chip=document.createElement('button');chip.type='button';chip.className='btn-secondary';chip.style.cssText='padding:4px 10px;font-size:.85rem';
+  chip.textContent=record.question+'  ×';chip.title='Remove';chip.onclick=()=>{state.selectedIds.delete(key);renderStoryQa(prefix);};chips.append(chip);}
+ if(!chips.childElementCount){const none=document.createElement('p');none.style.cssText='opacity:.7;margin:6px 0 10px';none.textContent='No answers ticked yet. Tick the answers this post should give.';chips.append(none);}
+ box.append(chips);
+ const label=value=>(state.contexts||[]).find(o=>o.value===value)?.label||value;
+ const groups=state.context==='general'
+  ? [['General / Savoury food',eligible.filter(r=>r.context==='general'),true]]
+  : [[label(state.context)+' answers',eligible.filter(r=>r.context===state.context),true],
+     ['General / Savoury food — add only if this post needs them',eligible.filter(r=>r.context==='general'),false]];
+ for(const [title,records,open] of groups){
+  const shown=records.filter(record=>!query||[record.question,record.qa_id,...(record.aliases||[]),...(record.source_aliases||[])].join(' ').toLowerCase().includes(query));
+  // Ticking re-renders the list; groups the admin opened or closed stay that way.
+  const group=document.createElement('details');const remembered=state.openGroups[title];group.open=Boolean(query)||(remembered===undefined?(open||records.some(r=>state.selectedIds.has(r.qa_id))):remembered);group.ontoggle=()=>{if(!query)state.openGroups[title]=group.open;};group.style.margin='6px 0';
+  const summary=document.createElement('summary');summary.style.cssText='font-weight:600;cursor:pointer;padding:4px 0';
+  summary.textContent=title+' ('+records.filter(r=>state.selectedIds.has(r.qa_id)).length+' of '+records.length+' ticked)';group.append(summary);
+  for(const record of shown)group.append(sourceQaCard(prefix,state,record));
+  if(!shown.length){const empty=document.createElement('p');empty.style.opacity='.7';empty.textContent=query?'No answers match the search.':'No answers in this category yet.';group.append(empty);}
+  box.append(group);
  }
  for(const key of state.selectedIds){if(eligible.some(r=>r.qa_id===key))continue;
   const warning=document.createElement('p');warning.textContent=key+' — unavailable/expired or context changed. Remove it and choose a current Q&A before saving.';
@@ -139,6 +170,19 @@ function renderStoryQa(prefix='igStory'){
  }
  const table=document.createElement('div');table.id=prefix+'AnswerTable';table.style.marginTop='14px';box.append(table);refreshAnswerTable(prefix);
 }
+// A Custom reply that promises a menu with none selected sent the text alone
+// to customers (19 Oct, sondesh posts and stories).
+const SOURCE_NOTE_FIELDS={ig:['igSourceDescription','igMenuPicker','igTopicPicker'],igStory:['igStorySourceDescription','igStoryMenuPicker','igStoryTopicPicker'],igMedia:['igMediaDescription','igMediaMenu','igMediaTopic']};
+function sourceNoteMenuMissing(prefix){
+ if(sourceResponseFields(prefix).response_mode!=='CUSTOM')return false;
+ const [noteId,menuId,topicId]=SOURCE_NOTE_FIELDS[prefix]||[];
+ if(!/\bmenu\b/i.test(document.getElementById(noteId)?.value||''))return false;
+ const menu=document.getElementById(menuId)?.value||'__none__';
+ if(menu==='__none__'||menu==='')return true;
+ if(menu==='__inherit__'){const topics=typeof igTopics!=='undefined'?igTopics:[];const topic=topics.find(t=>t.topic_id===document.getElementById(topicId)?.value);return !(topic&&topic.default_menu_id);}
+ return false;
+}
+function confirmSourceNoteMenu(prefix){return !sourceNoteMenuMissing(prefix)||confirm('This custom reply mentions a menu, but no menu is selected, so customers will get the text without a menu.\n\nSave anyway?');}
 // What common ad questions get from the ticked answers (18 Oct): shows the
 // result before saving, and the questions two ticked answers both claim.
 async function refreshAnswerTable(prefix){

@@ -88,3 +88,82 @@ aqEdit();if(document.getElementById('aqContext').value!=='general')throw Error('
 '''
     result = subprocess.run([node, '-e', harness + script + check], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
+
+
+def test_list_shows_one_category_at_a_time_and_form_asks_category_first():
+    # 21 Oct: the client wants Sondesh answers apart from General ones, and to
+    # pick the category before writing the question.
+    node = shutil.which('node')
+    assert node, 'Node is required to execute the Admin editor'
+    script = SCRIPT.split('<script>', 1)[1].split('</script>', 1)[0]
+    harness = r'''
+const elements = {};
+const document = {getElementById(id){return elements[id] ||= {value:'',style:{},innerHTML:'',textContent:'',replaceChildren(...options){this.options=options},showModal(){}}},querySelectorAll(){return []}};
+const Option = function(label,value){this.text=label;this.value=value};
+const escapeHtml = value => String(value).replaceAll('<','&lt;').replaceAll('>','&gt;');
+'''
+    check = r'''
+aqContexts=[{value:'general',label:'General'},{value:'sondesh',label:'Sondesh'}];
+aqRecords=[{qa_id:'g1',question:'General Q',answer:'A',context:'general',status:'ACTIVE'},
+           {qa_id:'s1',question:'Sondesh Q',answer:'A',context:'sondesh',status:'ACTIVE'},
+           {qa_id:'s2',question:'Sondesh Q2',answer:'A',context:'sondesh',status:'ACTIVE'}];
+aqRender();
+const list=()=>document.getElementById('aqList').innerHTML;
+if(!list().includes('General Q')||list().includes('Sondesh Q'))throw Error('default is not General only');
+const picker=document.getElementById('aqCategoryFilter');
+if(picker.options.map(o=>o.text).join('|')!=='General / Savoury food (1)|Sondesh (2)|All categories (3)')throw Error('options '+picker.options.map(o=>o.text));
+picker.value='sondesh';aqCategoryChanged();
+if(list().includes('General Q')||!list().includes('Sondesh Q2'))throw Error('sondesh filter');
+aqEdit();
+const form=document.getElementById('aqDialogContent').innerHTML;
+if(form.indexOf('id="aqContext"')>form.indexOf('id="aqQuestion"'))throw Error('category not first');
+if(document.getElementById('aqContext').value!=='sondesh')throw Error('new answer not in chosen category');
+if(!document.getElementById('aqCategoryQuestions').innerHTML.includes('Sondesh Q2'))throw Error('existing sondesh questions not listed');
+aqRoles=[{value:'price',label:'Price',questions:['How much does it cost?']}];
+document.getElementById('aqMappedRole').value='price';aqRoleChanged();
+const suggested=document.getElementById('aqMappedQuestions').value;
+if(!suggested.includes('How much does it cost?')||!suggested.includes('How much is Sondesh?'))throw Error('suggested '+suggested);
+document.getElementById('aqContext').value='general';aqFormCategoryChanged();
+if(document.getElementById('aqMappedQuestions').value.includes('Sondesh'))throw Error('wording kept old category');
+if(!document.getElementById('aqCategoryQuestions').innerHTML.includes('General Q'))throw Error('general list');
+aqRecords.push({qa_id:'p1',question:'Priced',answer:'A',context:'sondesh',status:'ACTIVE',mapped_role:'price',mapped_questions:['Sondesh box cost?','Rate for 12 pcs?']});
+aqEdit('p1');document.getElementById('aqMappedRole').value='price';
+document.getElementById('aqContext').value='general';aqFormCategoryChanged();
+if(document.getElementById('aqMappedQuestions').value!==['Sondesh box cost?','Rate for 12 pcs?'].join(String.fromCharCode(10)))throw Error('saved questions replaced: '+document.getElementById('aqMappedQuestions').value);
+picker.value='all';aqCategoryChanged();
+if(!list().includes('General Q')||!list().includes('Sondesh Q2'))throw Error('all');
+'''
+    result = subprocess.run([node, '-e', harness + script + check], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
+def test_topic_answer_list_shows_its_category_plus_general():
+    # 21 Oct: a Topic's "reply with" list showed every category's answers.
+    import re
+    from camellia import app as app_module
+    node = shutil.which('node')
+    assert node
+    source = open(app_module.__file__, encoding='utf-8').read()
+    start = source.index('        const TOPIC_CATEGORY_HINTS = [')
+    end = source.index('        async function renderMediaTopicAnswers() {')
+    helpers = source[start:end]
+    check = r'''
+const escapeHtml = value => String(value).replaceAll('<','&lt;');
+const records=[{qa_id:'sp',question:'Sondesh price',context:'sondesh'},{qa_id:'gp',question:'General price',context:'general'},
+  {qa_id:'ht',question:'Home table price',context:'home_table'},{qa_id:'dl',question:'Deliver out of area',context:'delivery'}];
+const contexts=[{value:'general',label:'General'},{value:'sondesh',label:'Sondesh'},{value:'home_table',label:'home_table (existing)'}];
+if(topicAnswerCategory({name:'sondesh delivery delhi NCR'},records)!=='sondesh')throw Error('sondesh');
+if(topicAnswerCategory({name:'Bengali Home Table'},records)!=='home_table')throw Error('home table');
+if(topicAnswerCategory({name:'Something else'},records)!=='general')throw Error('fallback');
+let html=topicAnswerListHtml(records,contexts,new Set(['dl']),'sondesh');
+if(!html.includes('Sondesh price')||!html.includes('General price')||html.includes('Home table price'))throw Error('filter '+html);
+if(!html.includes('Deliver out of area')||!html.includes('Already ticked from other categories'))throw Error('ticked kept');
+html=topicAnswerListHtml(records,contexts,new Set(),'all');
+if(!html.includes('Home table price'))throw Error('all');
+if(topicAnswerCategory({name:'Kolkata Sweets'},records)!=='sondesh')throw Error('kolkata sweets');
+html=topicAnswerListHtml(records,contexts,new Set(),topicAnswerCategory({name:'Durga Puja Specials'},records));
+if(!html.includes('<option value="general" selected>'))throw Error('general option not selected');
+if(!html.includes('General price')||html.includes('Sondesh price'))throw Error('general only');
+'''
+    result = subprocess.run([node, '-e', helpers + check], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
