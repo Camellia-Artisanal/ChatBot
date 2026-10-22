@@ -109,6 +109,7 @@ HTML = r'''
  <div id="aqCounts" class="admin-kpi-grid"></div>
  <div style="display:flex;gap:10px;flex-wrap:wrap;margin:16px 0;">
   <select id="aqCategoryFilter" aria-label="Show answers in this category" class="field-control" style="max-width:280px" onchange="aqCategoryChanged()"></select>
+  <button type="button" id="aqDeleteCategory" class="btn-secondary" hidden onclick="aqDeleteEmptyCategory()">Delete this empty category</button>
   <input id="aqSearch" aria-label="Search approved questions and answers" placeholder="Search in this category" oninput="aqRender()" class="field-control" style="flex:1;min-width:200px">
   <button class="btn-secondary" onclick="aqFilter('ACTIVE')">Active</button><button class="btn-secondary" onclick="aqFilter('SCHEDULED')">Scheduled</button><button class="btn-secondary" onclick="aqFilter('EXPIRING_SOON')">Expiring Soon</button><button class="btn-secondary" onclick="aqFilter('ARCHIVED')">Archived / Expired</button>
  </div>
@@ -160,12 +161,21 @@ function aqContextLabel(value) {
 function aqCategoryOptions() {
  const select=document.getElementById('aqCategoryFilter');if(!select)return;
  const active=aqRecords.filter(r=>r.status==='ACTIVE');
- // Older built-in categories ("… (existing)") are listed only while they hold answers.
- const values=[...aqContexts.filter(option=>!option.legacy&&!(/ \(existing\)$/.test(option.label||'')&&!aqRecords.some(r=>r.context===option.value))).map(option=>option.value)];
+ // Built-in categories are listed only while they hold answers (23 Oct); the
+ // client's own categories always show, so an empty one can be deleted here.
+ const values=[...aqContexts.filter(option=>!option.legacy&&(option.custom||aqRecords.some(r=>r.context===option.value))).map(option=>option.value)];
  aqRecords.forEach(r=>{ if(r.context&&!values.includes(r.context))values.push(r.context); });
  if(aqCategory!=='all'&&!values.includes(aqCategory))aqCategory=values.includes('general')?'general':(values[0]||'all');
  select.replaceChildren(...values.map(value=>new Option(`${aqContextLabel(value)} (${active.filter(r=>r.context===value).length})`,value)),new Option(`All categories (${active.length})`,'all'));
  select.value=aqCategory;
+ const option=aqContexts.find(item=>item.value===aqCategory);
+ const button=document.getElementById('aqDeleteCategory');
+ if(button)button.hidden=!(option&&option.custom&&!aqRecords.some(r=>r.context===aqCategory));
+}
+async function aqDeleteEmptyCategory() {
+ const value=aqCategory;if(!confirm(`Delete the empty category "${aqContextLabel(value)}"?`))return;
+ try{await aqApi('/contexts/'+encodeURIComponent(value),'DELETE');aqCategory='general';try{localStorage.setItem('aqCategory','general');}catch(_){}await aqReloadContexts();aqMessage('Category deleted.');}
+ catch(e){aqMessage(e.message,true);}
 }
 function aqCategoryChanged() { aqCategory=document.getElementById('aqCategoryFilter').value;try{localStorage.setItem('aqCategory',aqCategory);}catch(_){}aqRender(); }
 // 23 Oct: System Q&A — booking/ordering answers, the built-in conversation

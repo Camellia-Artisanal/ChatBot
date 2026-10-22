@@ -150,11 +150,15 @@ function renderStoryQa(prefix='igStory'){
   chip.textContent=record.question+'  ×';chip.title='Remove';chip.onclick=()=>{state.selectedIds.delete(key);renderStoryQa(prefix);};chips.append(chip);}
  if(!chips.childElementCount){const none=document.createElement('p');none.style.cssText='opacity:.7;margin:6px 0 10px';none.textContent='No answers ticked yet. Tick the answers this post should give.';chips.append(none);}
  box.append(chips);
- const label=value=>(state.contexts||[]).find(o=>o.value===value)?.label||value;
- const groups=state.context==='general'
-  ? [['General',eligible.filter(everywhere),true]]
+ const label=value=>String((state.contexts||[]).find(o=>o.value===value)?.label||value).replace(/ \(existing\)$/,'').replace(/^[a-z_]+$/,t=>t.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase()));
+ // 23 Oct: answers usable on any post (e.g. Savoury price/details) are listed
+ // under their own category, not inside General.
+ const sharedOther=eligible.filter(r=>r.shared&&r.context!=='general'&&r.context!==state.context);
+ const sharedGroups=[...new Set(sharedOther.map(r=>r.context))].map(value=>[label(value)+' — usable on any post',sharedOther.filter(r=>r.context===value),false]);
+ const groups=(state.context==='general'
+  ? [['General',eligible.filter(r=>r.context==='general'),true]]
   : [[label(state.context)+' answers',eligible.filter(r=>r.context===state.context),true],
-     ['General — add only if this post needs them',eligible.filter(r=>everywhere(r)&&r.context!==state.context),false]];
+     ['General — add only if this post needs them',eligible.filter(r=>r.context==='general'),false]]).concat(sharedGroups);
  for(const [title,records,open] of groups){
   const shown=records.filter(record=>!query||[record.question,record.qa_id,...(record.aliases||[]),...(record.source_aliases||[])].join(' ').toLowerCase().includes(query));
   // Ticking re-renders the list; groups the admin opened or closed stay that way.

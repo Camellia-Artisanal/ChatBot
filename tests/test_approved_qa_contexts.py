@@ -178,3 +178,28 @@ def _run_node(node, source):
         return subprocess.run([node, handle.name], capture_output=True, text=True)
     finally:
         os.unlink(handle.name)
+
+
+def test_empty_categories_built_in_hidden_own_ones_deletable():
+    node = shutil.which('node')
+    assert node
+    script = SCRIPT.split('<script>', 1)[1].split('</script>', 1)[0]
+    harness = r'''
+const elements = {};
+const document = {getElementById(id){return elements[id] ||= {value:'',style:{},innerHTML:'',textContent:'',hidden:true,replaceChildren(...options){this.options=options},showModal(){}}},querySelectorAll(){return []}};
+const Option = function(label,value){this.text=label;this.value=value};
+const escapeHtml = value => String(value);
+'''
+    check = r'''
+aqContexts=[{value:'general',label:'General'},{value:'savoury_deliveries',label:'Savoury Deliveries'},{value:'kolkata_sondesh',label:'Kolkata Sondesh',custom:true}];
+aqRecords=[{qa_id:'g1',question:'G',answer:'A',context:'general',status:'ACTIVE'}];
+aqRender();
+const texts=document.getElementById('aqCategoryFilter').options.map(o=>o.text).join('|');
+if(texts.includes('Savoury Deliveries'))throw Error('empty built-in shown: '+texts);
+if(!texts.includes('Kolkata Sondesh (0)'))throw Error('own category hidden: '+texts);
+if(!document.getElementById('aqDeleteCategory').hidden)throw Error('delete shown on General');
+document.getElementById('aqCategoryFilter').value='kolkata_sondesh';aqCategoryChanged();
+if(document.getElementById('aqDeleteCategory').hidden)throw Error('delete hidden on empty own category');
+'''
+    result = _run_node(node, harness + script + check)
+    assert result.returncode == 0, result.stderr
