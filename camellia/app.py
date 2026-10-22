@@ -4835,6 +4835,48 @@ def reset_handoff_message(x_admin_key: Optional[str] = Header(None), x_admin_pin
     return {"status": "success", **_handoff_message_state()}
 
 
+@app.get("/admin/system-replies")
+def get_system_replies(x_admin_key: Optional[str] = Header(None), x_admin_pin: Optional[str] = Header(None)):
+    """Approved Q&A → System Q&A: the built-in conversation replies (23 Oct)."""
+    require_admin(x_admin_key, x_admin_pin)
+    from camellia import system_replies
+    return {"replies": system_replies.listing(), "max_length": system_replies.MAX_LENGTH}
+
+
+@app.put("/admin/system-replies/{reply_id}")
+async def save_system_reply(reply_id: str, request: Request, x_admin_key: Optional[str] = Header(None), x_admin_pin: Optional[str] = Header(None)):
+    require_admin(x_admin_key, x_admin_pin)
+    from camellia import system_replies
+    if reply_id not in system_replies.REPLIES:
+        raise HTTPException(status_code=404, detail="Unknown system reply.")
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    message = str((body or {}).get("text") or "").strip() if isinstance(body, dict) else ""
+    if len(message) > system_replies.MAX_LENGTH:
+        raise HTTPException(status_code=400, detail=f"Keep the reply under {system_replies.MAX_LENGTH} characters.")
+    _validate_custom_qa_answer(message)
+    actor = "authenticated_admin" if (_admin_context.get() or {}).get("kind") == "session" else "admin_api_key"
+    if not db.save_response_template_override(
+        system_replies.OVERRIDE_PREFIX + reply_id, message, actor,
+        change_reason="system_reply_edited", previous_response=system_replies.REPLIES[reply_id][2],
+    ):
+        raise HTTPException(status_code=400, detail="Could not save the reply.")
+    return {"status": "success", "replies": system_replies.listing()}
+
+
+@app.post("/admin/system-replies/{reply_id}/reset")
+def reset_system_reply(reply_id: str, x_admin_key: Optional[str] = Header(None), x_admin_pin: Optional[str] = Header(None)):
+    require_admin(x_admin_key, x_admin_pin)
+    from camellia import system_replies
+    if reply_id not in system_replies.REPLIES:
+        raise HTTPException(status_code=404, detail="Unknown system reply.")
+    actor = "authenticated_admin" if (_admin_context.get() or {}).get("kind") == "session" else "admin_api_key"
+    db.reset_response_template_override(system_replies.OVERRIDE_PREFIX + reply_id, actor)
+    return {"status": "success", "replies": system_replies.listing()}
+
+
 @app.post("/admin/handoffs/{handoff_ref}/seen")
 def mark_admin_handoff_seen(
     handoff_ref: str,
@@ -9822,7 +9864,7 @@ THIS WEEK'S BENGAL SPECIALS
         function topicAnswerListHtml(records, contexts, selected, category) {
             if (!records.length) return '<p class="source-map-help">No approved answers yet.</p>';
             const label = value => {
-                if (value === 'general') return 'General / Savoury food';
+                if (value === 'general') return 'General';
                 const text = ((contexts || []).find(c => c.value === value)?.label || value).replace(/ \(existing\)$/, '');
                 return /^[a-z0-9_]+$/.test(text) ? text.replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase()) : text;
             };
@@ -9836,7 +9878,7 @@ THIS WEEK'S BENGAL SPECIALS
             const group = (title, items) => items.length ? `<div style="font-weight:600;font-size:0.85rem;margin:8px 0 2px;">${escapeHtml(title)}</div>${items.map(row).join('')}` : '';
             return picker
                 + (category === 'all' ? group('All categories', own) : category === 'general' ? '' : group(label(category), own))
-                + group('General / Savoury food', general)
+                + group('General', general)
                 + group('Already ticked from other categories', others);
         }
         function wireTopicAnswerList(box, render) {

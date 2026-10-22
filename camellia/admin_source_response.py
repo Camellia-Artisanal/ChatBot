@@ -72,7 +72,7 @@ async function initSourceResponse(prefix, route) {
   {
    state.contexts=data.contexts||Array.from(new Set(['general',...state.records.map(r=>r.context)])).map(value=>({value,label:value}));
    if(state.context===null)state.context=state.records.find(r=>state.selectedIds.has(r.qa_id))?.context||'general';
-   const context=document.getElementById(prefix+'QaContext');context.replaceChildren(...state.contexts.map(o=>new Option(o.value==='general'?'General / Savoury food':o.label,o.value)));context.value=state.context;
+   const context=document.getElementById(prefix+'QaContext');context.replaceChildren(...state.contexts.map(o=>new Option(o.value==='general'?'General':o.label,o.value)));context.value=state.context;
   }
   filterSourceQa(prefix);
  } catch(error) {
@@ -151,9 +151,9 @@ function renderStoryQa(prefix='igStory'){
  box.append(chips);
  const label=value=>(state.contexts||[]).find(o=>o.value===value)?.label||value;
  const groups=state.context==='general'
-  ? [['General / Savoury food',eligible.filter(r=>r.context==='general'),true]]
+  ? [['General',eligible.filter(r=>r.context==='general'),true]]
   : [[label(state.context)+' answers',eligible.filter(r=>r.context===state.context),true],
-     ['General / Savoury food — add only if this post needs them',eligible.filter(r=>r.context==='general'),false]];
+     ['General — add only if this post needs them',eligible.filter(r=>r.context==='general'),false]];
  for(const [title,records,open] of groups){
   const shown=records.filter(record=>!query||[record.question,record.qa_id,...(record.aliases||[]),...(record.source_aliases||[])].join(' ').toLowerCase().includes(query));
   // Ticking re-renders the list; groups the admin opened or closed stay that way.

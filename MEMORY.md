@@ -75,6 +75,10 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
   client's always-forward words (complaint, discount) even on a Custom-note mapping.
 - **Every logged message carries `decision_reason`** (which answer/rule, or the handoff ref
   and reason). Read it on `/admin/conversations` before guessing why a reply happened.
+- **System Q&A (Approved Q&A → System Q&A tab):** greeting, thanks, OK, bye and the two
+  clarifying questions read `system_replies.text(id)` (override id `system_reply.<id>`, same
+  versioned store as the handoff message). Add new built-in conversation copy there, not as
+  a hard-coded string. Booking/payment answers shown there are ordinary Approved Q&A records.
 - **WhatsApp links go out short:** `<PUBLIC_BASE_URL>/w/<ref>-<6 random chars>` redirects to
   the full wa.me link (`whatsapp_short_links` table, purged with retention). The random part
   is required — refs are 5 digits and order links carry the customer's order. No valid

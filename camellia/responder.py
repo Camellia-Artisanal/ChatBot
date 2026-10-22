@@ -21,6 +21,7 @@ from camellia.text_rules import FLOWER_RE, strip_flower_emoji
 from camellia.router import shadow_router
 from camellia.triage import triage_classifier
 from camellia.database import db
+from camellia import system_replies
 from camellia.trigger_index import trigger_index
 from camellia import weekly_flyer
 from camellia import weekly_savoury
@@ -1810,9 +1811,9 @@ class DeterministicResponder:
             return finish(response, template_id, images)
 
         if ACK_ONLY_RE.fullmatch(text):
-            return finish("Got it!", "acknowledgement")
+            return finish(system_replies.text("acknowledgement"), "acknowledgement")
         if CLOSING_ONLY_RE.fullmatch(text):
-            return finish("You're welcome! Message us whenever you need anything.", "conversation_closing")
+            return finish(system_replies.text("thanks"), "conversation_closing")
 
         price_question = BARE_PRICE_QUESTION_RE.fullmatch(text)
         if price_question and not facts.get("last_topic") and not structured_owns_price:
@@ -1820,7 +1821,7 @@ class DeterministicResponder:
             # a bare price question refers to or to replay a legacy menu.
             facts["awaiting_area_confirmation"] = False
             facts["awaiting_product_price"] = True
-            return finish("Would you like prices for Sondesh or Bengali Meals?", "price_clarify_product")
+            return finish(system_replies.text("price_clarify"), "price_clarify_product")
         if facts.get("awaiting_product_price"):
             if text in {
                 "meals", "meal", "food", "khana", "bengali meal", "bengali meals",
@@ -3299,7 +3300,7 @@ class DeterministicResponder:
 
         if channel == "instagram" and facts.pop("unmapped_shared_attachment", False):
             if re.fullmatch(r"\s*(?:tell me more|more details|tell me about it)\s*[?.!]*\s*", user_message, re.I):
-                clarification = "Of course — what would you like to know more about?"
+                clarification = system_replies.text("tell_me_more_clarify")
                 facts.update({
                     "last_route_source": "UNMAPPED_SHARED_ATTACHMENT_CLARIFICATION",
                     "last_grounding": "source_identity_unavailable",

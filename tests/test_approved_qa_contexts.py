@@ -86,7 +86,7 @@ if(document.getElementById('aqDialogContent').innerHTML.includes('<input id="aqC
 if(document.getElementById('aqContext').options[1].text!=='Sandesh <legacy> (existing)')throw Error('unsafe option');
 aqEdit();if(document.getElementById('aqContext').value!=='general')throw Error('new default');
 '''
-    result = subprocess.run([node, '-e', harness + script + check], capture_output=True, text=True)
+    result = _run_node(node, harness + script + check)
     assert result.returncode == 0, result.stderr
 
 
@@ -111,7 +111,7 @@ aqRender();
 const list=()=>document.getElementById('aqList').innerHTML;
 if(!list().includes('General Q')||list().includes('Sondesh Q'))throw Error('default is not General only');
 const picker=document.getElementById('aqCategoryFilter');
-if(picker.options.map(o=>o.text).join('|')!=='General / Savoury food (1)|Sondesh (2)|All categories (3)')throw Error('options '+picker.options.map(o=>o.text));
+if(picker.options.map(o=>o.text).join('|')!=='General (1)|Sondesh (2)|All categories (3)')throw Error('options '+picker.options.map(o=>o.text));
 picker.value='sondesh';aqCategoryChanged();
 if(list().includes('General Q')||!list().includes('Sondesh Q2'))throw Error('sondesh filter');
 aqEdit();
@@ -133,7 +133,7 @@ if(document.getElementById('aqMappedQuestions').value!==['Sondesh box cost?','Ra
 picker.value='all';aqCategoryChanged();
 if(!list().includes('General Q')||!list().includes('Sondesh Q2'))throw Error('all');
 '''
-    result = subprocess.run([node, '-e', harness + script + check], capture_output=True, text=True)
+    result = _run_node(node, harness + script + check)
     assert result.returncode == 0, result.stderr
 
 
@@ -165,5 +165,16 @@ html=topicAnswerListHtml(records,contexts,new Set(),topicAnswerCategory({name:'D
 if(!html.includes('<option value="general" selected>'))throw Error('general option not selected');
 if(!html.includes('General price')||html.includes('Sondesh price'))throw Error('general only');
 '''
-    result = subprocess.run([node, '-e', helpers + check], capture_output=True, text=True)
+    result = _run_node(node, helpers + check)
     assert result.returncode == 0, result.stderr
+
+
+def _run_node(node, source):
+    """Run JS from a file: the admin script is too long for a Windows command line."""
+    import tempfile, os
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as handle:
+        handle.write(source)
+    try:
+        return subprocess.run([node, handle.name], capture_output=True, text=True)
+    finally:
+        os.unlink(handle.name)

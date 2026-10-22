@@ -323,7 +323,7 @@ function inputs(node){return [...(node.tag==='input'?[node]:[]),...(node.childre
  if(checkboxes.find(c=>c.value==='payment').checked)throw Error('General auto-selected');
  if(checkboxes.find(c=>c.value==='other'))throw Error('cross context');
  if(!checkboxes.find(c=>c.value==='price').checked)throw Error('legacy not checked');
- if(!text(box).includes('General / Savoury food')||!text(box).includes('Price <unsafe>'))throw Error('groups/labels');
+ if(!text(box).includes('General')||!text(box).includes('Price <unsafe>'))throw Error('groups/labels');
  const payment=checkboxes.find(c=>c.value==='payment');payment.checked=true;payment.onchange();
  if(document.getElementById('igStoryQaCount').textContent!=='Selected: 2')throw Error('count');
  document.getElementById('igStoryQaSearch').value='details';filterSourceQa('igStory');

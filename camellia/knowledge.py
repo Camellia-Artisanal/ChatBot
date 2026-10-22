@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from camellia.understanding import BusinessAction, Intent, UnderstandingResult
+from camellia import system_replies
 
 # The one preferred source of truth per business domain. Where the same fact is
 # reachable from more than one place, the first entry wins and the others are
@@ -391,7 +392,7 @@ class ApprovedKnowledgeService:
                     knowledge_id="conversation:price_clarification",
                     intent=intent,
                     template_id="price_clarify_product",
-                    approved_response=self.PRICE_CLARIFICATION,
+                    approved_response=system_replies.text("price_clarify"),
                     source_ref="responder.price_clarification",
                     actions=(SEND.value,),
                     domain="prices",

@@ -100,6 +100,12 @@ HTML = r'''
 <div id="tab-approved-qa" class="panel-card" data-group="approved_qa" style="display:none;">
  <div class="admin-page-heading"><div><h2>Approved Q&amp;A</h2><p>Only client-approved answers are managed here. Preview your changes before publishing.</p></div><button class="btn-secondary" onclick="aqEdit()">+ Add Approved Q&amp;A</button></div>
  <div id="aqMessage" role="status" class="result-box" style="display:none;"></div>
+ <div role="tablist" aria-label="Approved Q&amp;A views" style="display:flex;gap:8px;margin:8px 0 4px;">
+  <button type="button" role="tab" id="aqTabMain" class="btn-secondary active" onclick="aqShowView('main')">Approved Q&amp;A</button>
+  <button type="button" role="tab" id="aqTabSystem" class="btn-secondary" onclick="aqShowView('system')">System Q&amp;A</button>
+ </div>
+ <div id="aqSystemView" style="display:none;"></div>
+ <div id="aqMainView">
  <div id="aqCounts" class="admin-kpi-grid"></div>
  <div style="display:flex;gap:10px;flex-wrap:wrap;margin:16px 0;">
   <select id="aqCategoryFilter" aria-label="Show answers in this category" class="field-control" style="max-width:280px" onchange="aqCategoryChanged()"></select>
@@ -108,6 +114,7 @@ HTML = r'''
  </div>
  <p id="aqFilterLabel">Active</p><div id="aqList"></div>
  <details style="margin-top:18px"><summary>Test a customer question (nothing is sent)</summary><label for="aqTestQuestion">Customer wording</label><input id="aqTestQuestion" class="field-control"><button class="btn-secondary" onclick="aqTest()">Test</button><pre id="aqTestResult" style="white-space:pre-wrap"></pre></details>
+ </div>
  <dialog id="aqDialog" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);margin:0;width:min(800px,95vw);max-height:90vh;overflow:auto;border:1px solid #ddd;border-radius:12px;padding:24px;">
   <button class="btn-secondary" style="float:right" onclick="document.getElementById('aqDialog').close()">Close</button><div id="aqDialogContent"></div>
  </dialog>
@@ -141,10 +148,9 @@ function aqVariationList(record) {
 async function loadApprovedQa() { if(!adminAuthenticated)return;try { const data=await aqApi();aqRecords=data.records;aqContexts=data.contexts||[];aqRoles=data.mapped_roles||[];document.getElementById('aqCounts').innerHTML=Object.entries(data.counts).map(([key,count])=>`<div class="admin-kpi"><div class="admin-kpi-label">${escapeHtml(key.replaceAll('_',' '))}</div><div class="admin-kpi-value">${count}</div></div>`).join('');aqRender(); }catch(e){aqMessage(e.message,true);} }
 // 21 Oct: one category at a time (Sondesh, General, …) instead of every answer mixed.
 let aqCategory = (()=>{ try { return localStorage.getItem('aqCategory') || 'general'; } catch(_) { return 'general'; } })();
-// The bot's "general" answers are the savoury food ones (price, details, booking,
-// payment); the name says so. Display only: the stored context stays "general",
-// which the bot uses for customers with no ad and on every checklist.
-const AQ_GENERAL_LABEL='General / Savoury food';
+// "general" is its own category (not Savoury): the bot uses it for customers
+// with no ad and offers it on every checklist. 22 Oct: shown as plain "General".
+const AQ_GENERAL_LABEL='General';
 function aqOptionLabel(option) { return option.value==='general'?AQ_GENERAL_LABEL:option.label; }
 function aqContextLabel(value) {
  if(value==='general')return AQ_GENERAL_LABEL;
@@ -162,6 +168,63 @@ function aqCategoryOptions() {
  select.value=aqCategory;
 }
 function aqCategoryChanged() { aqCategory=document.getElementById('aqCategoryFilter').value;try{localStorage.setItem('aqCategory',aqCategory);}catch(_){}aqRender(); }
+// 23 Oct: System Q&A — booking/ordering answers, the built-in conversation
+// replies (Hi, Thanks, OK, Bye, clarifying questions) and the handoff message.
+const AQ_SYSTEM_QA_IDS=['order_prebook','alacarte_prebook','order_ready_handoff','general_payment_client','home_table_payment','delivery_out_of_area_client'];
+const AQ_SYSTEM_QA_LABELS={order_prebook:'Pre-booking steps — orders',alacarte_prebook:'Pre-booking steps — à la carte',order_ready_handoff:'Customer is ready to order',general_payment_client:'How to pay',home_table_payment:'How to pay — Home Table',delivery_out_of_area_client:'Delivery outside our area'};
+function aqShowView(view) {
+ const system=view==='system';
+ document.getElementById('aqMainView').style.display=system?'none':'';
+ document.getElementById('aqSystemView').style.display=system?'':'none';
+ document.getElementById('aqTabMain').classList.toggle('active',!system);
+ document.getElementById('aqTabSystem').classList.toggle('active',system);
+ if(system)aqLoadSystem();
+}
+function aqSystemCard(inner) { return `<article style="border:1px solid var(--border);padding:16px;border-radius:10px;margin-bottom:12px">${inner}</article>`; }
+async function aqLoadSystem() {
+ const box=document.getElementById('aqSystemView');
+ box.innerHTML='<p>Loading…</p>';
+ let replies=[], handoff=null;
+ try {
+  const [r,h]=await Promise.all([
+   fetch('/admin/system-replies',{headers:getAuthHeaders(),cache:'no-store'}).then(x=>{if(!x.ok)throw Error('System replies are unavailable.');return x.json();}),
+   fetch('/admin/handoff-message',{headers:getAuthHeaders(),cache:'no-store'}).then(x=>{if(!x.ok)throw Error('Handoff message is unavailable.');return x.json();}),
+  ]);
+  replies=r.replies||[]; handoff=h;
+ } catch(e) { box.innerHTML=`<p class="result-box error">${escapeHtml(e.message)}</p>`; return; }
+ const booking=AQ_SYSTEM_QA_IDS.map(id=>aqRecords.find(r=>r.qa_id===id&&r.status==='ACTIVE')).filter(Boolean);
+ const bookingHtml=booking.map(r=>{const n=aqVariations(r).length;return aqSystemCard(`<h3 style="margin:0 0 2px">${escapeHtml(AQ_SYSTEM_QA_LABELS[r.qa_id]||r.question)}</h3><p style="opacity:.75;margin:0 0 6px">Question: ${escapeHtml(r.question)}</p><p style="white-space:pre-wrap;margin:0 0 8px">${escapeHtml(r.answer.slice(0,220))}${r.answer.length>220?'…':''}</p><p style="opacity:.75;margin:0 0 8px">${n} accepted question variation${n===1?'':'s'} · add more (e.g. “How to book?”) in Edit</p><button class="btn-secondary" data-aq-system-edit="${escapeHtml(r.qa_id)}">Edit</button>`);}).join('')||'<p>No booking answers found.</p>';
+ const replyHtml=replies.map(r=>aqSystemCard(`<h3 style="margin:0 0 4px">${escapeHtml(r.label)} ${r.edited?'<small style="font-weight:500;opacity:.75">· Edited</small>':''}</h3><p style="opacity:.75;margin:0 0 8px">When the customer says: ${escapeHtml(r.trigger)}</p><textarea class="field-control" rows="3" data-aq-system-text="${escapeHtml(r.id)}"></textarea><div style="margin-top:8px;display:flex;gap:8px"><button class="btn-secondary" data-aq-system-save="${escapeHtml(r.id)}">Save</button>${r.edited?`<button class="btn-secondary" data-aq-system-reset="${escapeHtml(r.id)}">Reset to default</button>`:''}</div>`)).join('');
+ const handoffHtml=aqSystemCard(`<h3 style="margin:0 0 4px">Handoff message ${handoff.is_custom?'<small style="font-weight:500;opacity:.75">· Edited</small>':''}</h3><p style="opacity:.75;margin:0 0 8px">Sent whenever the bot passes a customer to the manager.</p><textarea class="field-control" rows="4" id="aqSystemHandoff"></textarea><div style="margin-top:8px;display:flex;gap:8px"><button class="btn-secondary" onclick="aqSaveHandoff()">Save</button>${handoff.is_custom?'<button class="btn-secondary" onclick="aqResetHandoff()">Reset to default</button>':''}</div>`);
+ box.innerHTML=`<p id="aqSystemNote" role="status" style="min-height:1.2em"></p><h3 style="margin:12px 0 8px">Booking &amp; ordering</h3>${bookingHtml}<h3 style="margin:20px 0 8px">Conversation replies</h3>${replyHtml}<h3 style="margin:20px 0 8px">Handoff</h3>${handoffHtml}`;
+ for(const r of replies){const area=box.querySelector(`[data-aq-system-text="${CSS.escape(r.id)}"]`);if(area)area.value=r.text;}
+ document.getElementById('aqSystemHandoff').value=handoff.message||'';
+ box.querySelectorAll('[data-aq-system-edit]').forEach(b=>b.onclick=()=>aqEdit(b.dataset.aqSystemEdit));
+ box.querySelectorAll('[data-aq-system-save]').forEach(b=>b.onclick=()=>aqSaveSystemReply(b.dataset.aqSystemSave));
+ box.querySelectorAll('[data-aq-system-reset]').forEach(b=>b.onclick=()=>aqResetSystemReply(b.dataset.aqSystemReset));
+}
+function aqSystemNote(text,error=false) { const el=document.getElementById('aqSystemNote');if(!el)return;el.textContent=text;el.style.color=error?'var(--danger)':''; }
+async function aqSystemCall(url,method,payload) {
+ const response=await fetch(url,{method,headers:{...getAuthHeaders(),'Content-Type':'application/json'},...(payload?{body:JSON.stringify(payload)}:{})});
+ const data=await response.json().catch(()=>({}));
+ if(!response.ok)throw Error(data.detail||'Could not save.');
+ return data;
+}
+async function aqSaveSystemReply(id) {
+ const area=document.querySelector(`[data-aq-system-text="${CSS.escape(id)}"]`);
+ try{await aqSystemCall('/admin/system-replies/'+encodeURIComponent(id),'PUT',{text:area.value});await aqLoadSystem();aqSystemNote('Saved. Customers get the new reply from now on.');}catch(e){aqSystemNote(e.message,true);}
+}
+async function aqResetSystemReply(id) {
+ if(!confirm('Go back to the original reply?'))return;
+ try{await aqSystemCall('/admin/system-replies/'+encodeURIComponent(id)+'/reset','POST');await aqLoadSystem();aqSystemNote('Back to the original reply.');}catch(e){aqSystemNote(e.message,true);}
+}
+async function aqSaveHandoff() {
+ try{await aqSystemCall('/admin/handoff-message','PUT',{message:document.getElementById('aqSystemHandoff').value});await aqLoadSystem();aqSystemNote('Handoff message saved.');}catch(e){aqSystemNote(e.message,true);}
+}
+async function aqResetHandoff() {
+ if(!confirm('Go back to the original handoff message?'))return;
+ try{await aqSystemCall('/admin/handoff-message/reset','POST');await aqLoadSystem();aqSystemNote('Handoff message reset.');}catch(e){aqSystemNote(e.message,true);}
+}
 function aqFilter(value) { aqStatus=value;document.getElementById('aqFilterLabel').textContent=value==='ARCHIVED'?'Archived / Expired':value.replaceAll('_',' ');aqRender(); }
 function aqRender() {
  const search=document.getElementById('aqSearch').value.toLowerCase();

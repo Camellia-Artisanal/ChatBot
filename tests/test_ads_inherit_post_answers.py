@@ -204,10 +204,11 @@ adsWorkspace = {items:[{ad_id:'1',name:'YOU HOST',mapped:true,mapping:mapped,bin
                 routes:[],counts:{},sync:{},running_groups:[{member_ad_ids:['1','2'],delivering_ad_ids:['1','2']}]};
 adsFilter = 'running'; renderAdsWorkspace();
 assert(nodes.adsList.innerHTML.includes('data-ads-group-map="2"'));
-// An ad Meta gives no post link for gets one button, not two that do the same.
+// An ad Meta gives no post link for: Map Ad opens its own (ad-only) mapping, and
+// it can still be attached to an existing Post/Reel mapping (22 Oct).
 adsWorkspace.items = [{ad_id:'3',name:'YOU HOST _Group_1',mapped:false,history:[],answer_status:'NONE'}];
 adsFilter = 'all'; renderAdsWorkspace();
-assert(nodes.adsList.innerHTML.includes('data-ads-action="map"') && !nodes.adsList.innerHTML.includes('data-ads-action="choose"'));
+assert(nodes.adsList.innerHTML.includes('data-ads-action="map"') && nodes.adsList.innerHTML.includes('Use an existing Post/Reel'));
 '''
     target = tmp_path / "group-map.js"
     target.write_text(script, encoding="utf-8")

@@ -361,7 +361,7 @@ function inputs(node){return [...(node.tag==='input'?[node]:[]),...(node.childre
  for(const prefix of ['ig','igMedia']){
   const box=document.getElementById(prefix+'QaChecklist');const checks=inputs(box);
   if(!checks.find(c=>c.value==='price').checked||checks.find(c=>c.value==='payment').checked||checks.find(c=>c.value==='home'))throw Error('legacy/filter/general');
-  if(!text(box).includes('Price <unsafe>')||!text(box).includes('General / Savoury food'))throw Error('labels');
+  if(!text(box).includes('Price <unsafe>')||!text(box).includes('General'))throw Error('labels');
   const pay=checks.find(c=>c.value==='payment');pay.checked=true;pay.onchange();
   if(document.getElementById(prefix+'QaCount').textContent!=='Selected: 2')throw Error('count');
   document.getElementById(prefix+'QaSearch').value='details';filterSourceQa(prefix);
