@@ -50,7 +50,7 @@ def validate(context, qa_ids, rows):
     effective = {entry.qa_id: entry for entry in approved_qa.registry(rows)}
     if any(key not in effective for key in qa_ids):
         raise ValueError('Every selected Q&A must be effective')
-    if any(effective[key].context not in {context, 'general'} for key in qa_ids):
+    if any(effective[key].context != context and not approved_qa.usable_everywhere(effective[key]) for key in qa_ids):
         raise ValueError('Selected Q&A must belong to the exact context or explicit General group')
     for question, answers in approved_qa.mapped_collisions(qa_ids, rows):
         raise ValueError(f'"{question}" is used by both "{answers[0]}" and "{answers[1]}" on this post. '
@@ -92,7 +92,7 @@ def effective(database, bundle):
     with database.get_connection() as conn:
         rows = approved_qa._read(conn)
     allowed = {entry.qa_id for entry in approved_qa.registry(rows)
-               if entry.qa_id in bundle['approved_qa_ids'] and entry.context in {bundle['story_context'], 'general'}}
+               if entry.qa_id in bundle['approved_qa_ids'] and (entry.context == bundle['story_context'] or approved_qa.usable_everywhere(entry))}
     return rows, allowed
 
 

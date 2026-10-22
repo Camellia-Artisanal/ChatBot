@@ -141,7 +141,8 @@ function renderStoryQa(prefix='igStory'){
  const box=document.getElementById(prefix+'QaChecklist');box.replaceChildren();box.style.maxHeight='none';state.openGroups=state.openGroups||{};state.openAnswers=state.openAnswers||{};
  document.getElementById(prefix+'QaCount').textContent='Selected: '+state.selectedIds.size;
  const query=document.getElementById(prefix+'QaSearch').value.trim().toLowerCase();
- const eligible=state.records.filter(r=>r.context===state.context||r.context==='general');
+ const everywhere=r=>r.context==='general'||r.shared;
+ const eligible=state.records.filter(r=>r.context===state.context||everywhere(r));
  const byId=Object.fromEntries(state.records.map(r=>[r.qa_id,r]));
  const chips=document.createElement('div');chips.style.cssText='display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px';
  for(const key of state.selectedIds){const record=byId[key];if(!record||!eligible.includes(record))continue;
@@ -151,9 +152,9 @@ function renderStoryQa(prefix='igStory'){
  box.append(chips);
  const label=value=>(state.contexts||[]).find(o=>o.value===value)?.label||value;
  const groups=state.context==='general'
-  ? [['General',eligible.filter(r=>r.context==='general'),true]]
+  ? [['General',eligible.filter(everywhere),true]]
   : [[label(state.context)+' answers',eligible.filter(r=>r.context===state.context),true],
-     ['General — add only if this post needs them',eligible.filter(r=>r.context==='general'),false]];
+     ['General — add only if this post needs them',eligible.filter(r=>everywhere(r)&&r.context!==state.context),false]];
  for(const [title,records,open] of groups){
   const shown=records.filter(record=>!query||[record.question,record.qa_id,...(record.aliases||[]),...(record.source_aliases||[])].join(' ').toLowerCase().includes(query));
   // Ticking re-renders the list; groups the admin opened or closed stay that way.

@@ -328,7 +328,7 @@ def match(message, facts=None, *, rows=None, allowed_qa_ids=None, product_fallba
     original = client_qa._match_base(message, facts)
     if allowed_qa_ids is not None:
         independent = client_qa._match_base(message, {})
-        if independent and independent.entry.qa_id in active and active[independent.entry.qa_id].context == "general":
+        if independent and independent.entry.qa_id in active and usable_everywhere(active[independent.entry.qa_id]):
             exact.add(independent.entry.qa_id)
     if original and original.entry.qa_id in active:
         # Existing QA-S1 semantic authority also participates in ambiguity checks.
@@ -368,10 +368,21 @@ def match(message, facts=None, *, rows=None, allowed_qa_ids=None, product_fallba
     return client_qa.ApprovedMatch(entry, kind, assets)
 
 
+# 23 Oct: "whats the price" and "Can you tell me more about this" belong to
+# Savoury, but they are also the answers for customers with no ad and are
+# ticked on posts of every category. They stay usable everywhere, exactly as
+# General answers are, whatever category they are filed under.
+SHARED_ANSWER_IDS = frozenset({"general_price", "general_details"})
+
+
+def usable_everywhere(entry) -> bool:
+    return entry.context == "general" or entry.qa_id in SHARED_ANSWER_IDS
+
+
 def _record(entry, row):
     derived = status(row)
     end = parse_date(row.get("valid_until"))
-    return {"qa_id": entry.qa_id, "question": entry.question, "answer": entry.answer,
+    return {"qa_id": entry.qa_id, "question": entry.question, "answer": entry.answer, "shared": entry.qa_id in SHARED_ANSWER_IDS,
             "context": entry.context, "aliases": json.loads(row.get("aliases_json", "[]")),
             "source_aliases": _builtin_aliases(entry.qa_id, {entry.qa_id: row}),
             "hidden_aliases": json.loads(row.get("hidden_aliases_json") or "[]"),

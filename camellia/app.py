@@ -3476,6 +3476,12 @@ def _health_details():
             f"{ad_gaps} ad(s) customers messaged from this week would not answer "
             "\"How much does it cost?\" with an approved answer — see Admin → Ads."
         )
+    try:
+        from camellia.setup_check import check as setup_check
+        for problem in setup_check(db):
+            warnings.append(f"Setup check: {problem['message']} ({problem['count']}) — {problem['fix']}")
+    except Exception:
+        log.exception("Setup check failed during /health.")
     if not storage["database"]["expected_durable"]:
         warnings.append(
             f"Database is at {storage['database']['path']}, which is inside the "
@@ -4833,6 +4839,14 @@ def reset_handoff_message(x_admin_key: Optional[str] = Header(None), x_admin_pin
     db.reset_response_template_override(human_handoff.HANDOFF_MESSAGE_OVERRIDE_ID, actor)
     _realign_handoff_copy()
     return {"status": "success", **_handoff_message_state()}
+
+
+@app.get("/admin/setup-check")
+def get_setup_check(x_admin_key: Optional[str] = Header(None), x_admin_pin: Optional[str] = Header(None)):
+    """Settings that silently send customers to the manager (23 Oct)."""
+    require_admin(x_admin_key, x_admin_pin)
+    from camellia.setup_check import check
+    return {"problems": check(db)}
 
 
 @app.get("/admin/system-replies")
@@ -8060,6 +8074,7 @@ def get_admin_dashboard():
                 <div class="admin-kpi"><div class="admin-kpi-label">Active Stories</div><div class="admin-kpi-value" id="dashStories">—</div><div class="admin-kpi-note">Exact-ID sources</div></div>
                 <div class="admin-kpi"><div class="admin-kpi-label">Unmapped content</div><div class="admin-kpi-value" id="dashUnmapped">—</div><div class="admin-kpi-note">Stories, Posts &amp; Reels</div></div>
             </div>
+            <div id="dashSetupCheck" style="margin:0 0 16px;"></div>
             <div class="dashboard-subcard" style="margin:0;background:#fbfcfd;border:1px solid var(--border);border-radius:14px;padding:18px;"><div class="admin-page-heading" style="margin-bottom:12px;"><div><h3 style="color:var(--primary);">System pulse</h3><p>Recent routing activity and health stay lightweight here; operational detail lives in the dedicated workspaces.</p></div><span class="ig-media-status" id="dashHealthStatus">Checking</span></div><div id="dashRecentActivity" class="handoff-list"><span class="ig-media-muted">Loading recent activity…</span></div></div>
         </div>
 
@@ -9461,8 +9476,22 @@ THIS WEEK'S BENGAL SPECIALS
             if (element) element.innerText = value == null || value === '' ? '—' : String(value);
         }
 
+        // 23 Oct: settings that silently send customers to the manager.
+        async function loadSetupCheck() {
+            const box = document.getElementById('dashSetupCheck');
+            if (!box || !adminAuthenticated) return;
+            try {
+                const response = await fetch('/admin/setup-check', { headers: getAuthHeaders(), cache: 'no-store' });
+                if (!response.ok) throw new Error('unavailable');
+                const problems = (await response.json()).problems || [];
+                box.innerHTML = problems.length
+                    ? `<div class="dashboard-subcard" style="background:#fff8ec;border:1px solid #f0c36d;border-radius:14px;padding:18px;"><b>⚠ Setup check — ${problems.length} thing${problems.length === 1 ? '' : 's'} sending customers to the manager</b>${problems.map(p => `<details style="margin-top:10px;"><summary><b>${escapeHtml(p.message)}</b> (${Number(p.count)})</summary><p style="margin:6px 0;"><b>Fix:</b> ${escapeHtml(p.fix)}</p><ul style="margin:4px 0 0 18px;">${p.items.map(item => `<li style="overflow-wrap:anywhere;">${escapeHtml(item)}</li>`).join('')}</ul></details>`).join('')}</div>`
+                    : '<div class="dashboard-subcard" style="border:1px solid var(--border);border-radius:14px;padding:14px;">✅ Setup check: nothing is quietly sending customers to the manager.</div>';
+            } catch (_) { box.innerHTML = ''; }
+        }
         async function loadDashboardOverview() {
             if (!adminAuthenticated) return;
+            loadSetupCheck();
             try {
                 const responses = await Promise.all([
                     fetch('/admin/handoffs?limit=100&include_resumed=true', { headers: getAuthHeaders() }),

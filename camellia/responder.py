@@ -2808,7 +2808,7 @@ class DeterministicResponder:
             return bool(client_qa._match_subjects(normalized)) or bool(
                 OPENING_HOURS_RE.search(wording) or GREETING_ONLY_RE.fullmatch(wording.strip())
                 or menu_review.weekly_menu_browsing(wording) or order_intake.is_new_order_request(wording)) or bool(
-                global_match and global_match.entry.context == "general"
+                global_match and approved_qa.usable_everywhere(global_match.entry)
                 and not source_referential_intent(wording) and not is_payment_method_request(wording)
                 and not contextual_wording
                 and not re.search(r"\b(?:it|this|that)\b", normalized))

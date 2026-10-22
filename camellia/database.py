@@ -3248,6 +3248,26 @@ class Database:
                 """,
                 (media_id, media_id, media_id, media_id),
             ).fetchall()
+            if not rows:
+                # 23 Oct: a Post mapped from its link has no media id, so a
+                # share of it never matched (Kolkata Home Table post #144).
+                # Fall back to the post's link, known from the synced media
+                # library or from an ad that promotes it.
+                from camellia.instagram_routing import normalize_instagram_url
+                links = [row[0] for row in conn.execute(
+                    "SELECT permalink FROM instagram_media WHERE instagram_media_id=? AND permalink IS NOT NULL "
+                    "UNION SELECT instagram_permalink_url FROM instagram_ads_inventory "
+                    "WHERE effective_instagram_media_id=? AND instagram_permalink_url IS NOT NULL",
+                    (media_id, media_id),
+                ).fetchall()]
+                canonical = {normalize_instagram_url(link).get("canonical_url") for link in links if link}
+                canonical.discard(None)
+                if len(canonical) == 1:
+                    rows = conn.execute(
+                        "SELECT * FROM instagram_source_routes WHERE active=1 AND archived_at IS NULL "
+                        "AND source_type='post' AND canonical_url=? LIMIT 2",
+                        (canonical.pop(),),
+                    ).fetchall()
         return dict(rows[0]) if len(rows) == 1 else None
 
     # --- Dynamic menu catalogue ---------------------------------------------
