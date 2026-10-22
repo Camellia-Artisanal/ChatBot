@@ -6,6 +6,7 @@ customer sharing the post got "unmapped" and the manager handoff.
 from camellia.instagram_routing import route_for_inbound
 
 from test_instagram_ads_inventory import item, route, store, sync  # noqa: F401
+from test_ad_mapped_source_context import ad_customer, _ad_entry, _mapped_source, _process  # noqa: F401
 
 SHARED_ID = "18002504423797970"
 
@@ -32,3 +33,27 @@ def test_an_unknown_share_stays_unmapped(store, monkeypatch):
     monkeypatch.setattr("camellia.database.db", store)
     route(store, code="DevLtwmgIMF", media_id=None)
     assert route_for_inbound(ad_id=None, media_id=None, post_media_id="999", source_type="post")[0] is None
+
+
+def test_a_posts_own_price_answer_is_not_blocked_by_an_expired_weekly_menu(ad_customer, monkeypatch):
+    # 23 Oct: Kolkata Home Table post/reel replies went to the manager because
+    # the weekly savoury menu had expired; that menu has nothing to do with them.
+    from camellia import responder as responder_module
+    monkeypatch.setattr(responder_module.menu_review, "menu_question_blocked", lambda *a, **k: True)
+    sender, facts, db = ad_customer
+    _mapped_source(ad_customer, "post", "ad-sondesh", topic_name="Sondesh", response_mode="APPROVED_QA",
+                   approved_qa_ids=["sondesh_price_client"], source_context="sondesh")
+    _process(ad_customer, "How much does it cost?", _ad_entry(sender, "ad-sondesh", "How much does it cost?"))
+    row = db.get_conversations(limit=1, channel="instagram", user_id=sender)[0]
+    assert "handoff" not in row["template_id"] and not db.get_active_handoff("instagram", sender)
+
+
+def test_a_savoury_price_answer_still_waits_for_the_weekly_menu(ad_customer, monkeypatch):
+    from camellia import responder as responder_module
+    monkeypatch.setattr(responder_module.menu_review, "menu_question_blocked", lambda *a, **k: True)
+    sender, facts, db = ad_customer
+    _mapped_source(ad_customer, "post", "ad-savoury", topic_name="Savoury", response_mode="APPROVED_QA",
+                   approved_qa_ids=["general_price"], source_context="general")
+    _process(ad_customer, "How much does it cost?", _ad_entry(sender, "ad-savoury", "How much does it cost?"))
+    row = db.get_conversations(limit=1, channel="instagram", user_id=sender)[0]
+    assert "handoff" in row["template_id"]

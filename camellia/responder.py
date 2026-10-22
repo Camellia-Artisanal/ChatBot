@@ -151,6 +151,17 @@ def _approved_chicken_kosha_price_question(message: str, facts: Dict[str, Any]) 
     return bool(candidate and candidate.entry.qa_id == "chicken_kosha_price_client")
 
 
+_WEEKLY_MENU_CONTEXTS = {"general", "savoury", "savoury_deliveries"}
+
+
+def _mapped_answer_independent_of_weekly_menu(match) -> bool:
+    """A post's own approved answer that never sends the weekly savoury menu."""
+    if not match:
+        return False
+    from camellia import approved_qa
+    return match.entry.qa_id not in approved_qa.SHARED_ANSWER_IDS and match.entry.context not in _WEEKLY_MENU_CONTEXTS
+
+
 def _pending_menu_affects_question(message: str, facts: Dict[str, Any]) -> bool:
     """Fail closed only when the pending menu can supersede the asked fact."""
     pending = menu_review.pending_review_keys()
@@ -3126,7 +3137,11 @@ class DeterministicResponder:
         stable_primary_answer = bool((primary_qa and primary_qa.entry.qa_id in {
             "bento_details_client", "bento_price_client", "best_time_to_book",
             "savoury_delivery_time", "sondesh_delivery_time", "order_prebook", "alacarte_prebook",
-        }) or (bento_authority and _bento_grounded_comparison(user_message, bento_authority.answer)))
+        }) or (bento_authority and _bento_grounded_comparison(user_message, bento_authority.answer))
+            # 23 Oct: a post's own answer (e.g. Kolkata Home Table price) does not
+            # depend on the weekly savoury menu; an expired weekly menu sent it
+            # to the manager. General/Savoury answers still wait for the menu.
+            or _mapped_answer_independent_of_weekly_menu(mapped_qa_match))
         pending_menu = (
             channel == "instagram"
             and not stable_primary_answer
