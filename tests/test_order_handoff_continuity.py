@@ -102,7 +102,7 @@ def test_explicit_new_order_never_preloads_snapshot(customer, message):
     text = reply(uid, message)[0]
     assert "https://wa.me/" in text and not facts["order_intake_referred"]
     assert facts["order_intake_draft"] == new_order_draft()
-    assert "Items & quantity" not in unquote(text)
+    assert "1. Items & quantity:\n" in unquote(text)
     reply(uid, "3 boxes Chicken Bento Noida Saturday lunch")
     assert facts["order_intake_draft"]["receiver_phone"] is None
 

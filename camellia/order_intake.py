@@ -296,7 +296,8 @@ def _structured_fields(text: str) -> dict:
 
 
 def _extract_customer_item(text: str) -> str | None:
-    candidate = str(text or "")
+    # "Hello I'd like place a Sandesh" became the item verbatim (25 Oct).
+    candidate = re.sub(r"^\s*(?:hi+|hello|hey+|namaste|good\s+(?:morning|afternoon|evening))\b[\s,!.]*", "", str(text or ""), flags=re.I)
     process_prefix = _HOW_TO_ORDER_RE.match(candidate.strip())
     if process_prefix:
         candidate = candidate.strip()[process_prefix.end():]
@@ -304,7 +305,7 @@ def _extract_customer_item(text: str) -> str | None:
         r"^\s*how\s+(?:do\s+i|can\s+i|to)\s+(?:place\s+)?(?:an?\s+)?order\s*",
         "", candidate, flags=re.I,
     )
-    candidate = re.sub(r"^\s*(?:need|i\s+want|i\s+would\s+like|i['’]d\s+like|please\s+order)\s+(?:to\s+order\s+)?", "", candidate, flags=re.I)
+    candidate = re.sub(r"^\s*(?:need|i\s+want|i\s+would\s+like|i['’]d\s+like|please\s+order|can\s+i\s+(?:get|have|order))\s+(?:to\s+order\s+)?", "", candidate, flags=re.I)
     # "place a Sandesh order" / "book 2 boxes Sondesh": the item is what sits between.
     candidate = re.sub(r"^\s*(?:to\s+)?(?:place|make(?!\s+it\b)|book|pre-?book)\s+(?:an?\s+)?(?!order\b)", "", candidate, flags=re.I)
     candidate = re.sub(r"(?<=\w)\s+order(?:\s+please)?\s*[.!?]*\s*$", "", candidate, flags=re.I)
@@ -450,17 +451,19 @@ def request_summary(draft: dict) -> str:
 
 
 def provided_details(draft: dict) -> str:
-    """Only what the customer gave: "Not provided" lines in the WhatsApp prefill
-    had to be deleted by hand before typing (24 Oct)."""
+    """The client's WhatsApp order template (25 Oct): every line is shown, blank
+    when the customer has not said it yet, so they only type after the colon."""
     item_quantity = " ".join(value for value in (draft.get("quantity"), draft.get("item")) if value)
     rows = (
-        ("Items & quantity", item_quantity),
-        ("Delivery address/area", draft.get("delivery_address") or draft.get("delivery_area")),
-        ("Receiver phone", draft.get("receiver_phone")),
-        ("Preferred slot", draft.get("delivery_slot")),
-        ("Location pin", draft.get("location_pin")),
+        ("1. Items & quantity:", item_quantity),
+        ("2. Delivery address:", draft.get("delivery_address") or draft.get("delivery_area")),
+        ("3. Receiver phone:", draft.get("receiver_phone")),
+        ("4. Preferred slot (date & time when uu want the delivery):", draft.get("delivery_slot")),
     )
-    return "\n".join(f"{label}: {value}" for label, value in rows if value)
+    lines = [f"{label} {value}" if value else label for label, value in rows]
+    if draft.get("location_pin"):
+        lines.append(f"Location pin: {draft['location_pin']}")
+    return "ORDER DRAFT\n\n" + "\n".join(lines)
 
 
 def whatsapp_draft_link(draft: dict, *, reference: str | None = None) -> str:
@@ -468,8 +471,8 @@ def whatsapp_draft_link(draft: dict, *, reference: str | None = None) -> str:
     parts = ["Hi, I'd like to place a pre-order with Camellia Artisanal."]
     if reference:
         parts.append(f"Camellia reference: {reference}")
-    if details := provided_details(draft):
-        parts.append(details)
+    parts.append(provided_details(draft))
+    parts.append("Our manager will review availability, delivery charges, and the final invoice.")
     text = "\n\n".join(parts)
     return f"https://wa.me/{number}?text={quote(text)}"
 
@@ -503,6 +506,14 @@ def is_link_resend_request(message: str) -> bool:
         r"(?:send (?:the )?whatsapp link(?: again)?|where is (?:the )?whatsapp link|"
         r"whatsapp link please|send (?:the )?link(?: again)?|how do i continue on whatsapp|"
         r"(?:show|resend) (?:me )?(?:my|the) order(?: draft)?)", text,
+    ))
+
+
+def is_repeated_order_ask(message: str) -> bool:
+    """Asking to order again gets the full answer and link, not "unchanged" (25 Oct)."""
+    return bool(re.search(
+        r"\b(?:place|book|pre-?book)\b|\b(?:want|like|need)\s+to\s+order\b|\border\s+please\b",
+        str(message or ""), re.I,
     ))
 
 
@@ -540,7 +551,7 @@ def is_order_detail_message(message: str) -> bool:
 
 def present_draft(facts: dict, draft: dict, message: str) -> str:
     fingerprint = draft_fingerprint(draft)
-    force = is_link_resend_request(message) or is_order_process_question(message) or is_new_order_request(message)
+    force = is_link_resend_request(message) or is_order_process_question(message) or is_new_order_request(message) or is_repeated_order_ask(message)
     if not force and facts.get("order_intake_last_presented_fingerprint") == fingerprint and facts.get("order_intake_whatsapp_link_sent_for_fingerprint") == fingerprint:
         return "Your order draft is unchanged. The details are already noted."
     response = prebook_message() + f"\n\nContinue on WhatsApp:\n{_short_link(whatsapp_draft_link(draft))}"
