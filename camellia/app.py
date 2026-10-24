@@ -9504,12 +9504,19 @@ THIS WEEK'S BENGAL SPECIALS
                 const [handoffResp, menuResp, storyResp, routeResp, analyticsResp, healthResp] = responses;
                 const [handoffData, menuData, storyData, routeData, analyticsData, healthData] = await Promise.all(responses.map(response => response.json().catch(() => ({}))));
                 if (handoffResp.ok) setDashboardValue('dashHandoffs', handoffData.actionable_count ?? '—');
-                if (menuResp.ok) {
-                    const weeks = Array.isArray(menuData.menu?.weekly_menus) ? menuData.menu.weekly_menus : [];
-                    const week = weeks.length ? weeks[weeks.length - 1] : null;
-                    const dishes = week ? (week.vegetarian || []).length + (week.non_vegetarian || []).length : 0;
-                    setDashboardValue('dashMenuStatus', week && week.is_published !== false && dishes > 0 ? 'Published' : 'No active menu');
-                }
+                // 24 Oct: weekly menus are published as an image with no dish
+                // list, so counting dishes always said "No active menu". Use the
+                // same current-week check as the Menu page.
+                fetch('/admin/weekly-savoury', { headers: getAuthHeaders(), cache: 'no-store' })
+                    .then(response => response.ok ? response.json() : null)
+                    .then(weekly => {
+                        if (!weekly) return;
+                        const current = weekly.current;
+                        setDashboardValue('dashMenuStatus', current ? 'Published' : 'No active menu');
+                        const note = document.getElementById('dashMenuStatus')?.nextElementSibling;
+                        if (note) note.textContent = current ? `Weekly menu · ${current.display_date_range || ''}` : 'Upload this week’s menu';
+                    })
+                    .catch(() => {});
                 if (storyResp.ok) {
                     const stories = storyData.story_sources || [];
                     setDashboardValue('dashStories', stories.filter(item => String(item.story_status || 'ACTIVE').toUpperCase() === 'ACTIVE' && !Number(item.admin_deleted || 0)).length);

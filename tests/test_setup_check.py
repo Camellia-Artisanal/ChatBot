@@ -42,3 +42,12 @@ def test_endpoint_and_dashboard_card(store, monkeypatch):
     assert TestClient(app_module.app).get("/admin/setup-check").status_code in (401, 403)
     source = open(app_module.__file__, encoding="utf-8").read()
     assert 'id="dashSetupCheck"' in source and "loadSetupCheck();" in source
+
+
+def test_dashboard_menu_box_uses_the_current_weekly_menu_not_a_dish_count():
+    # 24 Oct: image-only weekly menus have no dish list, so the box always said
+    # "No active menu" even with this week's menu published.
+    source = open(app_module.__file__, encoding="utf-8").read()
+    start = source.index("async function loadDashboardOverview()")
+    body = source[start:start + 4000]
+    assert "/admin/weekly-savoury" in body and "dishes > 0" not in body
