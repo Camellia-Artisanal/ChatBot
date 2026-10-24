@@ -112,7 +112,7 @@ def test_active_order_date_is_customer_data_not_confirmation(customer, date):
     draft = customer[1]["order_intake_draft"]
     assert draft["delivery_slot"] == date.title()
     assert draft["item"] == before["item"] and draft["delivery_area"] == before["delivery_area"]
-    assert "https://wa.me/" in answer[0] and date.title() in answer[0]
+    assert "https://wa.me/" in answer[0] and date.title() in __import__("urllib.parse", fromlist=["unquote"]).unquote(answer[0])
     assert "order confirmed" not in answer[0].lower()
 
 

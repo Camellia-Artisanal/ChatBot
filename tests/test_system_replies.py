@@ -55,3 +55,11 @@ def test_the_tab_is_on_the_approved_qa_page():
     from camellia.admin_approved_qa import HTML, SCRIPT
     assert 'id="aqTabSystem"' in HTML and 'id="aqSystemView"' in HTML
     assert "/admin/system-replies" in SCRIPT and "'order_prebook'" in SCRIPT and "/admin/handoff-message" in SCRIPT
+
+
+def test_publishing_from_system_qa_refreshes_its_cards():
+    # 24 Oct: after editing "Pre-booking steps" the card kept showing the old text.
+    from camellia import admin_approved_qa
+    source = open(admin_approved_qa.__file__, encoding="utf-8").read()
+    start = source.index("async function loadApprovedQa()")
+    assert "aqLoadSystem()" in source[start:source.index("\n", start)]

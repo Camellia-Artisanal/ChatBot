@@ -174,10 +174,9 @@ def test_order_request_opens_a_draft_without_inventing_price():
     )
     reply_text = send_reply.call_args.args[1]
     assert not escalate.called
-    assert "delivery address/area" in reply_text.lower()
-    assert "ORDER DRAFT" in reply_text
-    assert "Delivery address/area: Not provided\n" in reply_text
-    assert "Receiver phone: Not provided\n" in reply_text
+    assert "Continue on WhatsApp:" in reply_text
+    assert "Not provided" not in urllib.parse.unquote(reply_text)
+    assert "Items & quantity: 250g Jolbhora" in urllib.parse.unquote(reply_text)
     assert "₹" not in reply_text
     assert "CAM-" not in reply_text
     facts = session_memory.get_facts(user_id, "instagram")

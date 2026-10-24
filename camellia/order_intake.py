@@ -305,6 +305,9 @@ def _extract_customer_item(text: str) -> str | None:
         "", candidate, flags=re.I,
     )
     candidate = re.sub(r"^\s*(?:need|i\s+want|i\s+would\s+like|i['’]d\s+like|please\s+order)\s+(?:to\s+order\s+)?", "", candidate, flags=re.I)
+    # "place a Sandesh order" / "book 2 boxes Sondesh": the item is what sits between.
+    candidate = re.sub(r"^\s*(?:to\s+)?(?:place|make(?!\s+it\b)|book|pre-?book)\s+(?:an?\s+)?(?!order\b)", "", candidate, flags=re.I)
+    candidate = re.sub(r"(?<=\w)\s+order(?:\s+please)?\s*[.!?]*\s*$", "", candidate, flags=re.I)
     candidate = _QUANTITY_RE.sub(" ", candidate)
     candidate = _SLOT_RE.sub(" ", candidate)
     candidate = _DATE_RE.sub(" ", candidate)
@@ -446,16 +449,40 @@ def request_summary(draft: dict) -> str:
     return summary
 
 
+def provided_details(draft: dict) -> str:
+    """Only what the customer gave: "Not provided" lines in the WhatsApp prefill
+    had to be deleted by hand before typing (24 Oct)."""
+    item_quantity = " ".join(value for value in (draft.get("quantity"), draft.get("item")) if value)
+    rows = (
+        ("Items & quantity", item_quantity),
+        ("Delivery address/area", draft.get("delivery_address") or draft.get("delivery_area")),
+        ("Receiver phone", draft.get("receiver_phone")),
+        ("Preferred slot", draft.get("delivery_slot")),
+        ("Location pin", draft.get("location_pin")),
+    )
+    return "\n".join(f"{label}: {value}" for label, value in rows if value)
+
+
 def whatsapp_draft_link(draft: dict, *, reference: str | None = None) -> str:
     number = re.sub(r"\D", "", config.WHATSAPP_BUSINESS_NUMBER or "") or "918796551990"
-    lines = [
-        "Hi, I'd like to place a pre-order with Camellia Artisanal.",
-        "",
-        ((f"Camellia reference: {reference}\n\n" if reference else "") + request_summary(draft)),
-        "",
-        "Please help me complete any missing details and confirm this order.",
-    ]
-    return f"https://wa.me/{number}?text={quote(chr(10).join(lines))}"
+    parts = ["Hi, I'd like to place a pre-order with Camellia Artisanal."]
+    if reference:
+        parts.append(f"Camellia reference: {reference}")
+    if details := provided_details(draft):
+        parts.append(details)
+    text = "\n\n".join(parts)
+    return f"https://wa.me/{number}?text={quote(text)}"
+
+
+def prebook_message() -> str:
+    """The client's pre-order wording, editable in Approved Q&A -> System Q&A
+    ("Pre-booking steps - orders")."""
+    try:
+        from camellia.client_qa import effective_entry
+        entry = effective_entry("order_prebook")
+    except Exception:
+        entry = None
+    return (entry.answer if entry and entry.answer else instruction_message()).strip()
 
 
 
@@ -516,16 +543,7 @@ def present_draft(facts: dict, draft: dict, message: str) -> str:
     force = is_link_resend_request(message) or is_order_process_question(message) or is_new_order_request(message)
     if not force and facts.get("order_intake_last_presented_fingerprint") == fingerprint and facts.get("order_intake_whatsapp_link_sent_for_fingerprint") == fingerprint:
         return "Your order draft is unchanged. The details are already noted."
-    prefix = instruction_message() + "\n\n" if is_order_process_question(message) or is_new_order_request(message) else ""
-    response = (
-        prefix + "I've prepared your order draft. Please continue on WhatsApp "
-        "to send it to our team. Missing details are marked Not provided, "
-        "and our manager can help complete them.\n\n"
-        + request_summary(draft)
-        + "\n\nOur manager will review availability, delivery charges, "
-        "and the final invoice.\n\n[Edit Order]\nReply with the change you want."
-        + f"\n\n[Continue on WhatsApp]\n{_short_link(whatsapp_draft_link(draft))}"
-    )
+    response = prebook_message() + f"\n\nContinue on WhatsApp:\n{_short_link(whatsapp_draft_link(draft))}"
     facts["order_intake_last_presented_fingerprint"] = fingerprint
     facts["order_intake_whatsapp_link_sent_for_fingerprint"] = fingerprint
     return response

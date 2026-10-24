@@ -138,7 +138,7 @@ def test_prebook_exact_answer_one_existing_human_continuation(current, query):
     assert answer[0].startswith(expected + "\n\nContinue on WhatsApp:\n")
     assert answer[0].count("https://wa.me/") == 1
     assert order_intake.whatsapp_draft_link(draft) in answer[0]
-    assert "Please help me complete" in __import__("urllib.parse", fromlist=["unquote"]).unquote(answer[0])
+    assert "Not provided" not in __import__("urllib.parse", fromlist=["unquote"]).unquote(answer[0])
     assert facts["order_intake_draft"] == saved
     assert sum(b.get("text", "").count("https://wa.me/") for b in facts["ordered_response_blocks"]) == 1
 

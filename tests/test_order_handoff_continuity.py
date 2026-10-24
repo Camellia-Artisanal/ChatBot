@@ -64,7 +64,7 @@ def test_meaningful_corrections_update_fingerprint_and_link(customer, message):
     original = start(uid)
     fingerprint = facts["order_intake_last_presented_fingerprint"]
     updated = reply(uid, message)[0]
-    assert "ORDER DRAFT" in updated and "https://wa.me/" in updated
+    assert "Continue on WhatsApp:" in updated and "https://wa.me/" in updated
     assert updated != original
     assert facts["order_intake_last_presented_fingerprint"] != fingerprint
     assert facts["order_intake_whatsapp_link_sent_for_fingerprint"] == draft_fingerprint(facts["order_intake_draft"])
@@ -102,7 +102,7 @@ def test_explicit_new_order_never_preloads_snapshot(customer, message):
     text = reply(uid, message)[0]
     assert "https://wa.me/" in text and not facts["order_intake_referred"]
     assert facts["order_intake_draft"] == new_order_draft()
-    assert "Items & quantity: Not provided" in text
+    assert "Items & quantity" not in unquote(text)
     reply(uid, "3 boxes Chicken Bento Noida Saturday lunch")
     assert facts["order_intake_draft"]["receiver_phone"] is None
 

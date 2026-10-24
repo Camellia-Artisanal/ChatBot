@@ -146,7 +146,7 @@ function aqVariationList(record) {
  if(!variations.length)return '<p style="margin:8px 0;opacity:.72">No additional question variations.</p>';
  return `<ol style="margin:8px 0 8px 22px">${variations.map(v=>`<li style="margin:4px 0">${escapeHtml(v)}</li>`).join('')}</ol>`;
 }
-async function loadApprovedQa() { if(!adminAuthenticated)return;try { const data=await aqApi();aqRecords=data.records;aqContexts=data.contexts||[];aqRoles=data.mapped_roles||[];document.getElementById('aqCounts').innerHTML=Object.entries(data.counts).map(([key,count])=>`<div class="admin-kpi"><div class="admin-kpi-label">${escapeHtml(key.replaceAll('_',' '))}</div><div class="admin-kpi-value">${count}</div></div>`).join('');aqRender(); }catch(e){aqMessage(e.message,true);} }
+async function loadApprovedQa() { if(!adminAuthenticated)return;try { const data=await aqApi();aqRecords=data.records;aqContexts=data.contexts||[];aqRoles=data.mapped_roles||[];document.getElementById('aqCounts').innerHTML=Object.entries(data.counts).map(([key,count])=>`<div class="admin-kpi"><div class="admin-kpi-label">${escapeHtml(key.replaceAll('_',' '))}</div><div class="admin-kpi-value">${count}</div></div>`).join('');aqRender();const systemView=document.getElementById('aqSystemView');if(systemView&&systemView.style.display!=='none')aqLoadSystem(); }catch(e){aqMessage(e.message,true);} }
 // 21 Oct: one category at a time (Sondesh, General, …) instead of every answer mixed.
 let aqCategory = (()=>{ try { return localStorage.getItem('aqCategory') || 'general'; } catch(_) { return 'general'; } })();
 // "general" is its own category (not Savoury): the bot uses it for customers
