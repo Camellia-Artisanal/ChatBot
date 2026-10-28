@@ -9851,13 +9851,15 @@ THIS WEEK'S BENGAL SPECIALS
             }
             const isStory = kind === 'story'; const route = isStory ? item : item; const drawer = document.getElementById('contentDetailsDrawer'); const backdrop = document.getElementById('contentDetailsBackdrop');
             const typeLabel = isStory ? 'Instagram Story' : (item.source_type === 'reel' ? 'Instagram Reel' : 'Instagram Post');
-            document.getElementById('contentDetailsType').innerText = typeLabel; document.getElementById('contentDetailsTitle').innerText = isStory ? (item.routing_topic || 'Unmapped Story') : (item.routing_topic || 'Unmapped content');
-            const image = !isStory && (item.preview_url || item.admin_preview_url); document.getElementById('contentDetailsPreview').innerHTML = image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(typeLabel)} preview">` : `<div style="font-size:3rem;color:#8b97a8;">${isStory ? '▣' : '◎'}</div>`;
             const status = isStory ? String(item.mapping_status || item.status || 'UNMAPPED').toUpperCase() : instagramContentStatus(item);
+            const topicName = isStory ? instagramStoryTopicName(item) : String(item.routing_topic || '').trim();
+            document.getElementById('contentDetailsType').innerText = typeLabel; document.getElementById('contentDetailsTitle').innerText = isStory ? instagramStoryMappingLabel(item, status) : (topicName || 'Unmapped content');
+            const image = !isStory && (item.preview_url || item.admin_preview_url); document.getElementById('contentDetailsPreview').innerHTML = image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(typeLabel)} preview">` : `<div style="font-size:3rem;color:#8b97a8;">${isStory ? '▣' : '◎'}</div>`;
             const id = item.story_media_id || item.media_id || 'Not supplied';
             const routeHealth = status === 'ACTIVE' || status === 'MAPPED' ? 'Healthy mapping' : status === 'UNMAPPED' ? 'Needs mapping' : 'Inactive';
             const auditSummary = [item.source || 'Existing Admin record', item.first_seen ? `first seen ${item.first_seen}` : '', item.updated_at ? `updated ${item.updated_at}` : ''].filter(Boolean).join(' · ');
-            const contentFacts = [['Exact Meta ID', id], ['Content type', typeLabel], ['Status', status], ['Route health', routeHealth], ['Topic / intent', item.routing_topic || 'Unmapped'], ['Route destination', item.menu_id || item.canonical_url || 'Not mapped'], ['Published', item.published_at || item.created_at || 'Not supplied'], ['Last seen', item.last_seen || 'Not supplied']];
+            const topicFact = topicName || (status === 'UNMAPPED' ? 'Unmapped' : 'No topic label');
+            const contentFacts = [['Exact Meta ID', id], ['Content type', typeLabel], ['Status', status], ['Route health', routeHealth], ['Topic / intent', topicFact], ['Route destination', item.menu_id || item.canonical_url || 'Not mapped'], ['Published', item.published_at || item.created_at || 'Not supplied'], ['Last seen', item.last_seen || 'Not supplied']];
             if (!isStory) contentFacts.push(['Routing history / audit', auditSummary || 'No additional history supplied']);
             document.getElementById('contentDetailsFacts').innerHTML = contentFacts.map(([label, value]) => `<div class="drawer-fact"><span class="drawer-fact-label">${escapeHtml(label)}</span><span class="drawer-fact-value">${escapeHtml(value)}</span></div>`).join('');
             const actions = [];
@@ -11228,6 +11230,21 @@ THIS WEEK'S BENGAL SPECIALS
                 .some(value => String(value || '').toLowerCase().includes(query));
         }
 
+        function instagramStoryTopicName(source) {
+            const routeLabel = String(source.routing_topic || '').trim();
+            const usableRouteLabel = /^unmapped(?: story)?$/i.test(routeLabel) ? '' : routeLabel;
+            const topic = igTopics.find(item => String(item.topic_id) === String(source.topic_id || ''));
+            return usableRouteLabel || String(topic?.name || '').trim();
+        }
+
+        function instagramStoryMappingLabel(source, status) {
+            const normalized = String(status || '').toUpperCase();
+            if (normalized === 'UNMAPPED' || normalized === 'ARCHIVED') return 'Unmapped Story';
+            const topicName = instagramStoryTopicName(source);
+            if (topicName) return topicName;
+            return normalized === 'DISABLED' ? 'Disabled Story' : 'Mapped Story';
+        }
+
         function setInstagramStoryFilter(filter) {
             igStoryFilter = filter || 'all';
             document.querySelectorAll('.ig-story-filter').forEach(button => button.classList.toggle('active', (button.dataset.storyFilter || 'all') === igStoryFilter));
@@ -11490,8 +11507,7 @@ THIS WEEK'S BENGAL SPECIALS
                 if (status === 'UNMAPPED') actions = `<button class="btn-secondary" type="button" data-story-action="map" data-story-media-id="${escapeHtml(source.story_media_id || '')}">Map Story</button>`;
                 else if (status === 'MAPPED' || status === 'DISABLED') actions = `<button class="btn-secondary" type="button" data-story-action="edit" data-story-media-id="${escapeHtml(source.story_media_id || '')}">Edit Mapping</button>`;
                 actions += ` <button class="btn-danger" type="button" data-story-action="delete" data-story-media-id="${escapeHtml(source.story_media_id || '')}">Delete</button>`;
-                const topic = source.routing_topic || 'Unmapped Story';
-                const mappingLabel = status === 'UNMAPPED' ? 'Unmapped' : topic;
+                const mappingLabel = instagramStoryMappingLabel(source, status);
                 const contextLabel = status === 'MAPPED' ? '● Context active' : '○ Context off';
                 return `<article class="ig-media-card ig-story-card" tabindex="0" data-story-media-id="${escapeHtml(source.story_media_id || '')}"><div class="ig-media-preview">${instagramStoryPreview(source)}<span class="ig-media-badge">STORY</span></div><div class="ig-media-main"><div class="ig-media-title"><b class="ig-media-topic">${escapeHtml(mappingLabel)}</b></div>${source.source_description ? `<div class="ig-media-summary">${escapeHtml(source.source_description)}</div>` : ''}<div class="ig-story-identification">${instagramStoryIdentification(source)}</div><div class="ig-media-facts"><span>${contextLabel}</span></div></div><div class="ig-media-actions">${actions}</div></article>`;
             }).join('');

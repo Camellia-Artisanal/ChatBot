@@ -56,7 +56,7 @@ function makeFakeElement(id) {
         disabled: false, className: '', style: {}, dataset: {}, options: [], selectedOptions: [],
     };
     const noop = new Set(['addEventListener', 'removeEventListener', 'removeChild',
-        'scrollIntoView', 'click', 'focus', 'blur', 'remove', 'replaceChildren', 'append', 'add', 'toggleAttribute']);
+        'scrollIntoView', 'click', 'focus', 'blur', 'remove', 'replaceChildren', 'append', 'add', 'toggleAttribute', 'setAttribute']);
     const target = { __id: id };
     return new Proxy(target, {
         get(t, prop) {
@@ -906,3 +906,26 @@ def test_story_visual_metadata_keeps_full_identity_and_owned_sequence():
     assert all(text not in result['card'] for text in ('1st Story', '2nd Story', 'sequence unavailable', 'Reel #', 'Post #'))
     assert 'Observed time unavailable' in result['invalid']
     assert 'Observed time unavailable' not in result['fallback']
+
+
+def test_active_story_mapping_never_displays_unmapped_fallback():
+    result = _run_node(r'''
+        igTopics = [{topic_id:'topic-gifts', name:'Gifting'}];
+        const mapped = {story_media_id:'mapped-story', routing_id:44, mapping_status:'MAPPED',
+            active:true, topic_id:'topic-gifts', routing_topic:'', source_description:'Gift box story'};
+        const mappedWithoutTopic = {story_media_id:'mapped-story-no-label', routing_id:45,
+            mapping_status:'MAPPED', active:true, topic_id:'missing-topic', routing_topic:''};
+        igStorySources = [mapped, mappedWithoutTopic];
+        renderInstagramStories();
+        const card = document.getElementById('igStoryList').innerHTML;
+        openContentDetails('story', mapped);
+        const drawerTitle = document.getElementById('contentDetailsTitle').innerText;
+        const drawerFacts = document.getElementById('contentDetailsFacts').innerHTML;
+        console.log('RESULT::' + JSON.stringify({card, drawerTitle, drawerFacts}));
+    ''')
+    assert 'Gifting' in result['card']
+    assert 'Mapped Story' in result['card']
+    assert 'Unmapped Story' not in result['card']
+    assert 'Edit Mapping' in result['card'] and 'Context active' in result['card']
+    assert result['drawerTitle'] == 'Gifting'
+    assert 'Gifting' in result['drawerFacts']
