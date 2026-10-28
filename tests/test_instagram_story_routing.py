@@ -119,6 +119,22 @@ def test_story_routes_require_exact_media_id_and_no_url(story_db):
         validate_route_payload({"source_type": "story", "routing_topic": "Jolbhora"})
 
 
+def test_story_source_uses_topic_name_when_route_label_is_empty(story_db):
+    story_db.create_instagram_topic(
+        "experience_kolkata", "Experience kolkata", "", None, [], [],
+    )
+    story_db.upsert_instagram_story_sync("story-with-topic-id")
+    story_db.save_instagram_source_route({
+        **_story_route("story-with-topic-id"),
+        "routing_topic": "",
+        "topic_id": "experience_kolkata",
+    })
+
+    [source] = story_db.list_instagram_story_sources()
+
+    assert source["routing_topic"] == "Experience kolkata"
+
+
 def test_mapped_story_does_not_authorize_unregistered_jolbhora_price(story_db):
     saved = story_db.save_instagram_source_route(_story_route("story-price"))
     uid = "story-price-" + uuid.uuid4().hex[:8]

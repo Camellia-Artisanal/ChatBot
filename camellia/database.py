@@ -2946,9 +2946,9 @@ class Database:
         sort_column = "r.updated_at" if sort == "recently_edited" else "s.last_seen"
         direction = "ASC" if sort == "oldest" else "DESC"
         with self.get_connection() as conn:
-            join = "LEFT JOIN instagram_source_routes r ON r.routing_id=(SELECT rr.routing_id FROM instagram_source_routes rr WHERE rr.source_type='story' AND rr.media_id=s.story_media_id ORDER BY rr.updated_at DESC, rr.routing_id DESC LIMIT 1)"
+            join = "LEFT JOIN instagram_source_routes r ON r.routing_id=(SELECT rr.routing_id FROM instagram_source_routes rr WHERE rr.source_type='story' AND rr.media_id=s.story_media_id ORDER BY rr.updated_at DESC, rr.routing_id DESC LIMIT 1) LEFT JOIN instagram_topics t ON t.topic_id=r.topic_id"
             total = int(conn.execute(f"SELECT COUNT(*) AS n FROM instagram_story_sources s {join} WHERE {where}", params).fetchone()["n"])
-            sql = f"SELECT s.story_media_id, s.temporary_url, s.story_status, s.first_seen, s.last_seen, s.last_sender_id, s.last_event_metadata, s.media_type, s.permalink, s.published_at, s.source, s.sync_miss_count, s.last_confirmed_active_at, s.story_sequence_number, s.story_sequence_date, r.routing_id, r.topic_id, r.routing_topic, r.source_description, r.response_mode, r.approved_qa_id, r.menu_id, r.menu_mode, r.active AS route_active, r.archived_at AS route_archived_at FROM instagram_story_sources s {join} WHERE {where} ORDER BY {sort_column} {direction}, s.story_media_id"
+            sql = f"SELECT s.story_media_id, s.temporary_url, s.story_status, s.first_seen, s.last_seen, s.last_sender_id, s.last_event_metadata, s.media_type, s.permalink, s.published_at, s.source, s.sync_miss_count, s.last_confirmed_active_at, s.story_sequence_number, s.story_sequence_date, r.routing_id, r.topic_id, COALESCE(NULLIF(r.routing_topic,''), t.name) AS routing_topic, r.source_description, r.response_mode, r.approved_qa_id, r.menu_id, r.menu_mode, r.active AS route_active, r.archived_at AS route_archived_at FROM instagram_story_sources s {join} WHERE {where} ORDER BY {sort_column} {direction}, s.story_media_id"
             if page_size is not None:
                 sql += " LIMIT ? OFFSET ?"
                 params = [*params, page_size, (page - 1) * page_size]
