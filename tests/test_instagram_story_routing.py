@@ -135,6 +135,45 @@ def test_story_source_uses_topic_name_when_route_label_is_empty(story_db):
     assert source["routing_topic"] == "Experience kolkata"
 
 
+def test_story_source_displays_approved_qa_context_when_topic_is_missing(story_db):
+    story_db.upsert_instagram_story_sync("story-with-qa-context")
+    story_db.upsert_instagram_story_sync("story-with-legacy-qa-context")
+    story_db.save_instagram_source_route({
+        **_story_route("story-with-qa-context"),
+        "routing_topic": "",
+        "topic_id": None,
+        "response_mode": "APPROVED_QA",
+        "approved_qa_id": "admin_kolkata_price",
+    })
+    story_db.save_instagram_source_route({
+        **_story_route("story-with-legacy-qa-context"),
+        "routing_topic": "",
+        "topic_id": None,
+        "response_mode": "APPROVED_QA",
+        "approved_qa_id": "general_price",
+    })
+    listing = {
+        "records": [
+            {"qa_id": "admin_kolkata_price", "context": "kolkata_sondesh"},
+            {"qa_id": "general_price", "context": "savoury"},
+        ],
+        "contexts": [
+            {"value": "kolkata_sondesh", "label": "Kolkata Sondesh", "legacy": False},
+            {"value": "savoury", "label": "savoury (existing)", "legacy": True},
+        ],
+    }
+
+    with patch.object(app_module, "require_admin", return_value=None), \
+         patch("camellia.approved_qa.listing", return_value=listing):
+        payload = app_module.list_instagram_story_sources()
+
+    labels = {item["story_media_id"]: item["routing_context_label"] for item in payload["story_sources"]}
+    assert labels == {
+        "story-with-qa-context": "Kolkata Sondesh",
+        "story-with-legacy-qa-context": "Savoury",
+    }
+
+
 def test_mapped_story_does_not_authorize_unregistered_jolbhora_price(story_db):
     saved = story_db.save_instagram_source_route(_story_route("story-price"))
     uid = "story-price-" + uuid.uuid4().hex[:8]

@@ -913,19 +913,24 @@ def test_active_story_mapping_never_displays_unmapped_fallback():
         igTopics = [{topic_id:'topic-gifts', name:'Gifting'}];
         const mapped = {story_media_id:'mapped-story', routing_id:44, mapping_status:'MAPPED',
             active:true, topic_id:'topic-gifts', routing_topic:'', source_description:'Gift box story'};
+        const mappedWithContext = {story_media_id:'mapped-story-context', routing_id:46,
+            mapping_status:'MAPPED', active:true, topic_id:null, routing_topic:'',
+            routing_context_label:'Kolkata Sondesh'};
         const mappedWithoutTopic = {story_media_id:'mapped-story-no-label', routing_id:45,
             mapping_status:'MAPPED', active:true, topic_id:'missing-topic', routing_topic:''};
-        igStorySources = [mapped, mappedWithoutTopic];
+        igStorySources = [mapped, mappedWithContext, mappedWithoutTopic];
         renderInstagramStories();
         const card = document.getElementById('igStoryList').innerHTML;
-        openContentDetails('story', mapped);
+        openContentDetails('story', mappedWithContext);
         const drawerTitle = document.getElementById('contentDetailsTitle').innerText;
         const drawerFacts = document.getElementById('contentDetailsFacts').innerHTML;
         console.log('RESULT::' + JSON.stringify({card, drawerTitle, drawerFacts}));
     ''')
     assert 'Gifting' in result['card']
+    assert 'Kolkata Sondesh' in result['card']
     assert 'Mapped Story' in result['card']
+    assert result['card'].count('Mapped Story') == 1
     assert 'Unmapped Story' not in result['card']
     assert 'Edit Mapping' in result['card'] and 'Context active' in result['card']
-    assert result['drawerTitle'] == 'Gifting'
-    assert 'Gifting' in result['drawerFacts']
+    assert result['drawerTitle'] == 'Kolkata Sondesh'
+    assert 'Kolkata Sondesh' in result['drawerFacts']
