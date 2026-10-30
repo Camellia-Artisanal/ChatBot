@@ -91,7 +91,8 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
 - **Every logged message carries `decision_reason`** (which answer/rule, or the handoff ref
   and reason). Read it on `/admin/conversations` before guessing why a reply happened.
 - **Dashboard escalation questions are not answer drafts.** Keep them under one collapsed section,
-  with expandable question rows showing customer username, question, and source preview when available.
+  with plain rows showing customer username, question, and source preview when available. Keep the
+  section open after an Ignore refresh; do not add nested disclosure controls per question.
   Show Map Ad for an unbound ad, Edit mapping for a bound source, and let staff Ignore
   an escalation (remove it from pending) or preview/edit its exact mapping. Never auto-approve a reply.
 - **Setup-check Edit mapping previews the exact Post/Reel/Story first.** Staff explicitly continue

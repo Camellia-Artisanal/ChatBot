@@ -73,8 +73,8 @@ Posts & Reels / Stories / mapping form), `admin_approved_qa.py` (Approved Q&A + 
 The Dashboard's Setup Check is assembled by `setup_check.py`; route-specific findings carry
 their routing ID and source identity so the admin can open the matching editor directly.
 Pending customer escalations are grouped under one collapsed Dashboard/Candidates dropdown,
-with compact per-question rows showing
-customer username, question, and source preview when available. Staff can ignore an item or
+with plain per-question rows showing customer username, question, and source preview when available.
+Staff can ignore an item or
 open its exact source mapping; unbound ads expose Map Ad. Mapping edits first show a source preview. Escalations remain
 separate records and are not treated as answer drafts.
 The exact Instagram default “more info on this” prompt without referral/source context fails
