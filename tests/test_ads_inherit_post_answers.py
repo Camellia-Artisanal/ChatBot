@@ -98,6 +98,17 @@ def test_needs_answers_view_lists_the_gaps_without_ad_ids(store, monkeypatch):
     assert ads.ads_workspace(store, "needs_answers")["items"] == []
 
 
+def test_observed_unknown_ad_is_not_a_needs_answers_gap(store):
+    # An observed webhook ID has no Meta status; do not count it as a currently
+    # active ad needing price answers until inventory confirms it is active.
+    store.observe_instagram_ad(AD, "completed ad")
+    store.log_conversation("customer", "instagram", "How much does it cost?", "handoff", False,
+                           "unmapped_ad_referral_handoff", ad_id=AD)
+    workspace = ads.ads_workspace(store, "all")
+    assert workspace["counts"]["answer_gaps"] == 0
+    assert ads.ads_workspace(store, "needs_answers")["items"] == []
+
+
 def test_an_ad_using_its_posts_answers_counts_as_mapped(store, monkeypatch):
     # 18 Oct: the client mapped the post four times and the card kept saying
     # "Not mapped", because only direct ad mappings counted.

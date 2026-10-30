@@ -340,11 +340,13 @@ def effective_routes(item, binding, route_by_id, routes, siblings=None):
 
 
 def is_answer_gap(item, status, recent_ids):
-    """A gap is an ad customers messaged from recently that is still running
-    (or not yet in the Ads inventory) and would not answer price questions.
-    Meta's "active" alone includes many old ads nobody messages from."""
-    ended = item.get("inventory_state", "CURRENT") == "CURRENT" and item.get("ad_account_id") and not item.get("active")
-    return item.get("ad_id") in recent_ids and not ended and status in {"NONE", "NOTE"}
+    """A gap is a recently messaged, Meta-confirmed active ad without price answers.
+
+    Observed-only IDs have unknown delivery status and must not be presented as
+    needing answers; they remain visible in Unmapped until inventory resolves them.
+    """
+    confirmed_active = item.get("inventory_state") == "CURRENT" and bool(item.get("active"))
+    return confirmed_active and item.get("ad_id") in recent_ids and status in {"NONE", "NOTE"}
 
 
 def ad_answer_gaps(database, days=7):
@@ -361,7 +363,8 @@ def ad_answer_gaps(database, days=7):
     siblings = sibling_routes(inventory, bindings, route_by_id)
     cache, gaps = {}, 0
     for ad_id in recent:
-        item = inventory.get(ad_id) or {"ad_id": ad_id, "inventory_state": "OBSERVED"}
+        item = ({**inventory[ad_id], "inventory_state": "CURRENT"}
+                if ad_id in inventory else {"ad_id": ad_id, "inventory_state": "OBSERVED"})
         binding = bindings.get(ad_id)
         if binding_disabled(binding):
             continue
