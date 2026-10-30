@@ -61,7 +61,8 @@ Group card Map Ad → the member that still needs answers
 Ads summary warns about recently messaged unmapped ads and ADS referrals missing an ad ID;
 the first observed unmapped ad ID triggers a background inventory/creative refresh.
 Needs answers includes only recently messaged ads Meta confirms are active; observed-only
-IDs with unknown delivery status remain in Unmapped and are not counted as active price gaps.
+IDs with unknown delivery status remain in Unmapped and are not counted in active answer or
+routing warnings.
 ```
 
 ## 3. Approved Q&A edit

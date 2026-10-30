@@ -60,8 +60,8 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
   summary surfaces recent unmapped ad messages and missing-ID referrals; the first observed
   unmapped ad ID triggers a background inventory/creative refresh.
 - **Needs answers only counts Meta-confirmed active ads.** A webhook-observed ID whose Meta
-  inventory status is unknown stays visible under Unmapped but is not reported as a confirmed
-  active price-answer gap.
+  inventory status is unknown stays visible under Unmapped but is not reported in active
+  price-answer or routing warnings.
 - **Mapping checklists isolate answers.** A post/ad checklist only uses its ticked answers
   (+ General); generic "Tell me more" / "How much does it cost?" pick its ticked
   details/price answer. No ad → general answers only. Use client categories (Approved Q&A →

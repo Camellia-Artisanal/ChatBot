@@ -98,7 +98,7 @@ def test_needs_answers_view_lists_the_gaps_without_ad_ids(store, monkeypatch):
     assert ads.ads_workspace(store, "needs_answers")["items"] == []
 
 
-def test_observed_unknown_ad_is_not_a_needs_answers_gap(store):
+def test_observed_unknown_ad_is_not_an_active_answer_or_routing_gap(store, monkeypatch):
     # An observed webhook ID has no Meta status; do not count it as a currently
     # active ad needing price answers until inventory confirms it is active.
     store.observe_instagram_ad(AD, "completed ad")
@@ -106,7 +106,16 @@ def test_observed_unknown_ad_is_not_a_needs_answers_gap(store):
                            "unmapped_ad_referral_handoff", ad_id=AD)
     workspace = ads.ads_workspace(store, "all")
     assert workspace["counts"]["answer_gaps"] == 0
+    assert workspace["counts"]["unmapped_messaged"] == 0
     assert ads.ads_workspace(store, "needs_answers")["items"] == []
+
+    # Once inventory confirms the same ad is active, it should reappear in both
+    # active-ad warning counters until its mapping/answers are fixed.
+    sync(store, monkeypatch, [item(ad_id=AD, effective_instagram_media_id=None,
+                                  instagram_permalink_url=None)])
+    active_workspace = ads.ads_workspace(store, "all")
+    assert active_workspace["counts"]["answer_gaps"] == 1
+    assert active_workspace["counts"]["unmapped_messaged"] == 1
 
 
 def test_an_ad_using_its_posts_answers_counts_as_mapped(store, monkeypatch):

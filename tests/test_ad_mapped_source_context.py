@@ -294,7 +294,7 @@ def test_first_unmapped_ad_hit_schedules_one_background_refresh(ad_customer, mon
     assert queued == ["new-unmapped-ad"]
 
 
-def test_ads_workspace_warns_about_recent_unmapped_and_missing_id_hits(ad_customer):
+def test_ads_workspace_warns_about_missing_id_but_not_unknown_status_ad(ad_customer):
     sender, _facts, db = ad_customer
     db.observe_instagram_ad("unmapped-recent-hit", "Kolkata promo")
     db.log_conversation(
@@ -306,7 +306,7 @@ def test_ads_workspace_warns_about_recent_unmapped_and_missing_id_hits(ad_custom
     from camellia import instagram_ads
     result = instagram_ads.ads_workspace(db, "all")
 
-    assert result["counts"]["unmapped_messaged"] == 1
+    assert result["counts"]["unmapped_messaged"] == 0
     assert result["counts"]["missing_ad_id_referrals"] == 1
 
 
