@@ -8,6 +8,7 @@ import uuid
 import pytest
 
 from camellia.instagram_routing import decode_route
+from camellia.ad_gate import EntryPoint
 from camellia.responder import responder
 from camellia.session_memory import session_memory
 
@@ -29,7 +30,7 @@ def test_menu_request_on_a_post_with_no_menu_sends_the_menu_cards(ad_customer, m
     route.update(menu_mode="NONE", menu_id=None, source_description="Sharing the menu for aamar collection below")
     db.save_instagram_source_route(route, routing_id=saved["routing_id"])
     _process(ad_customer, "Hello, can I get more info on this?", _ad_entry(sender, AD, "Hello, can I get more info on this?"))
-    send = _process(ad_customer, "Can i see the menu please", _ad_entry(sender, None, "Can i see the menu please"))
+    send = _process(ad_customer, "Can i see the menu please", EntryPoint(source="typed"))
     assert any(_images(send)), "no menu image was sent"
     assert not db.get_active_handoff("instagram", sender)
 

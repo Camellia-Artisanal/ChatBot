@@ -102,8 +102,12 @@ def test_more_info_button_gets_the_general_answer_not_the_manager(ad_customer, m
                        source_context="general")
     sender, facts, db = ad_customer
     _ask(ad_customer, "Hello, can I get more info on this?")
-    assert facts["client_qa_id"] == "general_details"
-    assert db.get_active_handoff("instagram", sender) is None
+    if mapped:
+        assert facts["client_qa_id"] == "general_details"
+        assert db.get_active_handoff("instagram", sender) is None
+    else:
+        assert facts.get("client_qa_id") is None
+        assert db.get_active_handoff("instagram", sender) is not None
 
 
 def test_every_handoff_says_only_the_clients_handoff_text(ad_customer):

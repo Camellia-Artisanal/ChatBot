@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import uuid
 from unittest.mock import patch
 
@@ -231,6 +232,82 @@ def test_unbound_ad_natural_price_does_not_borrow_title(ad_customer):
     _process(ad_customer, "How much does it cost?", _ad_entry(sender, "unbound", "How much does it cost?", title="Bengali Bento"))
     assert facts.get("client_qa_id") not in {p[2] for p in PRICE_SUBJECTS}
     assert db.get_active_handoff("instagram", sender)
+
+
+def test_ad_referral_without_ad_id_hands_off_and_does_not_reuse_old_route(ad_customer):
+    sender, facts, db = ad_customer
+    old_route = _mapped_source(ad_customer, "post", "older-gurgaon-ad", topic_name="Gurgaon Home Table")
+    facts["source_route"] = instagram_routing.decode_route(old_route)
+    facts["last_topic"] = "bengali_home_table"
+    entry = describe_entry_point({
+        "sender": {"id": sender},
+        "message": {"mid": "ad-without-id", "text": "What is the price per box?",
+                    "referral": {"source": "ADS", "ads_context_data": {"ad_title": "Kolkata"}}},
+    })
+
+    send = _process(ad_customer, "What is the price per box?", entry)
+
+    row = db.get_conversations(limit=1, channel="instagram", user_id=sender)[0]
+    reason = json.loads(row["decision_reason"])
+    assert row["template_id"] == "instagram_support_handoff"
+    assert "Manager" in row["bot_response"]
+    assert row["ad_id"] is None
+    assert row["ad_referral_source"] == "ADS"
+    assert row["ad_referral_ad_id_present"] == 0
+    assert reason["ad_referral"]["path"] == "message"
+    assert reason["grounding"] == "unmapped_ad_referral"
+    assert facts.get("client_qa_id") is None
+    assert facts.get("source_route") is None
+    assert db.get_active_handoff("instagram", sender)
+    assert send.called
+
+
+def test_price_per_box_phrase_uses_the_mapped_price_answer(ad_customer):
+    route = _mapped_source(
+        ad_customer, "post", "price-per-box-ad", topic_name="Bengali Bento",
+        response_mode="APPROVED_QA", approved_qa_ids=["bento_price_client"], source_context="bento",
+    )
+    sender, facts, db = ad_customer
+
+    _process(ad_customer, "What is the price per box?", _ad_entry(sender, "price-per-box-ad", "What is the price per box?"))
+
+    row = db.get_conversations(limit=1, channel="instagram", user_id=sender)[0]
+    assert row["source_routing_id"] == route["routing_id"]
+    assert facts["client_qa_id"] == "bento_price_client"
+    assert row["template_id"] != "instagram_support_handoff"
+    assert db.get_active_handoff("instagram", sender) is None
+
+
+def test_first_unmapped_ad_hit_schedules_one_background_refresh(ad_customer, monkeypatch):
+    sender, _facts, db = ad_customer
+    queued = []
+    monkeypatch.setattr(app_module, "_process_instagram_event", lambda *args, **kwargs: None)
+    monkeypatch.setattr(app_module, "_sync_first_unmapped_ad", lambda ad_id: queued.append(ad_id))
+
+    for mid in ("first-unmapped-ad-hit", "repeat-unmapped-ad-hit"):
+        event = {"sender": {"id": sender}, "message": {"mid": mid, "text": "Tell me more",
+                 "referral": {"source": "ADS", "ad_id": "new-unmapped-ad"}}}
+        tasks = BackgroundTasks()
+        app_module._dispatch_instagram_payload({"entry": [{"id": "test-account", "messaging": [event]}]}, tasks)
+        asyncio.run(tasks())
+
+    assert queued == ["new-unmapped-ad"]
+
+
+def test_ads_workspace_warns_about_recent_unmapped_and_missing_id_hits(ad_customer):
+    sender, _facts, db = ad_customer
+    db.observe_instagram_ad("unmapped-recent-hit", "Kolkata promo")
+    db.log_conversation(
+        sender, "instagram", "price?", "handoff", False, "instagram_support_handoff",
+        ad_id="unmapped-recent-hit", ad_referral_present=True, ad_referral_source="ADS",
+        ad_referral_ad_id_present=False,
+    )
+
+    from camellia import instagram_ads
+    result = instagram_ads.ads_workspace(db, "all")
+
+    assert result["counts"]["unmapped_messaged"] == 1
+    assert result["counts"]["missing_ad_id_referrals"] == 1
 
 
 @pytest.mark.parametrize("key,value,qa_id", [

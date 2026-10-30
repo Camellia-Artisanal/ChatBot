@@ -44,20 +44,28 @@ class EntryPoint:
     raw_payload: Optional[str] = None
     sender_id: Optional[str] = None
     customer_username: Optional[str] = None
+    referral_present: bool = False
+    referral_path: Optional[str] = None
+    referral_source: Optional[str] = None
+    referral_ad_id_present: bool = False
+    referral_keys: Optional[list] = None
 
 
 def _referral_of(messaging_event: Dict[str, Any]) -> Dict[str, Any]:
     """The referral block, wherever Meta hung it on this event."""
     message_obj = messaging_event.get("message") or {}
     postback_obj = messaging_event.get("postback") or {}
+    empty = None
     for candidate in (
         message_obj.get("referral"),
         postback_obj.get("referral"),
         messaging_event.get("referral"),
     ):
         if isinstance(candidate, dict):
-            return candidate
-    return {}
+            if candidate:
+                return candidate
+            empty = candidate
+    return empty or {}
 
 
 def describe_entry_point(messaging_event: Dict[str, Any]) -> EntryPoint:
@@ -70,7 +78,14 @@ def describe_entry_point(messaging_event: Dict[str, Any]) -> EntryPoint:
     """
     message_obj = messaging_event.get("message") or {}
     postback_obj = messaging_event.get("postback") or {}
-    referral = _referral_of(messaging_event)
+    message_referral = message_obj.get("referral")
+    postback_referral = postback_obj.get("referral")
+    event_referral = messaging_event.get("referral")
+    referral, referral_path = {}, None
+    for path, candidate in (("message", message_referral), ("postback", postback_referral), ("event", event_referral)):
+        if isinstance(candidate, dict) and candidate:
+            referral, referral_path = candidate, path
+            break
 
     ad_id = referral.get("ad_id")
     ads_context = referral.get("ads_context_data")
@@ -126,6 +141,11 @@ def describe_entry_point(messaging_event: Dict[str, Any]) -> EntryPoint:
         raw_payload=str(payload) if payload else None,
         sender_id=str(sender_id) if sender_id else None,
         customer_username=customer_username,
+        referral_present=bool(referral_path),
+        referral_path=referral_path,
+        referral_source=str(referral.get("source") or "").upper() or None,
+        referral_ad_id_present=bool(referral.get("ad_id")),
+        referral_keys=sorted(str(key)[:80] for key in referral.keys())[:30] if referral else [],
     )
 
 def fetch_message_details_fallback(mid: str) -> Tuple[Optional[str], Optional[str]]:

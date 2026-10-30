@@ -16,6 +16,7 @@ Meta webhook (signed)  POST /webhook/instagram
       │      2. route with that ad_id              → "ad_id"
       │      3. inherited post/reel mapping, then mapped twin ad  → "ad_creative"
       │      4. story / shared post / reel ids     → "story_media_id" / "shared_*"
+      │    explicit ADS referral without exact route → clear prior context and hand off
       ├─ responder.match_and_respond(...)                  responder.py
       │      first layer that owns the turn answers:
       │      order flows → mapping checklist (bundle) → Custom topic answers
@@ -38,6 +39,10 @@ Rules that hold the flow together:
 - Every handoff sends only `default_handoff_message()` (Admin-editable). Approved answers
   that themselves hand off keep their approved wording.
 - No ad context: generic price questions get `general_price`; nothing mapping-specific leaks.
+- An explicit ADS referral without an ad ID or exact active route clears prior ad/topic
+  context and hands off; it cannot fall through to a generic or previous-city answer.
+- Referral presence/path/source/keys and whether an ad ID was supplied are stored on the
+  conversation row. The raw webhook body is not retained.
 - Outbound queue: a block retries at most 6 times, a terminal failure fails the rest of its
   answer (so the customer's later replies are not held), a retry resumes after the Meta
   messages already accepted (`sent_steps`), and a reply whose handoff opened after its answer
@@ -53,6 +58,8 @@ Map Ad:
   ad has no link   → mapping form preset to source "Ad (no Post/Reel link)" + its Ad ID
 Group card Map Ad → the member that still needs answers
 /health warns about recently messaged ads that cannot answer price
+Ads summary warns about recently messaged unmapped ads and ADS referrals missing an ad ID;
+the first observed unmapped ad ID triggers a background inventory/creative refresh.
 ```
 
 ## 3. Approved Q&A edit

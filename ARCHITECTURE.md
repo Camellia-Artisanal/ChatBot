@@ -81,7 +81,7 @@ Posts & Reels / Stories / mapping form), `admin_approved_qa.py` (Approved Q&A + 
 | `approved_qa_contexts` | Client-added categories (built-ins are in `CANONICAL_CONTEXTS`) |
 | `menu_catalogue`, `menu_versions`, `menu_image_versions`, `menu_customer_topics` | Menus and what customers can see |
 | `cross_channel_handoffs` | Handoffs (WAITING_FOR_HUMAN mutes the bot) |
-| `conversations` | Every inbound/outbound turn (template_id, ad_id, source_routing_id) |
+| `conversations` | Every inbound/outbound turn (template_id, ad_id, source_routing_id, safe ad-referral presence/path/source/key diagnostics; no raw webhook body) |
 
 ## Tests
 

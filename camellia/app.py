@@ -808,6 +808,10 @@ def _process_instagram_event(
                 sender_id, "instagram", customer_message, "", False,
                 "waiting_for_human", message_source=entry.source, ad_id=ad_id,
                 decision_reason=json.dumps({"silent": "open handoff " + active_handoff["handoff_ref"]}),
+                ad_referral_present=entry.referral_present, ad_referral_path=entry.referral_path,
+                ad_referral_source=entry.referral_source,
+                ad_referral_ad_id_present=entry.referral_ad_id_present,
+                ad_referral_keys=entry.referral_keys,
             )
             log.info(
                 "Stored Instagram customer message while handoff %s is waiting for human.",
@@ -834,7 +838,7 @@ def _process_instagram_event(
             "ad_id": entry.ad_id or ad_id,
             # A new ad click brings its own title (or none); an earlier ad's
             # title must not pick the product for it (19 Oct).
-            "ad_title": entry.ad_title if entry.ad_id else (entry.ad_title or facts.get("ad_title")),
+            "ad_title": entry.ad_title if entry.from_ad_click else (entry.ad_title or facts.get("ad_title")),
             "media_id": entry.media_id,
         }
         if entry.ad_id:
@@ -866,7 +870,7 @@ def _process_instagram_event(
             post_media_id=shared_post_id,
             source_type="story_reply" if entry.source == "story_reply" else shared_source_type,
         )
-        unbound_ad_referral = bool(entry.from_ad_click and entry.ad_id and not source_route)
+        unbound_ad_referral = bool(entry.from_ad_click and not source_route)
         if trace.get("ad_id") and source_route:
             log.info(
                 "INSTAGRAM_AD_ROUTE ad_present=true ad_id_hash=%s binding_status=%s routing_id=%s source_type=%s",
@@ -896,10 +900,12 @@ def _process_instagram_event(
                 facts["source_priority_cursor"] = 0
                 facts["active_product_context"] = None
         elif unbound_ad_referral:
-            # A new trusted Ad referral without an exact active binding cannot
+            # A trusted ad referral without an ID or exact active binding cannot
             # borrow the source context from an earlier conversation/ad.
             facts["source_route"] = None
             facts["source_context_superseded"] = True
+            facts["source_match_method"] = "ad_referral_unmapped"
+            source_match_method = "ad_referral_unmapped"
             facts["source_priority_cursor"] = 0
             facts["last_topic"] = None
             facts["active_product_context"] = None
@@ -989,6 +995,21 @@ def _process_instagram_event(
             referral_source="ADS", referral_ad_id=trace["ad_id"], referral_ad_title=trace["ad_title"],
         )
 
+        if unbound_ad_referral:
+            # A trusted ad referral without an exact route must not borrow a
+            # generic or previous-city answer, even if a similar Q&A exists.
+            from camellia.handoff import default_handoff_message
+            response_text = default_handoff_message()
+            was_matched = False
+            template_id = "unmapped_ad_referral_handoff"
+            image_url = None
+            facts.update(
+                client_qa_id=None, ordered_response_blocks=[], source_context_used=False,
+                last_route_source="HUMAN_HANDOFF", last_grounding="unmapped_ad_referral",
+                last_actions=["escalate_to_team"], knowledge_sufficient=False,
+                ad_product=None, last_answer_id=None,
+            )
+
         # A Custom mapping's note is the client's own reply for that ad/post.
         # A generic price/details question nothing else answered gets it
         # (once) instead of the manager handoff. Specific requests, orders and
@@ -1023,7 +1044,7 @@ def _process_instagram_event(
         protected_flow = bool(
             facts.get("cart") or facts.get("order_draft") or facts.get("order_intake_draft")
         ) or template_id in ("order_draft_receipt", "order_next_steps", "order_intake_draft")
-        if (config.LLM_ASSISTED_RESOLUTION_ENABLED or config.LLM_AUTO_RESOLVE_SIMULATION_ENABLED) and not was_matched and not protected_flow and not source_route and template_id not in {"pending_menu_handoff", "unknown_price_handoff"}:
+        if (config.LLM_ASSISTED_RESOLUTION_ENABLED or config.LLM_AUTO_RESOLVE_SIMULATION_ENABLED) and not was_matched and not protected_flow and not source_route and template_id not in {"pending_menu_handoff", "unknown_price_handoff", "unmapped_ad_referral_handoff"}:
             assisted_suggestion = create_suggestion(
                 user_id=sender_id, channel="instagram", customer_message=customer_message,
                 deterministic_resolved=False, active_protected_flow=protected_flow,
@@ -1079,6 +1100,7 @@ def _process_instagram_event(
                 "order_draft_receipt",
                 "order_next_steps",
                 "client_approved_order_ready_handoff",
+                "unmapped_ad_referral_handoff",
             )
             or explicit_human_help
         )
@@ -1093,7 +1115,12 @@ def _process_instagram_event(
         )
         decision = {"responder_template": template_id, "matched": bool(was_matched),
                     "route_source": facts.get("last_route_source"), "grounding": facts.get("last_grounding"),
-                    "answer": facts.get("client_qa_id") if was_matched else None}
+                    "answer": facts.get("client_qa_id") if was_matched else None,
+                    "ad_referral": {
+                        "present": entry.referral_present, "path": entry.referral_path,
+                        "source": entry.referral_source, "ad_id_present": entry.referral_ad_id_present,
+                        "keys": entry.referral_keys or [],
+                    }}
         if needs_escalation:
             # A registry miss stays on Instagram even when the wording looks
             # purchase-shaped (for example, a 200-box wedding enquiry). Only
@@ -1102,12 +1129,14 @@ def _process_instagram_event(
             contact_mode = (
                 "whatsapp_order" if intake_order_handoff else
                 "support_callback"
-                if not was_matched and template_id in (None, "pending_menu_handoff", "unknown_price_handoff")
+                if not was_matched and template_id in (None, "pending_menu_handoff", "unknown_price_handoff", "unmapped_ad_referral_handoff")
                 else handoff_contact_mode(customer_message, template_id=template_id, facts=facts)
             )
             reason = (
                 "Order Confirmation & Intake Request"
                 if contact_mode == "whatsapp_order"
+                else "Unmapped Instagram Ad Referral"
+                if template_id == "unmapped_ad_referral_handoff"
                 else "Generic Human Support"
                 if explicit_human_help
                 else "Unmatched Instagram Query / Sensitive Request"
@@ -1153,7 +1182,7 @@ def _process_instagram_event(
                     },
                 )
             order_summary = handoff.get("verified_order")
-            if template_id in ("order_draft_receipt", "client_approved_order_ready_handoff", "pending_menu_handoff", "unknown_price_handoff") or facts.get("client_qa_handoff_exact"):
+            if template_id in ("order_draft_receipt", "client_approved_order_ready_handoff", "pending_menu_handoff", "unknown_price_handoff", "unmapped_ad_referral_handoff") or facts.get("client_qa_handoff_exact"):
                 response_text = response_text.rstrip()
             else:
                 response_text = customer_facing_notice(
@@ -1193,7 +1222,10 @@ def _process_instagram_event(
             logged_response = f"{response_text}\n\n{link_message}"
         conversation_id = db.log_conversation(
             sender_id, "instagram", customer_message, logged_response, was_matched,
-            template_id, **trace,
+            template_id, ad_referral_present=entry.referral_present,
+            ad_referral_path=entry.referral_path, ad_referral_source=entry.referral_source,
+            ad_referral_ad_id_present=entry.referral_ad_id_present,
+            ad_referral_keys=entry.referral_keys, **trace,
         )
 
         ordered_blocks = facts.get("ordered_response_blocks") if facts.get("last_route_source") in {"EXACT_APPROVED", "SOURCE_DESCRIPTION", "CUSTOM_SEQUENCE"} else None
@@ -2124,6 +2156,7 @@ def _dispatch_instagram_payload(payload: dict, background_tasks: BackgroundTasks
     )
     results = []
     preview_requests = []
+    unmapped_ad_sync_ids = set()
     for entry in entries:
         entry_id = entry.get("id", "")
         guard_match = _instagram_account_guard_matches(entry_id, configured_account_id)
@@ -2206,7 +2239,9 @@ def _dispatch_instagram_payload(payload: dict, background_tasks: BackgroundTasks
                     exact_route, _ = route_for_inbound(ad_id=str(entry_point.ad_id), media_id=None)
                     binding_status = db.instagram_ad_binding_status(str(entry_point.ad_id))
                     if binding_status == "UNBOUND":
-                        db.observe_instagram_ad(str(entry_point.ad_id), entry_point.ad_title)
+                        observed = db.observe_instagram_ad(str(entry_point.ad_id), entry_point.ad_title)
+                        if not exact_route and int(observed.get("occurrence_count") or 0) == 1:
+                            unmapped_ad_sync_ids.add(str(entry_point.ad_id))
                     log.info(
                         "INSTAGRAM_AD_ROUTE ad_present=true ad_id_hash=%s binding_status=%s routing_id=%s source_type=%s",
                         _safe_identifier_hash(entry_point.ad_id), binding_status,
@@ -2350,7 +2385,25 @@ def _dispatch_instagram_payload(payload: dict, background_tasks: BackgroundTasks
     preview_tasks = getattr(background_tasks, "background_tasks", background_tasks)
     for story_id, media_url in preview_requests:
         preview_tasks.add_task(instagram_story_previews.cache_preview, story_id, media_url, db)
+    for observed_ad_id in sorted(unmapped_ad_sync_ids):
+        preview_tasks.add_task(_sync_first_unmapped_ad, observed_ad_id)
     return {"status": "processed", "results": results}
+
+
+def _sync_first_unmapped_ad(ad_id: str) -> None:
+    """Refresh ad and creative inventory after the first exact unmapped ad hit."""
+    try:
+        from camellia.instagram_ads import sync_instagram_ads
+        result = sync_instagram_ads(db)
+        log.info("Unmapped ad first-hit inventory refresh: ad_id_hash=%s status=%s",
+                 _safe_identifier_hash(ad_id), result.get("status"))
+        if result.get("status") == "success":
+            from camellia.instagram_media import sync_instagram_media
+            media_result = sync_instagram_media(db)
+            log.info("Unmapped ad creative refresh: ad_id_hash=%s status=%s",
+                     _safe_identifier_hash(ad_id), media_result.get("status"))
+    except Exception:
+        log.exception("Unmapped ad first-hit sync failed: ad_id_hash=%s", _safe_identifier_hash(ad_id))
 
 
 @app.post("/webhook/instagram")

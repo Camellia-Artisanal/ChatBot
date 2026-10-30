@@ -663,9 +663,12 @@ def ads_workspace(database, view="active"):
     new_ad_ids = [row["ad_id"] for row in rows if row["waiting_for_meta"]]
     # Mapped = answers from its own mapping or from the Post/Reel it promotes.
     covered = lambda row: row["mapped"] or row["answers_from"] == "post"
+    referral_health = database.instagram_ad_referral_health(days=7)
     counts = {"active": len(active_groups), "raw_active": sum(row["active"] for row in rows), "unmapped": sum(not covered(row) for row in rows),
               "mapped": sum(covered(row) for row in rows), "inactive": sum(not row["active"] and row["inventory_state"] != "OBSERVED" for row in rows), "all": len(rows),
-              "answer_gaps": sum(is_answer_gap(row, row["answer_status"], recent_ids) for row in rows)}
+              "answer_gaps": sum(is_answer_gap(row, row["answer_status"], recent_ids) for row in rows),
+              "unmapped_messaged": sum(bool(row["recently_messaged"] and not covered(row)) for row in rows),
+              "missing_ad_id_referrals": referral_health["missing_ad_id"]}
     counts["running"] = len(running_groups) if delivery["status"] == "available" else None
     if delivery["unresolved_ad_ids"]:
         counts["running"] = None
@@ -677,5 +680,5 @@ def ads_workspace(database, view="active"):
                 (view == "inactive" and not row["active"] and row["inventory_state"] != "OBSERVED") or (view == "mapped" and row["mapped"]) or
                 (view == "unmapped" and not row["mapped"]) or
                 (view == "needs_answers" and is_answer_gap(row, row["answer_status"], recent_ids))]
-    return {"status": "success", "items": filtered, "active_groups": active_groups, "running_groups": running_groups, "new_ad_ids": new_ad_ids, "delivery": delivery, "counts": counts, "sync": sync_status(database),
+    return {"status": "success", "items": filtered, "active_groups": active_groups, "running_groups": running_groups, "new_ad_ids": new_ad_ids, "delivery": delivery, "counts": counts, "referral_health": referral_health, "sync": sync_status(database),
             "routes": [row for row in routes if row.get("active") and row.get("source_type") in {"post", "reel"}]}

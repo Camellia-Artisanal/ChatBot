@@ -7,6 +7,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 
 from camellia import instagram_ads as ads
+from camellia.admin_ads import SCRIPT
 
 from test_instagram_ads_inventory import item, route, store, sync  # noqa: F401
 
@@ -104,6 +105,12 @@ def test_ads_card_syncs_posts_and_stories_and_lists_new_ads():
     for url in ("/admin/instagram-ads/sync", "/admin/instagram-media/sync", "/admin/instagram-story-sources/sync"):
         assert url in SCRIPT
     assert "New: waiting for Meta" in SCRIPT and "new_ad_ids" in SCRIPT
+
+
+def test_ads_workspace_surfaces_recent_unmapped_and_missing_referral_warnings():
+    assert "unmapped_messaged" in SCRIPT
+    assert "missing_ad_id_referrals" in SCRIPT
+    assert "last 7 days" in SCRIPT
 
 
 def test_an_ad_past_its_schedule_is_not_waiting(store, monkeypatch):

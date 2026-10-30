@@ -1148,6 +1148,11 @@ class Database:
                 # Why the bot answered or handed off (18 Oct: a 9:54 PM handoff
                 # could not be explained afterwards).
                 ("decision_reason", "TEXT"),
+                ("ad_referral_present", "INTEGER DEFAULT 0"),
+                ("ad_referral_path", "TEXT"),
+                ("ad_referral_source", "TEXT"),
+                ("ad_referral_ad_id_present", "INTEGER DEFAULT 0"),
+                ("ad_referral_keys", "TEXT"),
             ):
                 self._ensure_column(cursor, "conversations", column, declaration)
 
@@ -4086,6 +4091,21 @@ class Database:
                 "ad_titles_seen": sum(1 for a in by_ad if a["ad_title"]),
             }
 
+    def instagram_ad_referral_health(self, days: int = 7) -> Dict[str, int]:
+        """Count explicitly attributed ad referrals and missing IDs without retaining raw webhook bodies."""
+        cutoff = (datetime.utcnow() - timedelta(days=max(1, int(days)))).strftime("%Y-%m-%d %H:%M:%S")
+        with self.get_connection() as conn:
+            row = conn.execute("""
+                SELECT COUNT(*) AS total,
+                       SUM(CASE WHEN ad_referral_present=1 AND ad_referral_source='ADS' THEN 1 ELSE 0 END) AS ad_referrals,
+                       SUM(CASE WHEN ad_referral_present=1 AND ad_referral_source='ADS'
+                                 AND ad_referral_ad_id_present=0 THEN 1 ELSE 0 END) AS missing_ad_id
+                FROM conversations
+                WHERE channel='instagram' AND timestamp >= ?
+            """, (cutoff,)).fetchone()
+        return {"days": max(1, int(days)), "ad_referrals": int(row["ad_referrals"] or 0),
+                "missing_ad_id": int(row["missing_ad_id"] or 0)}
+
     def set_ad_qualified(self, user_id: str, channel: str, is_ad_qualified: bool = True, ad_id: Optional[str] = None):
         """Mark user session as ad_qualified."""
         with self.get_connection() as conn:
@@ -4134,6 +4154,11 @@ class Database:
         source_media_present: bool = False,
         customer_text_accompanied_media: bool = False,
         decision_reason: Optional[str] = None,
+        ad_referral_present: bool = False,
+        ad_referral_path: Optional[str] = None,
+        ad_referral_source: Optional[str] = None,
+        ad_referral_ad_id_present: bool = False,
+        ad_referral_keys: Optional[List[str]] = None,
     ):
         """Log message exchange and increment analytics counters."""
         with self.get_connection() as conn:
@@ -4144,15 +4169,18 @@ class Database:
                 message_source, ad_id, ad_title, source_routing_id, source_match_method,
                 source_type, shortcode, media_id, routing_topic, source_context_used,
                 source_context_available, source_referential_intent, source_media_present,
-                customer_text_accompanied_media, decision_reason
+                customer_text_accompanied_media, decision_reason, ad_referral_present,
+                ad_referral_path, ad_referral_source, ad_referral_ad_id_present, ad_referral_keys
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 user_id, channel, user_message, bot_response, 1 if was_matched else 0, template_id,
                 message_source, ad_id, ad_title, source_routing_id, source_match_method,
                 source_type, shortcode, media_id, routing_topic, int(bool(source_context_used)),
                 int(bool(source_context_available)), source_referential_intent,
                 int(bool(source_media_present)), int(bool(customer_text_accompanied_media)), decision_reason,
+                int(bool(ad_referral_present)), ad_referral_path, ad_referral_source,
+                int(bool(ad_referral_ad_id_present)), json.dumps(ad_referral_keys or [], ensure_ascii=False),
             ))
             conversation_id = int(cursor.lastrowid)
             

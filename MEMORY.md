@@ -53,10 +53,20 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
 - **Ads answer like their post/reel**; renewed ads use their mapped twin's mapping; a group
   card's Map Ad opens the ad that needs answers. Ads Meta sends with no post link get their
   own mapping (source "Ad", identity = Meta Ad ID).
+- **An explicit ADS referral must have an exact active route.** If its ad ID is missing or
+  the ad has no route, clear prior ad/topic/product context and hand off; never answer from
+  an earlier conversation, an ad title, or generic city-specific copy. Store only referral
+  path/source/key names and ID-presence diagnostics, never the raw webhook body. The Ads
+  summary surfaces recent unmapped ad messages and missing-ID referrals; the first observed
+  unmapped ad ID triggers a background inventory/creative refresh.
 - **Mapping checklists isolate answers.** A post/ad checklist only uses its ticked answers
   (+ General); generic "Tell me more" / "How much does it cost?" pick its ticked
   details/price answer. No ad → general answers only. Use client categories (Approved Q&A →
   Category → Manage) to keep e.g. Kolkata and Gurgaon Home Table answers apart.
+- **Price button wording can vary across ads.** Keep one approved price answer and map price
+  prompts such as "What is the price per box?" to that price role on the exact ad/post. It
+  answers only when the source route selects one price answer; ambiguity or missing source
+  context still hands off.
 - **Generic ad questions are per post, not variations.** Never add "How much does it cost?" as an
   Approved Q&A variation (collides with General price or leaks to no-ad customers). Set the answer's
   "On mapped posts/ads, use for" instead and tick it on the post.

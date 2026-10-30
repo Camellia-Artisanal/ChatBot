@@ -50,7 +50,8 @@ def test_generic_questions_get_the_checklists_kolkata_answers(store):
     ask = lambda m: (approved_qa.match(m, facts, allowed_qa_ids=allowed, product_fallback=True) or type("N", (), {"entry": type("E", (), {"qa_id": None})})).entry.qa_id
     for message in ("Tell me more", "Can you tell me more about this?", "Hello, can I get more info on this?"):
         assert ask(message) == details["qa_id"], message
-    for message in ("How much does it cost?", "What is the price?", "What is the price per person?"):
+    for message in ("How much does it cost?", "What is the price?", "What is the price per person?",
+                    "What is the price per box?", "What is the price of a box?"):
         assert ask(message) == price["qa_id"], message
     assert ask("How do I pay?") == "general_payment_client"
     assert ask("Is it vegetarian?") is None

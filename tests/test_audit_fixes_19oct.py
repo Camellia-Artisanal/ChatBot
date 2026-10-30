@@ -57,7 +57,10 @@ def test_not_ready_to_order_is_not_a_finalised_order():
 
 def test_a_new_ad_does_not_inherit_the_previous_ads_title(ad_customer):
     sender, facts, db = ad_customer
-    _process(ad_customer, "hi", _ad_entry(sender, "111000222", "hi", title="Bengali Bento meal box"))
+    facts["ad_title"] = "Bengali Bento meal box"
+    facts["ad_product"] = "bento"
+    _mapped_source(ad_customer, "post", "999000111", topic_name="General",
+                   response_mode="APPROVED_QA", approved_qa_id="general_price")
     _process(ad_customer, "How much does it cost?", _ad_entry(sender, "999000111", "How much does it cost?", title=""))
     stored = db.get_conversations(limit=1, channel="instagram", user_id=sender)[0]
     assert facts.get("ad_product") is None

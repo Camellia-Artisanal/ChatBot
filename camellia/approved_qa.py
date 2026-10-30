@@ -246,7 +246,8 @@ def _role(entry):
 MAPPED_ROLES = {"price": "Price questions", "details": "Details questions", "booking": "Booking",
                 "location": "Location", "date": "Date & time"}
 DEFAULT_MAPPED_QUESTIONS = {
-    "price": ["How much does it cost?", "What is the price?", "What is the price per person?", "What's the price?",
+    "price": ["How much does it cost?", "What is the price?", "What is the price per person?",
+              "What is the price per box?", "What is the price of a box?", "What's the price?",
               "Price?", "Price please", "Rate?", "Cost?", "How much?", "How much is it?",
               "How much per person?", "Pricing?", "Price details", "Price list", "Charges?", "Fees?"],
     "details": ["Tell me more", "Tell me more about this", "Hello, can I get more info on this?", "Can I get more info?",
@@ -256,7 +257,8 @@ DEFAULT_MAPPED_QUESTIONS = {
     "location": ["Where is it?", "Location?", "Address please", "Where are you located?", "How to reach?"],
     "date": ["When is it?", "What is the date?", "What time does it start?", "Next date?", "Is this available?"],
 }
-PREVIEW_QUESTIONS = ["How much does it cost?", "What is the price per person?", "Tell me more",
+PREVIEW_QUESTIONS = ["How much does it cost?", "What is the price per person?", "What is the price per box?",
+                     "What is the price of a box?", "Tell me more",
                      "Hello, can I get more info on this?", "How to book?", "Where is it?", "When is it?"]
 
 

@@ -282,9 +282,10 @@ def test_attachment_reply_behaviour_is_unchanged(monkeypatch):
     result = app_module._dispatch_instagram_payload(payload, _Tasks())
 
     assert result["results"][0]["action"] == "queued_attachment_reply"
-    assert [name for name, _ in queued] == ["_handle_shared_attachment"]
+    assert [name for name, _ in queued] == ["_handle_shared_attachment", "_sync_first_unmapped_ad"]
     # No identity was extracted, so the wrapper has no context to establish.
     assert queued[0][1][1] is None
+    assert queued[1][1] == ("ad_1",)
     assert result["results"][0]["shared_reel_shortcode"] is None
     # Captured for inspection, but no routing decision was taken from it.
     assert len(app_module._ATTACHMENT_DEBUG_EVENTS) == 1

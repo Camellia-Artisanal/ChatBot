@@ -127,10 +127,14 @@ function renderAdsWorkspace() {
     const plain = counts.mapped == null && counts.unmapped == null ? '' : `<div style="width:100%;font-size:1rem;"><b>${Number(counts.mapped || 0)}</b> ads mapped · <b>${Number(counts.unmapped || 0)}</b> not mapped</div>`;
     // Ads customers messaged from this week that cannot answer price, without needing their IDs.
     const gaps = Number(counts.answer_gaps || 0);
+    const unmappedHits = Number(counts.unmapped_messaged || 0);
+    const missingAdIds = Number(counts.missing_ad_id_referrals || 0);
+    const referralBanner = unmappedHits || missingAdIds
+        ? `<div role="alert" style="width:100%;font-size:1rem;margin-bottom:6px;">⚠ Recent ad routing needs review: <b>${unmappedHits}</b> recently messaged ad(s) lack a mapped answer; <b>${missingAdIds}</b> ad referral(s) arrived without an ad ID in the last 7 days. Check Unmapped and Conversations.</div>` : '';
     const gapBanner = adsFilter === 'needs_answers'
         ? `<div style="width:100%;font-size:1rem;margin-bottom:6px;">${gaps ? `<b>${gaps}</b> ad(s) customers messaged from this week can't answer “How much does it cost?”. Tap <b>Map Ad</b> on each and set its answers.` : '✅ Every ad customers messaged from this week answers price questions.'}</div>`
         : gaps ? `<div style="width:100%;font-size:1rem;margin-bottom:6px;">⚠ <b>${gaps}</b> ad(s) customers messaged from this week can't answer price questions. <button class="btn-secondary" type="button" onclick="setAdsFilter('needs_answers')">Show them</button></div>` : '';
-    document.getElementById('adsSummary').innerHTML = `${gapBanner}${plain}<details style="width:100%;" class="ig-media-muted"><summary>Counts</summary><div style="width:100%;">Running Now: <b>${counts.running == null ? 'Not checked / unavailable' : Number(counts.running)}</b> creative groups · Meta-reported active creative groups: <b>${Number(counts.active || 0)}</b></div><div style="width:100%;"><b>Raw Meta Ad ID counts</b> · ${rawCounts.map(([key,label]) => `${label}: ${counts[key] == null ? 'Not checked' : Number(counts[key])}`).join(' · ')}</div></details>`;
+    document.getElementById('adsSummary').innerHTML = `${referralBanner}${gapBanner}${plain}<details style="width:100%;" class="ig-media-muted"><summary>Counts</summary><div style="width:100%;">Running Now: <b>${counts.running == null ? 'Not checked / unavailable' : Number(counts.running)}</b> creative groups · Meta-reported active creative groups: <b>${Number(counts.active || 0)}</b></div><div style="width:100%;"><b>Raw Meta Ad ID counts</b> · ${rawCounts.map(([key,label]) => `${label}: ${counts[key] == null ? 'Not checked' : Number(counts[key])}`).join(' · ')}</div></details>`;
     const sync = adsWorkspace.sync || {};
     const notice = document.getElementById('adsSyncNotice');
     if (sync.error_category && !adsSyncBusy && !notice.textContent.startsWith('Synced')) notice.textContent = `⚠ The last ads sync failed (${sync.error_category}). The ads shown are from ${sync.last_success_at || 'an earlier sync'}. Tap Sync Now to retry.`;

@@ -78,6 +78,29 @@ class TestEntryPointClassification:
         assert entry.ad_id == "999"
         assert entry.ad_title is None
 
+    def test_an_ad_referral_without_an_id_retains_safe_diagnostics(self):
+        entry = describe_entry_point({
+            "sender": {"id": "u1"},
+            "message": {"text": "price per box?", "referral": {"source": "ADS", "ads_context_data": {}}},
+        })
+        assert entry.from_ad_click is True
+        assert entry.ad_id is None
+        assert entry.referral_present is True
+        assert entry.referral_path == "message"
+        assert entry.referral_source == "ADS"
+        assert entry.referral_ad_id_present is False
+        assert entry.referral_keys == ["ads_context_data", "source"]
+
+    def test_empty_message_referral_does_not_hide_event_referral(self):
+        entry = describe_entry_point({
+            "sender": {"id": "u1"},
+            "message": {"text": "price?", "referral": {}},
+            "referral": {"source": "ADS", "ad_id": "ad-123"},
+        })
+        assert entry.from_ad_click is True
+        assert entry.ad_id == "ad-123"
+        assert entry.referral_path == "event"
+
     def test_a_story_reply_is_distinguished_from_a_normal_message(self):
         entry = describe_entry_point(
             {
@@ -120,6 +143,25 @@ class TestConversationLogging:
             ).fetchone()
 
         assert row["message_source"] is None
+
+    def test_ad_referral_diagnostics_are_persisted_without_raw_payload(self):
+        db.log_conversation(
+            "ep_user_3", "instagram", "price?", "handoff", False, "instagram_support_handoff",
+            ad_referral_present=True, ad_referral_path="message", ad_referral_source="ADS",
+            ad_referral_ad_id_present=False, ad_referral_keys=["source", "ads_context_data"],
+        )
+        with db.get_connection() as conn:
+            row = conn.execute(
+                "SELECT ad_referral_present, ad_referral_path, ad_referral_source, "
+                "ad_referral_ad_id_present, ad_referral_keys FROM conversations "
+                "WHERE user_id='ep_user_3' ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+        assert row["ad_referral_present"] == 1
+        assert row["ad_referral_path"] == "message"
+        assert row["ad_referral_source"] == "ADS"
+        assert row["ad_referral_ad_id_present"] == 0
+        assert '"ads_context_data"' in row["ad_referral_keys"]
+        assert db.instagram_ad_referral_health(days=3650)["missing_ad_id"] >= 1
 
 
 class TestBreakdown:
