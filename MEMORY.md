@@ -62,6 +62,8 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
 - **Needs answers only counts Meta-confirmed active ads.** A webhook-observed ID whose Meta
   inventory status is unknown stays visible under Unmapped but is not reported in active
   price-answer or routing warnings.
+- **Admin Sync Now must not hold the browser request open for full Meta pagination.** Queue
+  the ads, Posts/Reels, and Stories refresh in the background and expose durable progress.
 - **Mapping checklists isolate answers.** A post/ad checklist only uses its ticked answers
   (+ General); generic "Tell me more" / "How much does it cost?" pick its ticked
   details/price answer. No ad → general answers only. Use client categories (Approved Q&A →

@@ -925,6 +925,17 @@ class Database:
                 )
             """)
             cursor.execute("""
+                CREATE TABLE IF NOT EXISTS instagram_ads_manual_sync_jobs (
+                    id INTEGER PRIMARY KEY CHECK(id=1),
+                    status TEXT NOT NULL DEFAULT 'IDLE',
+                    stage TEXT,
+                    started_at TEXT,
+                    finished_at TEXT,
+                    result_json TEXT,
+                    updated_at TEXT NOT NULL
+                )
+            """)
+            cursor.execute("""
             CREATE TABLE IF NOT EXISTS instagram_source_ad_binding_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 ad_id TEXT NOT NULL,
@@ -1877,6 +1888,54 @@ class Database:
             row = conn.execute("SELECT * FROM instagram_ads_syncs WHERE ad_account_id=?", (account_id,)).fetchone()
         result = dict(row) if row else {}
         result.pop("lease_until", None)
+        return result
+
+    def start_instagram_ads_manual_sync(self) -> bool:
+        """Claim the singleton manual refresh job, rejecting recent duplicates."""
+        now = datetime.now(timezone.utc)
+        stamp = now.isoformat()
+        stale_before = (now - timedelta(minutes=20)).isoformat()
+        with self.get_connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute("SELECT status,updated_at FROM instagram_ads_manual_sync_jobs WHERE id=1").fetchone()
+            if row and row["status"] == "RUNNING" and str(row["updated_at"] or "") >= stale_before:
+                conn.rollback()
+                return False
+            conn.execute("""
+                INSERT INTO instagram_ads_manual_sync_jobs (id,status,stage,started_at,finished_at,result_json,updated_at)
+                VALUES (1,'RUNNING','QUEUED',?,NULL,NULL,?)
+                ON CONFLICT(id) DO UPDATE SET status='RUNNING',stage='QUEUED',started_at=excluded.started_at,
+                    finished_at=NULL,result_json=NULL,updated_at=excluded.updated_at
+            """, (stamp, stamp))
+            conn.commit()
+        return True
+
+    def update_instagram_ads_manual_sync(self, status: str, stage: Optional[str] = None,
+                                        result: Optional[Dict[str, Any]] = None) -> None:
+        stamp = datetime.now(timezone.utc).isoformat()
+        finished = stamp if status in {"SUCCESS", "PARTIAL", "FAILED"} else None
+        with self.get_connection() as conn:
+            conn.execute("""
+                INSERT INTO instagram_ads_manual_sync_jobs (id,status,stage,started_at,finished_at,result_json,updated_at)
+                VALUES (1,?,?,?, ?,?,?)
+                ON CONFLICT(id) DO UPDATE SET status=excluded.status,stage=excluded.stage,
+                    finished_at=COALESCE(excluded.finished_at,instagram_ads_manual_sync_jobs.finished_at),
+                    result_json=COALESCE(excluded.result_json,instagram_ads_manual_sync_jobs.result_json),
+                    updated_at=excluded.updated_at
+            """, (status, stage, stamp, finished, json.dumps(result, ensure_ascii=False) if result is not None else None, stamp))
+            conn.commit()
+
+    def get_instagram_ads_manual_sync(self) -> Dict[str, Any]:
+        with self.get_connection() as conn:
+            row = conn.execute("SELECT * FROM instagram_ads_manual_sync_jobs WHERE id=1").fetchone()
+        if not row:
+            return {"status": "IDLE", "stage": None, "started_at": None, "finished_at": None, "result": None}
+        result = dict(row)
+        raw = result.pop("result_json", None)
+        try:
+            result["result"] = json.loads(raw) if raw else None
+        except (TypeError, ValueError):
+            result["result"] = None
         return result
 
     def acquire_instagram_ads_sync(self, account_id: str) -> bool:

@@ -87,13 +87,52 @@ async function loadAdsWorkspace() {
         if (generation === adsRequestGeneration) document.getElementById('adsSyncStatus').textContent = 'Could not refresh Ads. Previously loaded inventory is retained.';
     }
 }
-// 19 Oct: Sync Now also brings in new Posts/Reels and Stories, so the post a
-// new ad promotes is ready to map in the same click, and says what came in.
-const ADS_SYNC_WARNINGS = {busy: 'A sync is already running. Try again in a minute.', error: 'Meta did not answer this sync. The ads already shown are kept.'};
+// Sync Now queues the full refresh and polls durable progress instead of holding
+// the request open while Meta's paginated inventory is read.
+const ADS_SYNC_STAGES = {QUEUED:'Starting sync…', ADS:'Syncing ads…', POSTS_REELS:'Syncing posts and reels…', STORIES:'Syncing stories…', COMPLETE:'Finishing…'};
 async function adsSyncStep(url) {
     const response = await fetch(url, {method:'POST', headers:getAuthHeaders()});
     if (!response.ok) throw Error('Sync unavailable');
     return response.json();
+}
+async function getManualAdsSyncStatus() {
+    const response = await fetch('/admin/instagram-ads/manual-sync-status', {headers:getAuthHeaders(), cache:'no-store'});
+    if (!response.ok) throw Error('Sync status unavailable');
+    return response.json();
+}
+const adsSyncWait = ms => new Promise(resolve => setTimeout(resolve, ms));
+let adsSyncMonitorRunning = false;
+async function waitForManualAdsSync(notice) {
+    const deadline = Date.now() + 20 * 60 * 1000;
+    while (Date.now() < deadline) {
+        const state = await getManualAdsSyncStatus();
+        if (state.status !== 'RUNNING') return state;
+        notice.textContent = ADS_SYNC_STAGES[state.stage] || 'Syncing with Meta…';
+        await adsSyncWait(1500);
+    }
+    throw Error('Sync is still running in the background. Check status again shortly.');
+}
+async function monitorManualAdsSync(notice, before) {
+    if (adsSyncMonitorRunning) return;
+    adsSyncMonitorRunning = true;
+    try {
+        const job = await waitForManualAdsSync(notice);
+        await loadAdsWorkspace();
+        const counts = adsWorkspace.counts || {};
+        const added = Math.max(0, Number(counts.all || 0) - before);
+        const waiting = Number(counts.new_waiting || 0);
+        const result = job.result || {};
+        const warnings = [];
+        if (result.ads?.status !== 'success') warnings.push(`Ads: ${result.ads?.error_category || result.ads?.status || 'sync failed'}`);
+        if (result.posts_reels?.status !== 'COMPLETED') warnings.push(`Posts/Reels: ${result.posts_reels?.failure_category || result.posts_reels?.status || 'sync failed'}`);
+        if (result.stories?.status !== 'success') warnings.push(`Stories: ${result.stories?.failure_category || result.stories?.status || 'sync failed'}`);
+        const newPosts = Number(result.posts_reels?.discovered || 0);
+        const parts = [`${added} new ad(s)`, `${newPosts} new post(s)/reel(s)`];
+        if (waiting) parts.push(`${waiting} waiting for Meta, ready to map`);
+        notice.textContent = `${job.status === 'SUCCESS' ? 'Synced' : 'Sync finished with warnings'}: ${parts.join(' · ')}${warnings.length ? ' ⚠ ' + warnings.join(' · ') : ''}`;
+    } catch (_) {
+        notice.textContent = '⚠ Sync is still running in the background or its status could not be checked. Refresh Ads shortly.';
+    } finally { adsSyncMonitorRunning = false; }
 }
 async function syncAdsNow() {
     if (adsSyncBusy) return;
@@ -101,24 +140,14 @@ async function syncAdsNow() {
     const notice = document.getElementById('adsSyncNotice');
     const button = document.getElementById('adsSyncButton'); button.disabled = true; button.textContent = 'Syncing…';
     const before = Number(adsWorkspace.counts?.all || 0);
-    const parts = [], warnings = [];
     try {
-        notice.textContent = 'Syncing ads, posts/reels and stories…';
-        const ads = await adsSyncStep('/admin/instagram-ads/sync');
-        if (ads.status !== 'success') warnings.push('Ads: ' + (ADS_SYNC_WARNINGS[ads.status] || ADS_SYNC_WARNINGS.error) + (ads.error_category ? ` (${ads.error_category})` : ''));
-        const media = await adsSyncStep('/admin/instagram-media/sync').catch(() => ({status: 'FAILED'}));
-        if (media.status === 'COMPLETED') parts.push(`${Number(media.discovered || 0)} new post(s)/reel(s)`);
-        else warnings.push('Posts/Reels: ' + (media.failure_category || media.failure?.category || 'sync failed'));
-        const stories = await adsSyncStep('/admin/instagram-story-sources/sync').catch(() => ({status: 'error'}));
-        if (stories.status === 'busy') warnings.push('Stories: a sync is already running');
-        else if (stories.failure && stories.status !== 'partial') warnings.push('Stories: ' + (stories.failure.category || 'sync failed'));
-        await loadAdsWorkspace();
-        const counts = adsWorkspace.counts || {};
-        const added = Math.max(0, Number(counts.all || 0) - before);
-        const waiting = Number(counts.new_waiting || 0);
-        parts.unshift(`${added} new ad(s)${waiting ? ` · ${waiting} waiting for Meta (listed below, you can map them now)` : ''}`);
-        notice.textContent = `Synced: ${parts.join(' · ')}${warnings.length ? ' ⚠ ' + warnings.join(' · ') : ''}`;
-    } catch (_) { notice.textContent = '⚠ Sync unavailable. The ads already shown are kept. Try again in a minute.'; }
+        notice.textContent = 'Starting background sync…';
+        const started = await adsSyncStep('/admin/instagram-ads/sync');
+        notice.textContent = started.status === 'busy'
+            ? 'A sync is already running. You can keep using the portal; this status will update when it finishes.'
+            : 'Sync started in the background. You can keep using the portal; this status will update when it finishes.';
+        void monitorManualAdsSync(notice, before);
+    } catch (_) { notice.textContent = '⚠ Sync is running in the background or could not be checked. Refresh Ads shortly to see updated results.'; }
     finally { adsSyncBusy = false; button.disabled = false; button.textContent = '↻ Sync Now'; }
 }
 function renderAdsWorkspace() {

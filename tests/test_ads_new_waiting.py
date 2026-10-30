@@ -99,11 +99,12 @@ def test_auto_sync_survives_a_failing_sync(monkeypatch, store):
     assert calls == ["ads", "media"]
 
 
-def test_ads_card_syncs_posts_and_stories_and_lists_new_ads():
+def test_ads_card_queues_background_sync_and_lists_new_ads():
     from camellia.admin_ads import HTML, SCRIPT
     assert 'id="adsSyncNotice"' in HTML
-    for url in ("/admin/instagram-ads/sync", "/admin/instagram-media/sync", "/admin/instagram-story-sources/sync"):
-        assert url in SCRIPT
+    assert "/admin/instagram-ads/sync" in SCRIPT
+    assert "/admin/instagram-ads/manual-sync-status" in SCRIPT
+    assert "waitForManualAdsSync" in SCRIPT and "Syncing posts and reels" in SCRIPT
     assert "New: waiting for Meta" in SCRIPT and "new_ad_ids" in SCRIPT
 
 

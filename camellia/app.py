@@ -3958,10 +3958,56 @@ def instagram_ads_sync_status(x_admin_key: Optional[str] = Header(None), x_admin
 
 
 @app.post("/admin/instagram-ads/sync")
-def sync_admin_instagram_ads(x_admin_key: Optional[str] = Header(None), x_admin_pin: Optional[str] = Header(None)):
+def sync_admin_instagram_ads(background_tasks: BackgroundTasks,
+                             x_admin_key: Optional[str] = Header(None), x_admin_pin: Optional[str] = Header(None)):
     require_admin(x_admin_key, x_admin_pin)
+    if not db.start_instagram_ads_manual_sync():
+        return {"status": "busy"}
+    background_tasks.add_task(_run_admin_instagram_ads_sync)
+    return {"status": "started"}
+
+
+@app.get("/admin/instagram-ads/manual-sync-status")
+def instagram_ads_manual_sync_status(x_admin_key: Optional[str] = Header(None), x_admin_pin: Optional[str] = Header(None)):
+    require_admin(x_admin_key, x_admin_pin)
+    return db.get_instagram_ads_manual_sync()
+
+
+def _run_admin_instagram_ads_sync() -> None:
+    """Refresh ads, Posts/Reels, then Stories off the admin request path."""
     from camellia.instagram_ads import sync_instagram_ads
-    return sync_instagram_ads(db)
+    from camellia.instagram_media import sync_instagram_media
+    from camellia.instagram_story_sync import sync_instagram_stories
+
+    results = {}
+    try:
+        db.update_instagram_ads_manual_sync("RUNNING", "ADS")
+        ads_result = sync_instagram_ads(db)
+        results["ads"] = {key: ads_result.get(key) for key in ("status", "error_category", "active_ad_count")}
+
+        db.update_instagram_ads_manual_sync("RUNNING", "POSTS_REELS", results)
+        media_result = sync_instagram_media(db)
+        results["posts_reels"] = {key: media_result.get(key) for key in ("status", "failure_category", "discovered", "updated")}
+
+        db.update_instagram_ads_manual_sync("RUNNING", "STORIES", results)
+        story_result = sync_instagram_stories(db)
+        results["stories"] = {key: story_result.get(key) for key in ("status", "created", "updated")}
+        results["stories"]["failure_category"] = (story_result.get("failure") or {}).get("category")
+
+        successful = (
+            ads_result.get("status") == "success"
+            and media_result.get("status") == "COMPLETED"
+            and story_result.get("status") == "success"
+        )
+        any_success = (ads_result.get("status") == "success"
+                       or media_result.get("status") == "COMPLETED"
+                       or story_result.get("status") == "success")
+        db.update_instagram_ads_manual_sync("SUCCESS" if successful else "PARTIAL" if any_success else "FAILED",
+                                            "COMPLETE", results)
+    except Exception:
+        log.exception("Manual Instagram ads workspace sync failed.")
+        results["failure_category"] = "LOCAL_SYNC_FAILED"
+        db.update_instagram_ads_manual_sync("FAILED", "FAILED", results)
 
 
 @app.post("/admin/instagram-ads/{ad_id}/bind")

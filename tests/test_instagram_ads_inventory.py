@@ -213,6 +213,30 @@ def test_not_configured_never_calls_meta(store, monkeypatch):
     assert result["error_category"] == "NOT_CONFIGURED" and not result["configured"] and not calls
 
 
+def test_admin_manual_sync_queues_immediately_and_persists_progress(store, monkeypatch):
+    class TaskCapture:
+        def __init__(self):
+            self.tasks = []
+        def add_task(self, fn, *args, **kwargs):
+            self.tasks.append((fn, args, kwargs))
+
+    tasks = TaskCapture()
+    response = app_module.sync_admin_instagram_ads(tasks, x_admin_key=config.ADMIN_API_KEY)
+    assert response == {"status": "started"}
+    assert len(tasks.tasks) == 1 and tasks.tasks[0][0] is app_module._run_admin_instagram_ads_sync
+    assert app_module.sync_admin_instagram_ads(TaskCapture(), x_admin_key=config.ADMIN_API_KEY) == {"status": "busy"}
+    assert app_module.instagram_ads_manual_sync_status(x_admin_key=config.ADMIN_API_KEY)["status"] == "RUNNING"
+
+    from camellia import instagram_media, instagram_story_sync
+    monkeypatch.setattr(ads, "sync_instagram_ads", lambda database: {"status": "success", "active_ad_count": 2})
+    monkeypatch.setattr(instagram_media, "sync_instagram_media", lambda database: {"status": "COMPLETED", "discovered": 3})
+    monkeypatch.setattr(instagram_story_sync, "sync_instagram_stories", lambda database: {"status": "success", "created": 1})
+    tasks.tasks[0][0]()
+    final = app_module.instagram_ads_manual_sync_status(x_admin_key=config.ADMIN_API_KEY)
+    assert final["status"] == "SUCCESS"
+    assert final["result"]["posts_reels"]["discovered"] == 3
+
+
 def test_sync_lock_prevents_overlapping_snapshot(store, monkeypatch):
     assert store.acquire_instagram_ads_sync("act_12345")
     calls = mock_pages(monkeypatch, [])

@@ -75,6 +75,7 @@ Posts & Reels / Stories / mapping form), `admin_approved_qa.py` (Approved Q&A + 
 |---|---|
 | `instagram_source_routes` | A mapping: source_type post/reel/ad/story, identity (url/shortcode/media_id/ad_id), response_mode CUSTOM or APPROVED_QA, topic, menu |
 | `instagram_source_ad_bindings` | Meta Ad ID → mapping (BOUND/OBSERVED, active) |
+| `instagram_ads_manual_sync_jobs` | Singleton durable status/stage for the admin background Ads/Posts/Reels/Stories refresh |
 | `instagram_source_qa_bundles` (+`_items`) | Checklist of approved answers for a post/reel/ad mapping, with its context |
 | `instagram_topics` | Mapping topics; `default_approved_qa_ids` answer price/details for Custom mappings |
 | `approved_qa_overrides` (+`_versions`) | Admin edits/new answers; `aliases_json`, `blocks_json`, `hidden_aliases_json` |

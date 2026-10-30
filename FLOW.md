@@ -60,6 +60,8 @@ Group card Map Ad → the member that still needs answers
 /health warns about recently messaged ads that cannot answer price
 Ads summary warns about recently messaged unmapped ads and ADS referrals missing an ad ID;
 the first observed unmapped ad ID triggers a background inventory/creative refresh.
+Manual Sync Now returns immediately, then refreshes ads, Posts/Reels, and Stories in a
+background job while the portal polls and displays the current stage/result.
 Needs answers includes only recently messaged ads Meta confirms are active; observed-only
 IDs with unknown delivery status remain in Unmapped and are not counted in active answer or
 routing warnings.
