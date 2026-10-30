@@ -4843,6 +4843,9 @@ def get_escalations_list(limit: int = 50, status: Optional[str] = None, x_admin_
             context = {}
         if not isinstance(context, dict):
             context = {}
+        escalation["customer_username"] = normalize_instagram_username(context.get("customer_username") or context.get("instagram_username")) or None
+        escalation["source_type"] = str(context.get("source_type") or "").strip().lower() or None
+        escalation["media_id"] = str(context.get("media_id") or "").strip() or None
         ad_id = str(context.get("ad_id") or "").strip()
         escalation["mapping_routing_id"] = None
         if ad_id:
@@ -4856,6 +4859,19 @@ def get_escalations_list(limit: int = 50, status: Optional[str] = None, x_admin_
                 if ad_route:
                     escalation["mapping_routing_id"] = ad_route.get("routing_id")
         escalation["ad_id"] = ad_id or None
+        source_route = db.get_instagram_source_route(int(escalation["mapping_routing_id"])) if escalation.get("mapping_routing_id") else None
+        if not source_route and escalation.get("media_id"):
+            source_route = db.find_instagram_source_route("media_id", escalation["media_id"], escalation.get("source_type"))
+        if not source_route and ad_id:
+            ad = db.get_instagram_ad_inventory_row(ad_id) or {}
+            escalation["source_preview_url"] = ad.get("thumbnail_url") or ad.get("image_url") or None
+            escalation["source_permalink"] = ad.get("permalink") or None
+            escalation["source_label"] = ad.get("name") or "Instagram ad"
+        else:
+            source_route = source_route or {}
+            escalation["source_preview_url"] = source_route.get("preview_url") or source_route.get("admin_preview_url") or None
+            escalation["source_permalink"] = source_route.get("canonical_url") or None
+            escalation["source_label"] = source_route.get("routing_topic") or source_route.get("source_type") or "Instagram content"
     return {"count": len(escalations), "escalations": escalations}
 
 
@@ -6643,7 +6659,9 @@ async def resolve_escalation(
     except Exception:
         body = {}
 
-    status = body.get("status", "resolved")
+    status = str(body.get("status", "resolved")).strip().lower()
+    if status not in {"resolved", "ignored"}:
+        raise HTTPException(status_code=400, detail="Status must be resolved or ignored.")
     verified_answer = body.get("verified_answer", "").strip()
     topic = body.get("topic", "").strip()
     question_pattern = body.get("question_pattern", "").strip()
@@ -6663,10 +6681,11 @@ async def resolve_escalation(
         raise HTTPException(status_code=404, detail="Escalation not found")
 
     return {
-        "status": "resolved",
+        "status": status,
         "escalation_id": escalation_id,
         "learned_knowledge_id": knowledge_id,
-        "message": "Escalation resolved successfully." + (" Knowledge base updated." if knowledge_id else "")
+        "message": ("Escalation ignored." if status == "ignored" else "Escalation resolved successfully.")
+        + (" Knowledge base updated." if knowledge_id else "")
     }
 
 @app.get("/admin/templates")
@@ -9313,6 +9332,13 @@ THIS WEEK'S BENGAL SPECIALS
         <div id="contentDetailsFacts" class="drawer-facts"></div>
         <div id="contentDetailsActions" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
     </aside>
+    <div id="setupRoutePreviewOverlay" class="ig-cover-modal-overlay" aria-hidden="true">
+        <section class="ig-cover-modal-box" role="dialog" aria-modal="true" aria-labelledby="setupRoutePreviewTitle">
+            <h3 id="setupRoutePreviewTitle">Review source before editing</h3>
+            <div id="setupRoutePreviewBody"></div>
+            <div class="ig-cover-modal-actions"><button class="ig-cover-cancel" type="button" onclick="closeSetupRoutePreview()">Cancel</button><button class="ig-cover-save" type="button" onclick="continueSetupRouteEdit()">Continue to edit mapping</button></div>
+        </section>
+    </div>
     <div id="adminToastStack" class="toast-stack" aria-live="polite" aria-atomic="true"></div>
 
     <script>
@@ -9644,22 +9670,47 @@ THIS WEEK'S BENGAL SPECIALS
             } catch (_) { box.innerHTML = ''; }
         }
         async function openSetupRoute(routingId, sourceType, mediaId) {
-            if (sourceType === 'story' && mediaId) {
-                switchTab('tab-instagram-stories', null);
-                setTimeout(() => openInstagramStoryMapping(mediaId), 150);
-                return;
-            }
+            let route = null;
             await loadAdRoutes();
-            const route = (window.igRoutes || []).find(item => Number(item.routing_id) === Number(routingId));
-            if (route) openAdminRoute(route);
+            route = (window.igRoutes || []).find(item => Number(item.routing_id) === Number(routingId));
+            window.pendingSetupRouteEdit = {routingId, sourceType, mediaId, route};
+            const image = route?.preview_url || route?.admin_preview_url;
+            const link = route?.canonical_url;
+            document.getElementById('setupRoutePreviewBody').innerHTML = `${image ? `<img src="${escapeHtml(image)}" alt="Instagram source preview" style="width:100%;max-height:320px;object-fit:contain;border-radius:10px;background:#eee;">` : '<div class="ig-media-placeholder" style="height:180px;border-radius:10px;">Preview unavailable</div>'}<p><b>${escapeHtml(route?.routing_topic || (sourceType === 'story' ? 'Instagram Story' : sourceType === 'reel' ? 'Instagram Reel' : 'Instagram Post'))}</b></p>${link ? `<a href="${escapeHtml(link)}" target="_blank" rel="noopener">Open original Instagram post</a>` : '<p class="ig-media-muted">No Instagram permalink is available for this source.</p>'}`;
+            document.getElementById('setupRoutePreviewOverlay').classList.add('active');
+            document.getElementById('setupRoutePreviewOverlay').setAttribute('aria-hidden', 'false');
+        }
+        function closeSetupRoutePreview() {
+            document.getElementById('setupRoutePreviewOverlay')?.classList.remove('active');
+            document.getElementById('setupRoutePreviewOverlay')?.setAttribute('aria-hidden', 'true');
+            window.pendingSetupRouteEdit = null;
+        }
+        function continueSetupRouteEdit() {
+            const pending = window.pendingSetupRouteEdit;
+            if (!pending) return;
+            closeSetupRoutePreview();
+            if (pending.sourceType === 'story' && pending.mediaId) {
+                switchTab('tab-instagram-stories', null);
+                setTimeout(() => openInstagramStoryMapping(pending.mediaId), 150);
+            } else if (pending.route) openAdminRoute(pending.route);
             else { switchTab('tab-instagram-content', null); setInstagramContentSubview('routing'); document.getElementById('adRouteList')?.scrollIntoView({behavior:'smooth'}); }
         }
         function renderEscalationReview(container, escalations, dashboard = false) {
             if (!container) return;
             if (!escalations.length) { container.innerHTML = dashboard ? '' : '<div class="dashboard-subcard" style="padding:12px;border:1px solid var(--border);border-radius:12px;color:var(--text-muted);">No pending escalated questions.</div>'; return; }
-            const heading = dashboard ? 'Customer questions needing a human answer' : 'Escalated customer questions · separate from answer drafts';
-            container.innerHTML = `<div class="dashboard-subcard" style="background:#fff8ec;border:1px solid #f0c36d;border-radius:14px;padding:16px;"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;"><b>${heading} (${escalations.length})</b>${dashboard ? '<button class="btn-secondary" type="button" onclick="switchTab(\'tab-candidates\', null)">Review questions</button>' : ''}</div><p style="margin:5px 0 10px;color:var(--text-muted);">These questions were handed to the manager. Review the reason and map their source or add a verified answer; nothing here is automatically approved.</p>${escalations.map(e => `<div style="padding:10px 0;border-top:1px solid #ead8bb;"><b>${escapeHtml(e.user_message || 'Customer question unavailable')}</b><div style="font-size:.85rem;margin:3px 0;color:var(--text-muted);">${escapeHtml(e.channel || 'Instagram')} · ${escapeHtml(formatAdminTimestamp(e.created_at))} · ${escapeHtml(e.reason || 'No reason recorded')}</div><button class="btn-secondary" type="button" data-escalation-map="${Number(e.id)}" style="padding:5px 9px;font-size:.78rem;">${e.mapping_routing_id || e.ad_id ? 'Open mapping' : 'Review question'}</button></div>`).join('')}</div>`;
+            const heading = 'Escalated customer questions';
+            container.innerHTML = `<div class="dashboard-subcard" style="background:#fff8ec;border:1px solid #f0c36d;border-radius:14px;padding:10px 12px;"><b>${heading} (${escalations.length})</b><div style="margin-top:6px;">${escalations.map(e => { const image = e.source_preview_url; const preview = image ? `<img src="${escapeHtml(image)}" alt="Source post preview" loading="lazy" style="width:100%;max-height:210px;object-fit:contain;border-radius:8px;background:#eee;">` : '<div class="ig-media-placeholder" style="height:120px;border-radius:8px;">Preview unavailable</div>'; return `<details style="padding:7px 0;border-top:1px solid #ead8bb;"><summary style="cursor:pointer;"><b>${escapeHtml(e.customer_username ? '@' + e.customer_username : 'Instagram customer')}</b> · ${escapeHtml(e.user_message || 'Customer question unavailable')} <span style="color:var(--text-muted);font-size:.82em;">· ${escapeHtml(formatAdminTimestamp(e.created_at))}</span></summary><div style="padding:8px 0 2px;">${preview}<div style="margin:6px 0;color:var(--text-muted);">${escapeHtml(e.source_label || 'Instagram source')}</div>${e.source_permalink ? `<a href="${escapeHtml(e.source_permalink)}" target="_blank" rel="noopener">Open original post</a>` : ''}<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">${e.mapping_routing_id ? `<button class="btn-secondary" type="button" data-escalation-map="${Number(e.id)}" style="padding:5px 9px;font-size:.78rem;">Edit mapping</button>` : ''}<button class="btn-secondary" type="button" data-escalation-ignore="${Number(e.id)}" style="padding:5px 9px;font-size:.78rem;">Ignore</button></div></div></details>`; }).join('')}</div></div>`;
             container.querySelectorAll('[data-escalation-map]').forEach(button => button.addEventListener('click', () => openEscalationMapping(Number(button.dataset.escalationMap), escalations)));
+            container.querySelectorAll('[data-escalation-ignore]').forEach(button => button.addEventListener('click', () => ignoreEscalation(Number(button.dataset.escalationIgnore), container.id)));
+        }
+        async function ignoreEscalation(escalationId, containerId) {
+            if (!confirm('Ignore this escalated question? It will be removed from the pending dashboard list.')) return;
+            try {
+                const response = await fetch(`/admin/escalations/${escalationId}/resolve`, {method:'POST', headers:{'Content-Type':'application/json', ...getAuthHeaders()}, body:JSON.stringify({status:'ignored'})});
+                if (!response.ok) throw new Error('Could not ignore this question.');
+                await loadEscalationReview(containerId, containerId === 'dashEscalations');
+                if (containerId === 'dashEscalations') await loadEscalationReview('candidateEscalations');
+            } catch (error) { alert(error.message || 'Could not ignore this question.'); }
         }
         async function loadEscalationReview(containerId, dashboard = false) {
             const container = document.getElementById(containerId); if (!container || !adminAuthenticated) return;
@@ -9674,7 +9725,7 @@ THIS WEEK'S BENGAL SPECIALS
             if (escalation.mapping_routing_id) {
                 await loadAdRoutes();
                 const route = (window.igRoutes || []).find(item => Number(item.routing_id) === Number(escalation.mapping_routing_id));
-                if (route) { openAdminRoute(route); return; }
+                if (route) { openSetupRoute(route.routing_id, route.source_type, route.media_id); return; }
             }
             if (escalation.ad_id) {
                 const input = document.getElementById('adsExactId');

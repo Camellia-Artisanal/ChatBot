@@ -90,9 +90,11 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
   client's always-forward words (complaint, discount) even on a Custom-note mapping.
 - **Every logged message carries `decision_reason`** (which answer/rule, or the handoff ref
   and reason). Read it on `/admin/conversations` before guessing why a reply happened.
-- **Dashboard escalation questions are not answer drafts.** Show the customer question and
-  handoff reason, then take staff to the exact mapped source when the event has an ad binding;
-  otherwise locate the ad or open the escalation for human review. Never auto-approve a reply.
+- **Dashboard escalation questions are not answer drafts.** Keep them in collapsed rows showing
+  customer username, question, and originating source preview when available. Staff may Ignore
+  an escalation (remove it from pending) or preview/edit its exact mapping. Never auto-approve a reply.
+- **Setup-check Edit mapping previews the exact Post/Reel/Story first.** Staff explicitly continue
+  before the route editor opens, so they can verify the source before changing its mapping.
 - **Meta's default "more info on this" prompt may arrive without a referral block.** With no
   exact source or existing session route, hand it to a person; do not send the city-specific
   savoury intro from an unknown ad context.

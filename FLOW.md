@@ -106,11 +106,10 @@ focused tests → full suite (parallel) → restore data/menu.json → commit (n
 ## 7. Dashboard review actions
 
 ```
-Dashboard Setup Check → issue rows carry routing IDs → Edit mapping opens the exact
-Posts/Reels or Story editor
-Pending escalation → Dashboard / Candidates review list → show customer question + reason
-  → exact ad binding opens its mapped source; ad ID without binding opens that ad
-  → otherwise open the escalation in AI Resolution for human review
+Dashboard Setup Check → issue rows carry routing IDs → Edit mapping previews the exact
+Post/Reel/Story before opening its editor
+Pending escalation → collapsed Dashboard / Candidates row shows customer username, question,
+  and source preview → staff may preview/edit the mapped source or Ignore the escalation
 ```
 
 Escalations stay separate from suggested answer drafts. Verified knowledge still requires

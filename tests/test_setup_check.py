@@ -49,19 +49,36 @@ def test_endpoint_and_dashboard_card(store, monkeypatch):
 
 def test_dashboard_escalations_include_exact_mapped_source_action(store, monkeypatch):
     from camellia.config import config
-    mapped = route(store, code="EscalatedQuestion", media_id="188001")
+    mapped = route(store, code="EscalatedQuestion", media_id="188001",
+                   preview_url="https://cdn.example.test/escalated.jpg")
     store.bind_instagram_ad("120000000000001", mapped["routing_id"], "test")
     store.record_escalation("1907508513949156", "instagram", "What is the price per box?", "No exact approved answer",
-                            {"ad_id": "120000000000001"})
+                            {"ad_id": "120000000000001", "customer_username": "camellia_customer"})
     monkeypatch.setattr(config, "ADMIN_API_KEY", "setup-check-admin")
     response = TestClient(app_module.app).get("/admin/escalations?status=pending", headers={"x-admin-key": "setup-check-admin"})
     assert response.status_code == 200
     escalation = response.json()["escalations"][0]
     assert escalation["mapping_routing_id"] == mapped["routing_id"]
     assert escalation["ad_id"] == "120000000000001"
+    assert escalation["customer_username"] == "camellia_customer"
+    assert escalation["source_preview_url"] == "https://cdn.example.test/escalated.jpg"
     source = open(app_module.__file__, encoding="utf-8").read()
     assert 'id="dashEscalations"' in source and 'id="candidateEscalations"' in source
     assert "renderEscalationReview" in source and "openEscalationMapping" in source
+    assert "data-escalation-ignore" in source and "status:'ignored'" in source
+    assert 'id="setupRoutePreviewOverlay"' in source and "continueSetupRouteEdit" in source
+    assert "Review question</button>" not in source
+
+
+def test_dashboard_ignore_removes_escalation_from_pending_list(store, monkeypatch):
+    from camellia.config import config
+    escalation_id = store.record_escalation("1907508513949156", "instagram", "Ignore this question", "test", {})
+    monkeypatch.setattr(config, "ADMIN_API_KEY", "setup-check-admin")
+    client = TestClient(app_module.app)
+    response = client.post(f"/admin/escalations/{escalation_id}/resolve", json={"status": "ignored"}, headers={"x-admin-key": "setup-check-admin"})
+    assert response.status_code == 200 and response.json()["status"] == "ignored"
+    pending = client.get("/admin/escalations?status=pending", headers={"x-admin-key": "setup-check-admin"})
+    assert all(item["user_message"] != "Ignore this question" for item in pending.json()["escalations"])
 
 
 def test_dashboard_menu_box_uses_the_current_weekly_menu_not_a_dish_count():
