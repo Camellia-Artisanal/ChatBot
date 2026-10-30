@@ -90,8 +90,9 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
   client's always-forward words (complaint, discount) even on a Custom-note mapping.
 - **Every logged message carries `decision_reason`** (which answer/rule, or the handoff ref
   and reason). Read it on `/admin/conversations` before guessing why a reply happened.
-- **Dashboard escalation questions are not answer drafts.** Keep them in collapsed rows showing
-  customer username, question, and originating source preview when available. Staff may Ignore
+- **Dashboard escalation questions are not answer drafts.** Keep them under one collapsed section,
+  with expandable question rows showing customer username, question, and source preview when available.
+  Show Map Ad for an unbound ad, Edit mapping for a bound source, and let staff Ignore
   an escalation (remove it from pending) or preview/edit its exact mapping. Never auto-approve a reply.
 - **Setup-check Edit mapping previews the exact Post/Reel/Story first.** Staff explicitly continue
   before the route editor opens, so they can verify the source before changing its mapping.

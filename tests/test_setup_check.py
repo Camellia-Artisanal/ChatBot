@@ -66,6 +66,13 @@ def test_dashboard_escalations_include_exact_mapped_source_action(store, monkeyp
     assert 'id="dashEscalations"' in source and 'id="candidateEscalations"' in source
     assert "renderEscalationReview" in source and "openEscalationMapping" in source
     assert "data-escalation-ignore" in source and "status:'ignored'" in source
+    assert "Escalated customer questions (${escalations.length})" in source
+    assert "const mappingLabel = e.mapping_routing_id ? 'Edit mapping' : e.ad_id ? 'Map Ad'" in source
+    assert "data-escalation-map=\"${Number(e.id)}\"" in source
+    assert "#setupRoutePreviewOverlay.active { display:flex; }" in source
+    assert "Number(item.routing_id)===Number(id)" in source
+    ignore_function = source[source.index("async function ignoreEscalation("):source.index("async function loadEscalationReview(")]
+    assert "confirm(" not in ignore_function and "status:'ignored'" in ignore_function
     assert 'id="setupRoutePreviewOverlay"' in source and "continueSetupRouteEdit" in source
     assert "Review question</button>" not in source
 

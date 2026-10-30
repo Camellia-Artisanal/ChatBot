@@ -7825,6 +7825,7 @@ def get_admin_dashboard():
         .ig-cover-file-name { min-height:1.2em; text-align:center; color:var(--text-muted); font-size:0.78rem; overflow-wrap:anywhere; }
         .ig-cover-modal-status { min-height:1.2em; color:var(--text-muted); font-size:0.78rem; }
         .ig-cover-modal-overlay { display:none; position:fixed; inset:0; z-index:1000; background:rgba(34,29,26,.52); justify-content:center; align-items:center; padding:16px; }
+        #setupRoutePreviewOverlay.active { display:flex; }
         .ig-cover-modal-box { width:min(100%, 440px); max-height:calc(100vh - 32px); overflow:auto; padding:18px; background:#fff; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.25); display:flex; flex-direction:column; gap:12px; }
         .ig-cover-modal-box h3 { margin:0; color:var(--primary); font-size:1.05rem; }
         .ig-cover-modal-actions { display:flex; justify-content:flex-end; gap:8px; }
@@ -9698,19 +9699,19 @@ THIS WEEK'S BENGAL SPECIALS
         function renderEscalationReview(container, escalations, dashboard = false) {
             if (!container) return;
             if (!escalations.length) { container.innerHTML = dashboard ? '' : '<div class="dashboard-subcard" style="padding:12px;border:1px solid var(--border);border-radius:12px;color:var(--text-muted);">No pending escalated questions.</div>'; return; }
-            const heading = 'Escalated customer questions';
-            container.innerHTML = `<div class="dashboard-subcard" style="background:#fff8ec;border:1px solid #f0c36d;border-radius:14px;padding:10px 12px;"><b>${heading} (${escalations.length})</b><div style="margin-top:6px;">${escalations.map(e => { const image = e.source_preview_url; const preview = image ? `<img src="${escapeHtml(image)}" alt="Source post preview" loading="lazy" style="width:100%;max-height:210px;object-fit:contain;border-radius:8px;background:#eee;">` : '<div class="ig-media-placeholder" style="height:120px;border-radius:8px;">Preview unavailable</div>'; return `<details style="padding:7px 0;border-top:1px solid #ead8bb;"><summary style="cursor:pointer;"><b>${escapeHtml(e.customer_username ? '@' + e.customer_username : 'Instagram customer')}</b> · ${escapeHtml(e.user_message || 'Customer question unavailable')} <span style="color:var(--text-muted);font-size:.82em;">· ${escapeHtml(formatAdminTimestamp(e.created_at))}</span></summary><div style="padding:8px 0 2px;">${preview}<div style="margin:6px 0;color:var(--text-muted);">${escapeHtml(e.source_label || 'Instagram source')}</div>${e.source_permalink ? `<a href="${escapeHtml(e.source_permalink)}" target="_blank" rel="noopener">Open original post</a>` : ''}<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">${e.mapping_routing_id ? `<button class="btn-secondary" type="button" data-escalation-map="${Number(e.id)}" style="padding:5px 9px;font-size:.78rem;">Edit mapping</button>` : ''}<button class="btn-secondary" type="button" data-escalation-ignore="${Number(e.id)}" style="padding:5px 9px;font-size:.78rem;">Ignore</button></div></div></details>`; }).join('')}</div></div>`;
+            const heading = `Escalated customer questions (${escalations.length})`;
+            container.innerHTML = `<details class="dashboard-subcard" style="background:#fff8ec;border:1px solid #f0c36d;border-radius:14px;padding:10px 12px;"><summary style="cursor:pointer;font-weight:700;">${heading}</summary><div style="margin-top:6px;">${escalations.map(e => { const image = e.source_preview_url; const preview = image ? `<img src="${escapeHtml(image)}" alt="Source post preview" loading="lazy" style="width:100%;max-height:210px;object-fit:contain;border-radius:8px;background:#eee;">` : '<div class="ig-media-placeholder" style="height:120px;border-radius:8px;">Preview unavailable</div>'; const mappingLabel = e.mapping_routing_id ? 'Edit mapping' : e.ad_id ? 'Map Ad' : e.source_type === 'story' ? 'Map Story' : 'Map source'; return `<details style="padding:7px 0;border-top:1px solid #ead8bb;"><summary style="cursor:pointer;"><b>${escapeHtml(e.customer_username ? '@' + e.customer_username : 'Instagram customer')}</b> · ${escapeHtml(e.user_message || 'Customer question unavailable')} <span style="color:var(--text-muted);font-size:.82em;">· ${escapeHtml(formatAdminTimestamp(e.created_at))}</span></summary><div style="padding:8px 0 2px;">${preview}<div style="margin:6px 0;color:var(--text-muted);">${escapeHtml(e.source_label || 'Instagram source')}</div>${e.source_permalink ? `<a href="${escapeHtml(e.source_permalink)}" target="_blank" rel="noopener">Open original post</a>` : ''}<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"><button class="btn-secondary" type="button" data-escalation-map="${Number(e.id)}" style="padding:5px 9px;font-size:.78rem;">${mappingLabel}</button><button class="btn-secondary" type="button" data-escalation-ignore="${Number(e.id)}" style="padding:5px 9px;font-size:.78rem;">Ignore</button></div></div></details>`; }).join('')}</div></details>`;
             container.querySelectorAll('[data-escalation-map]').forEach(button => button.addEventListener('click', () => openEscalationMapping(Number(button.dataset.escalationMap), escalations)));
-            container.querySelectorAll('[data-escalation-ignore]').forEach(button => button.addEventListener('click', () => ignoreEscalation(Number(button.dataset.escalationIgnore), container.id)));
+            container.querySelectorAll('[data-escalation-ignore]').forEach(button => button.addEventListener('click', () => ignoreEscalation(Number(button.dataset.escalationIgnore), container.id, button)));
         }
-        async function ignoreEscalation(escalationId, containerId) {
-            if (!confirm('Ignore this escalated question? It will be removed from the pending dashboard list.')) return;
+        async function ignoreEscalation(escalationId, containerId, button) {
+            if (button) { button.disabled = true; button.innerText = 'Ignoring…'; }
             try {
                 const response = await fetch(`/admin/escalations/${escalationId}/resolve`, {method:'POST', headers:{'Content-Type':'application/json', ...getAuthHeaders()}, body:JSON.stringify({status:'ignored'})});
                 if (!response.ok) throw new Error('Could not ignore this question.');
                 await loadEscalationReview(containerId, containerId === 'dashEscalations');
                 if (containerId === 'dashEscalations') await loadEscalationReview('candidateEscalations');
-            } catch (error) { alert(error.message || 'Could not ignore this question.'); }
+            } catch (error) { if (button) { button.disabled = false; button.innerText = 'Ignore'; } alert(error.message || 'Could not ignore this question.'); }
         }
         async function loadEscalationReview(containerId, dashboard = false) {
             const container = document.getElementById(containerId); if (!container || !adminAuthenticated) return;
@@ -9735,8 +9736,23 @@ THIS WEEK'S BENGAL SPECIALS
                 switchTab('tab-ads', null);
                 return;
             }
-            switchTab('tab-ai-resolution', null);
-            setTimeout(() => { const search = document.getElementById('aiResolutionSearch'); if (search) { search.value = escalation.user_message || ''; renderAiResolution(); } }, 150);
+            if (escalation.source_type === 'story' && escalation.media_id) {
+                switchTab('tab-instagram-stories', null);
+                setTimeout(async () => { await loadInstagramStories(); openInstagramStoryMapping(escalation.media_id); }, 150);
+                return;
+            }
+            if (escalation.media_id) {
+                switchTab('tab-instagram-content', null);
+                setInstagramContentSubview('gallery');
+                const search = document.getElementById('igContentSearch');
+                if (search) search.value = escalation.media_id;
+                await loadInstagramContentGallery(true);
+                return;
+            }
+            switchTab('tab-instagram-content', null);
+            setInstagramContentSubview('gallery');
+            await loadInstagramContentGallery(true);
+            return;
         }
         async function loadDashboardOverview() {
             if (!adminAuthenticated) return;
@@ -10823,8 +10839,8 @@ THIS WEEK'S BENGAL SPECIALS
         }
 
         function editInstagramRoute(id) {
-            const route=(window.igRoutes||[]).find(item=>item.routing_id===id); if(!route)return;
-            igEditingId=id; igPriority=[...(route.priority_products||[])];
+            const route=(window.igRoutes||[]).find(item=>Number(item.routing_id)===Number(id)); if(!route)return;
+            igEditingId=Number(route.routing_id); igPriority=[...(route.priority_products||[])];
             document.getElementById('igSourceType').value=route.source_type||'post';
             onInstagramSourceTypeChange();
             document.getElementById('igRouteUrl').value=route.canonical_url||'';

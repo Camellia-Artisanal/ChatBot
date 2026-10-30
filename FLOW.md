@@ -108,8 +108,8 @@ focused tests → full suite (parallel) → restore data/menu.json → commit (n
 ```
 Dashboard Setup Check → issue rows carry routing IDs → Edit mapping previews the exact
 Post/Reel/Story before opening its editor
-Pending escalation → collapsed Dashboard / Candidates row shows customer username, question,
-  and source preview → staff may preview/edit the mapped source or Ignore the escalation
+Pending escalation → collapsed Dashboard / Candidates section → expandable question row shows
+  customer username, question, and source preview → staff may map/edit the source or Ignore it
 ```
 
 Escalations stay separate from suggested answer drafts. Verified knowledge still requires
