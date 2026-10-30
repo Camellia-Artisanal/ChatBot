@@ -70,6 +70,9 @@ def test_dashboard_escalations_include_exact_mapped_source_action(store, monkeyp
     escalation_renderer = source[source.index("function renderEscalationReview("):source.index("async function ignoreEscalation(")]
     assert "data-escalation-list" in escalation_renderer and "listWasOpen" in escalation_renderer
     assert "return `<details style=" not in escalation_renderer
+    assert " : ''; const mappingLabel" in escalation_renderer
+    assert "onerror=\"this.remove()\"" in escalation_renderer
+    assert "Preview unavailable</div>" not in escalation_renderer
     assert "const mappingLabel = e.mapping_routing_id ? 'Edit mapping' : e.ad_id ? 'Map Ad'" in source
     assert "data-escalation-map=\"${Number(e.id)}\"" in source
     assert "#setupRoutePreviewOverlay.active { display:flex; }" in source
