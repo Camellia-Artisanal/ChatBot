@@ -17,10 +17,14 @@ AD = "120246593316020540"
 NOTE = "Operator-authored post description."
 
 
-def _custom_route(ad_customer, topic_answers=None):
+def _custom_route(ad_customer, topic_answers=None, *, custom_info_questions_enabled=False):
     route = _mapped_source(ad_customer, "post", AD, topic_name="Sondesh Delivery Delhi NCR")
     if topic_answers is not None:
         instagram_routing.update_topic(route["topic_id"], default_approved_qa_ids=topic_answers)
+    if custom_info_questions_enabled:
+        route = instagram_routing.decode_route(route)
+        route["custom_info_questions_enabled"] = True
+        route = ad_customer[2].save_instagram_source_route(route, int(route["routing_id"]))
     return route
 
 
@@ -30,7 +34,8 @@ def _ask(ad_customer, message):
 
 
 def test_topic_answers_let_a_custom_mapping_answer_price_word_for_word(eligible_weekly_asset, ad_customer):
-    _custom_route(ad_customer, ["sondesh_price_client", "sondesh_details_client"])
+    _custom_route(ad_customer, ["sondesh_price_client", "sondesh_details_client"],
+                   custom_info_questions_enabled=True)
     sender, facts, db = ad_customer
     db.save_menu_image_draft("weekly_vegetarian", "/uploads/test-reviewed-current-weekly.jpeg", "fixture")
     db.publish_menu_image("weekly_vegetarian")
@@ -59,11 +64,49 @@ def test_without_topic_answers_the_note_is_sent_once_instead_of_the_manager(ad_c
 @pytest.mark.parametrize("topic_answers", [None, ["sondesh_price_client", "sondesh_details_client"]])
 def test_meta_more_info_button_gets_the_note(ad_customer, topic_answers):
     # 15 customers in 30 days tapped this ad button and were all handed off.
-    _custom_route(ad_customer, topic_answers)
+    _custom_route(ad_customer, topic_answers, custom_info_questions_enabled=True)
     sender, _facts, db = ad_customer
     _ask(ad_customer, "Hello, can I get more info on this?")
     assert db.get_active_handoff("instagram", sender) is None
     assert db.get_conversations(limit=1, channel="instagram", user_id=sender)[0]["bot_response"] == NOTE
+
+
+@pytest.mark.parametrize("message", [
+    "Hello, can I get more info on this?",
+    "Tell me more",
+    "Tell me more about this",
+    "Can you tell me more about that?",
+    "Could you tell me more about it, please?",
+    "More details about this",
+])
+def test_explicit_custom_info_option_uses_source_note_for_generic_questions(ad_customer, message):
+    _custom_route(ad_customer, ["general_details", "sondesh_price_client"],
+                  custom_info_questions_enabled=True)
+    sender, facts, db = ad_customer
+    _ask(ad_customer, message)
+    stored = db.get_conversations(limit=1, channel="instagram", user_id=sender)[0]
+    assert stored["bot_response"] == NOTE
+    assert stored["template_id"] == "source_description"
+    assert facts["last_route_source"] == "SOURCE_DESCRIPTION"
+    assert db.get_active_handoff("instagram", sender) is None
+
+
+def test_existing_generic_custom_info_behavior_stays_compatible_when_option_is_off(ad_customer):
+    _custom_route(ad_customer, ["general_details"])
+    sender, _facts, db = ad_customer
+    _ask(ad_customer, "Tell me more about this")
+    stored = db.get_conversations(limit=1, channel="instagram", user_id=sender)[0]
+    assert stored["bot_response"] == NOTE
+    assert db.get_active_handoff("instagram", sender) is None
+
+
+def test_explicit_custom_info_option_does_not_override_specific_questions(ad_customer):
+    _custom_route(ad_customer, ["sondesh_price_client", "sondesh_details_client"],
+                  custom_info_questions_enabled=True)
+    sender, facts, db = ad_customer
+    _ask(ad_customer, "How much does it cost?")
+    assert facts["client_qa_id"] == "sondesh_price_client"
+    assert db.get_active_handoff("instagram", sender) is None
 
 
 def test_price_question_without_its_ad_gets_the_general_price_answer(ad_customer):

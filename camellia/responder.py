@@ -865,6 +865,37 @@ def source_referential_intent(text: str) -> Optional[str]:
         return "order"
     return None
 
+
+def is_general_source_info_question(text: str) -> bool:
+    """Match only short, generic requests for more information about a source.
+
+    These phrases carry no product, price, delivery, booking, or other
+    specific intent, so a mapped Custom response can safely answer them.
+    Keep this allowlist narrow: unsupported or specific questions must use the
+    normal approved-Q&A and handoff flow.
+    """
+    normalized = unicodedata.normalize("NFKC", str(text or "")).lower()
+    normalized = re.sub(r"[^a-z0-9]+", " ", normalized).strip()
+    normalized = re.sub(r"^(?:(?:hello|hi|hey)\s+)+", "", normalized)
+    normalized = re.sub(r"\s+please$", "", normalized).strip()
+    return normalized in {
+        "tell me more", "tell me more about this", "tell me more about that",
+        "tell me more about it", "can you tell me more", "can you tell me more about this",
+        "can you tell me more about that", "can you tell me more about it",
+        "could you tell me more", "could you tell me more about this",
+        "could you tell me more about that", "could you tell me more about it",
+        "can i get more info", "can i get more info on this", "can i get more info about this",
+        "can i get more info on that", "can i get more info about that",
+        "can i get more information", "can i get more information on this",
+        "can i get more information about this", "can i get more information on that",
+        "can i get more information about that", "can i know more", "can i know more about this",
+        "can i know more about that", "can i know more about it",
+        "what is this about", "what is that about", "what is it about",
+        "what is this post about", "what is this reel about",
+        "more details", "more details about this", "more details about that",
+        "more details about it", "more information", "more info",
+    }
+
 # Words that carry no subject, so they cannot anchor an answer to a question.
 RELEVANCE_STOP_WORDS = frozenset({
     "the", "and", "but", "for", "you", "your", "yours", "our", "ours", "are",
@@ -3816,6 +3847,13 @@ class DeterministicResponder:
                 requested_topic = "WEEKLY_SAVOURY" if re.search(r"\b(?:this\s+week|weekly)\b", lowered_text) else "SAVOURY"
             elif re.search(r"\bbento\b", lowered_text):
                 requested_topic = "BENTO_MEAL"
+            elif source_active and re.search(
+                r"\b(?:sondesh|sandesh|mishti|sweet)\b",
+                str(source.get("routing_topic") or ""),
+            ):
+                # A mapped Sondesh post gives "Can I see the menu?" its
+                # subject even when the customer does not repeat "Sondesh".
+                requested_topic = "SONDESH"
             # "sondesh menu please" / "sweets menu pls" are the same request (19 Oct).
             menu_query = re.sub(r"[\s,]+(?:please|pls|plz)$", "", lowered_text.rstrip(" ?.!").strip())
             menu_query = re.sub(r"\bsweets?\b", "mishti", menu_query)
@@ -3827,7 +3865,8 @@ class DeterministicResponder:
                 r"what\s+(?:sondesh|sandesh|mishti|savoury|savory|bento)\s+"
                 r"(?:(?:menus?|collections?|options?)\s+)?do\s+you\s+have|"
                 r"(?:sondesh|sandesh|mishti|savoury|savory|bento)\s+"
-                r"(?:menus?|collections?)",
+                r"(?:menus?|collections?)|"
+                r"(?:can|could|may)\s+i\s+(?:see|view)\s+(?:the\s+)?menus?",
                 menu_query,
             ))
             if requested_topic and menu_request:

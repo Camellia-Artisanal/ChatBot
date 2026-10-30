@@ -491,6 +491,12 @@ def validate_route_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     media_type = str(payload.get("media_type") or "").strip() or None
     if media_type and len(media_type) > 80:
         raise ValueError("media_type is too long.")
+    custom_info_questions_enabled = payload.get("custom_info_questions_enabled", False)
+    if not isinstance(custom_info_questions_enabled, bool):
+        raise ValueError("custom_info_questions_enabled must be true or false.")
+    custom_info_questions_enabled = bool(
+        custom_info_questions_enabled and response_mode == "CUSTOM" and source_description
+    )
 
     media_id = str(payload.get("story_media_id") or payload.get("media_id") or "").strip() or None
     if source_type == "story":
@@ -514,6 +520,7 @@ def validate_route_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         "media_type": str(payload.get("media_type") or "").strip() or None,
         "routing_topic": routing_topic,
         "source_description": source_description,
+        "custom_info_questions_enabled": custom_info_questions_enabled,
         "knowledge_scope": scope,
         "escalation_policy": escalation,
         "priority_products": priority,
@@ -546,6 +553,7 @@ def decode_route(row: Dict[str, Any]) -> Dict[str, Any]:
     route["response_mode"] = route.get("response_mode") or "CUSTOM"
     route["approved_qa_id"] = route.get("approved_qa_id")
     route["active"] = bool(route.get("active"))
+    route["custom_info_questions_enabled"] = bool(route.get("custom_info_questions_enabled"))
     route["menu_mode"] = str(route.get("menu_mode") or "").strip().upper()
     if route["menu_mode"] not in _MENU_MODES:
         route["menu_mode"] = "SELECTED" if route.get("menu_id") else "INHERIT"

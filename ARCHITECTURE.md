@@ -84,7 +84,7 @@ closed to human review so a generic city-specific introduction is never sent as 
 
 | Table | Meaning |
 |---|---|
-| `instagram_source_routes` | A mapping: source_type post/reel/ad/story, identity (url/shortcode/media_id/ad_id), response_mode CUSTOM or APPROVED_QA, topic, menu |
+| `instagram_source_routes` | A mapping: source_type post/reel/ad/story, identity (url/shortcode/media_id/ad_id), response_mode CUSTOM or APPROVED_QA, topic, menu, optional custom generic-info phrase routing |
 | `instagram_source_ad_bindings` | Meta Ad ID → mapping (BOUND/OBSERVED, active) |
 | `instagram_ads_manual_sync_jobs` | Singleton durable status/stage for the admin background Ads/Posts/Reels/Stories refresh |
 | `instagram_source_qa_bundles` (+`_items`) | Checklist of approved answers for a post/reel/ad mapping, with its context |

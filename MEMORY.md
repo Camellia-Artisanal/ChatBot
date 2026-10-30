@@ -75,6 +75,9 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
 - **Generic ad questions are per post, not variations.** Never add "How much does it cost?" as an
   Approved Q&A variation (collides with General price or leaks to no-ad customers). Set the answer's
   "On mapped posts/ads, use for" instead and tick it on the post.
+- **Generic source-info copy is an explicit per-route choice.** A Custom Post/Reel may use its own
+  description for the strict allowlist of general “tell me more” phrases. Keep specific approved
+  answers and explicit handoff triggers higher priority; do not use fuzzy semantic matching here.
 - **New Approved Q&A wording must not match an existing answer** (`_conflicts`); customers
   rarely type the question text, so pick a distinct label ("Kolkata lunch price").
 - **Weekly savoury menu is published as an image, no parsing.** Dish-level price questions

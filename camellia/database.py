@@ -1307,6 +1307,7 @@ class Database:
             self._ensure_column(cursor, "instagram_source_routes", "menu_mode", "TEXT NOT NULL DEFAULT 'INHERIT'")
             self._ensure_column(cursor, "instagram_source_routes", "preview_url", "TEXT")
             self._ensure_column(cursor, "instagram_source_routes", "media_type", "TEXT")
+            self._ensure_column(cursor, "instagram_source_routes", "custom_info_questions_enabled", "INTEGER NOT NULL DEFAULT 0")
 
             # Admin-only visual fallback for connected media whose Meta
             # preview is unavailable. This table is deliberately separate
@@ -2044,7 +2045,8 @@ class Database:
             json.dumps(route.get("priority_products", [])), int(bool(route.get("active", True))),
             route.get("topic_id"), route.get("menu_id"), menu_mode,
             route.get("preview_url"), route.get("media_type"),
-            route.get("response_mode") or "CUSTOM", route.get("approved_qa_id"), now,
+            route.get("response_mode") or "CUSTOM", route.get("approved_qa_id"),
+            int(bool(route.get("custom_info_questions_enabled", False))), now,
         )
         from camellia import approved_qa, instagram_story_qa, instagram_source_qa
         bundle_write = "approved_qa_ids" in route
@@ -2115,8 +2117,9 @@ class Database:
                     """INSERT INTO instagram_source_routes
                     (source_type, canonical_url, shortcode, media_id, ad_id, campaign_id,
                      routing_topic, source_description, approved_opening_message, knowledge_scope, escalation_policy, priority_products,
-                    active, topic_id, menu_id, menu_mode, preview_url, media_type, response_mode, approved_qa_id, created_at, updated_at)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    active, topic_id, menu_id, menu_mode, preview_url, media_type, response_mode, approved_qa_id,
+                    custom_info_questions_enabled, created_at, updated_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     values[:-1] + (now, now),
                 )
                 routing_id = int(cursor.lastrowid)
@@ -2125,7 +2128,7 @@ class Database:
                     """UPDATE instagram_source_routes SET source_type=?, canonical_url=?, shortcode=?,
                     media_id=?, ad_id=?, campaign_id=?, routing_topic=?, source_description=?, approved_opening_message=?, knowledge_scope=?,
                     escalation_policy=?, priority_products=?, active=?, topic_id=?, menu_id=?, menu_mode=?,
-                    preview_url=?, media_type=?, response_mode=?, approved_qa_id=?, updated_at=?, archived_at=NULL
+                    preview_url=?, media_type=?, response_mode=?, approved_qa_id=?, custom_info_questions_enabled=?, updated_at=?, archived_at=NULL
                     WHERE routing_id=?""",
                     values + (routing_id,),
                 )

@@ -1026,12 +1026,36 @@ def _process_instagram_event(
                 ad_product=None, last_answer_id=None,
             )
 
+        # An explicitly enabled Custom mapping owns only generic source-info
+        # wording. It may replace a broad generic QA match, but the strict
+        # allowlist leaves price, delivery, booking, and other specific asks
+        # to their selected Approved Q&A answers or the normal handoff path.
+        mapped = facts.get("source_route") if isinstance(facts.get("source_route"), dict) else {}
+        note = str(mapped.get("source_description") or "").strip()
+        if (mapped.get("custom_info_questions_enabled") and note and mapped.get("active", True)
+                and mapped.get("response_mode", "CUSTOM") == "CUSTOM"
+                and responder_module.is_general_source_info_question(customer_message)
+                and not unbound_ad_referral and not contextless_ad_button
+                and not facts.get("source_context_superseded")
+                and not is_human_help_request(customer_message)
+                and not responder.check_explicit_escalation_triggers(customer_message)):
+            menu_id = mapped.get("menu_id")
+            if str(mapped.get("menu_mode") or "INHERIT").upper() == "INHERIT" and not menu_id and mapped.get("topic_id"):
+                menu_id = (db.get_instagram_topic(mapped["topic_id"]) or {}).get("default_menu_id")
+            image_url = menu_images.current_url(str(menu_id)) if menu_id and str(mapped.get("menu_mode") or "").upper() != "NONE" else None
+            response_text, was_matched, template_id = note, True, "source_description"
+            facts.update(
+                client_qa_id=None, ordered_response_blocks=[], source_context_used=True,
+                last_route_source="SOURCE_DESCRIPTION", last_grounding="explicit_admin_source_description",
+                last_actions=[], knowledge_sufficient=True, ad_product=None, last_answer_id=None,
+                source_note_sent_routing_id=mapped.get("routing_id"),
+            )
+            session_memory.touch(sender_id, "instagram")
+
         # A Custom mapping's note is the client's own reply for that ad/post.
         # A generic price/details question nothing else answered gets it
         # (once) instead of the manager handoff. Specific requests, orders and
         # later unanswered questions still go to a person.
-        mapped = facts.get("source_route") if isinstance(facts.get("source_route"), dict) else {}
-        note = str(mapped.get("source_description") or "").strip()
         if (not was_matched and template_id is None and note and mapped.get("active", True)
                 and (responder_module.source_referential_intent(customer_message) in {"price", "details"}
                      # Meta's ad button "Hello, can I get more info on this?" reads as an
@@ -4237,6 +4261,7 @@ async def save_instagram_media_mapping(item_id: int, request: Request, x_admin_k
         "approved_qa_id": body.get("approved_qa_id"),
         "media_id": (existing or {}).get("media_id") if manual else item["instagram_media_id"], "shortcode": item.get("shortcode"),
         "topic_id": topic_id, "source_description": body.get("source_description") or "",
+        "custom_info_questions_enabled": bool(body.get("custom_info_questions_enabled", (existing or {}).get("custom_info_questions_enabled", False))),
         "menu_id": body.get("menu_id"), "menu_mode": body.get("menu_mode") or "NONE",
         "preview_url": item.get("thumbnail_url") or item.get("media_url"),
         "media_type": item["media_type"], "active": body.get("auto_reply_enabled", True),
@@ -8370,7 +8395,7 @@ def get_admin_dashboard():
                 <small id="igTopicEmptyHelp" class="ig-media-muted" style="display:none; margin-top:6px;">No active Topics are configured yet. Use + Add Topic to create one before saving Instagram routing.</small>
             </div>
 
-            <div class="source-map-field"><label class="field-label" id="igSourceDescriptionLabel" for="igSourceDescription">Description for this post</label><p class="source-map-help" id="igSourceDescriptionHelp">Used when someone asks what this post is about.</p><textarea class="field-control" id="igSourceDescription" rows="4"></textarea></div>
+            <div class="source-map-field"><label class="field-label" id="igSourceDescriptionLabel" for="igSourceDescription">Description for this post</label><p class="source-map-help" id="igSourceDescriptionHelp">Used when someone asks what this post is about.</p><textarea class="field-control" id="igSourceDescription" rows="4"></textarea><label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;"><input type="checkbox" id="igCustomInfoQuestions"><span><b>Use this response for general “tell me more” questions</b><br><small class="source-map-help">Covers phrases like “Tell me more about this” and “Can I get more info?”. Specific questions still use approved answers.</small></span></label></div>
 
             <div class="source-map-field">
                 <label class="field-label" for="igMenuPicker">Menu / Image <span class="ig-media-muted">Optional</span></label>
@@ -10103,8 +10128,8 @@ THIS WEEK'S BENGAL SPECIALS
                 document.getElementById('contentDetailsActions').innerHTML = `<div class="source-map-form">
                     ${sourceResponseHtml('igMedia')}
                     <div class="source-map-field"><label class="field-label" for="igMediaTopic">Topic</label><select class="field-control" id="igMediaTopic" onchange="renderSourceAssetCard('igMediaMenu','igMediaMenuSelected'); renderMediaTopicAnswers()">${topicOptions}</select><div class="source-secondary-actions"><button class="btn-secondary" type="button" onclick="openTopicModal('', 'igMediaTopic')">+ Add Topic</button><button class="btn-secondary" type="button" onclick="openManageTopics('igMediaTopic')">Manage Topics</button></div></div>
-                    <div class="source-map-field" id="igMediaTopicAnswersField"><label class="field-label">When customers ask the price or details, reply with</label><p class="source-map-help">Approved answers, sent word for word. Your Custom response is still used for “tell me more”. These apply to every Post/Reel in this Topic.</p><div id="igMediaTopicAnswers" style="max-height:220px;overflow-y:auto;border:1px solid #e5e5e5;border-radius:8px;padding:8px;"></div></div>
-                    <div class="source-map-field"><label class="field-label" for="igMediaDescription">Description for this ${item.source_type}</label><p class="source-map-help">Used when someone asks what this ${item.source_type} is about.</p><textarea class="field-control" id="igMediaDescription" rows="5">${escapeHtml(item.source_description || '')}</textarea></div>
+                    <div class="source-map-field" id="igMediaTopicAnswersField"><label class="field-label">When customers ask the price or details, reply with</label><p class="source-map-help">Approved answers, sent word for word. Turn on the option below the Custom response to use it for generic “tell me more” questions. These answers apply to every Post/Reel in this Topic.</p><div id="igMediaTopicAnswers" style="max-height:220px;overflow-y:auto;border:1px solid #e5e5e5;border-radius:8px;padding:8px;"></div></div>
+                    <div class="source-map-field"><label class="field-label" for="igMediaDescription">Description for this ${item.source_type}</label><p class="source-map-help">Used when someone asks what this ${item.source_type} is about.</p><textarea class="field-control" id="igMediaDescription" rows="5">${escapeHtml(item.source_description || '')}</textarea><label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;"><input type="checkbox" id="igMediaCustomInfoQuestions" ${item.mapping_route?.custom_info_questions_enabled ? 'checked' : ''}><span><b>Use this response for general “tell me more” questions</b><br><small class="source-map-help">Covers phrases like “Tell me more about this” and “Can I get more info?”. Specific questions still use approved answers.</small></span></label></div>
                     <div class="source-map-field"><label class="field-label" for="igMediaMenu">Menu / Image <span class="ig-media-muted">Optional</span></label><select class="field-control" id="igMediaMenu" onchange="renderSourceAssetCard('igMediaMenu','igMediaMenuSelected')">${menuOptions}</select><div class="source-secondary-actions"><button class="btn-secondary" type="button" onclick="openMenuModal('igMediaMenu')">+ Add Menu / Image</button></div><div class="source-asset-card" id="igMediaMenuSelected"></div></div>
                     <div class="source-map-field"><b>Use as chatbot context</b><div class="source-switch-row"><span class="source-map-help">Use this mapped Story, Post or Reel to understand short follow-up messages like “tell me more” or “price?”. This does not send a message automatically.</span><label class="source-switch"><input type="checkbox" id="igMediaAutoReply" aria-label="Use as chatbot context" ${item.mapping_route?.active || (!item.mapping_route && item.route_mode !== 'DISABLED') ? 'checked' : ''}><span></span></label></div></div>
                     ${item.source_type === 'post' && item.mapping_route ? `<div><button class="btn-secondary" type="button" onclick="pairInstagramPost(${Number(item.mapping_route.routing_id)})">Pair exact shared Post</button><div id="igPairingStatus-${Number(item.mapping_route.routing_id)}"></div></div>` : ''}
@@ -10234,7 +10259,7 @@ THIS WEEK'S BENGAL SPECIALS
             if (!confirmSourceNoteMenu('igMedia')) return;
             const menu = document.getElementById('igMediaMenu').value;
             const menuChoice = menuChoiceParts(menu);
-            const payload = { ...sourceResponseFields('igMedia'), topic_id: document.getElementById('igMediaTopic').value, source_description: document.getElementById('igMediaDescription').value.trim(), menu_id: menuChoice.menu_id, menu_mode: menuChoice.menu_mode, auto_reply_enabled: document.getElementById('igMediaAutoReply').checked };
+            const payload = { ...sourceResponseFields('igMedia'), topic_id: document.getElementById('igMediaTopic').value, source_description: document.getElementById('igMediaDescription').value.trim(), custom_info_questions_enabled: document.getElementById('igMediaCustomInfoQuestions').checked, menu_id: menuChoice.menu_id, menu_mode: menuChoice.menu_mode, auto_reply_enabled: document.getElementById('igMediaAutoReply').checked };
             const response = await fetch(`/admin/instagram-media/${id}/mapping`, { method: 'PUT', headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             if (!response.ok) { const data = await response.json().catch(() => ({})); alert(data.detail || 'Could not save mapping.'); return; }
             await saveMediaTopicAnswers();
@@ -10796,6 +10821,7 @@ THIS WEEK'S BENGAL SPECIALS
             renderSourceAssetCard('igMenuPicker', 'igMenuSelected');
             document.getElementById('igActive').checked = true;
             document.getElementById('igSourceDescription').value = '';
+            document.getElementById('igCustomInfoQuestions').checked = false;
             initSourceResponse('ig', {});
             document.getElementById('igTopicDescription').value = '';
             document.getElementById('igEscalationPolicy').value='human_if_unsupported';
@@ -10858,6 +10884,7 @@ THIS WEEK'S BENGAL SPECIALS
             document.getElementById('igEscalationPolicy').value=route.escalation_policy||'human_if_unsupported';
             document.getElementById('igActive').checked=route.active !== false;
             document.getElementById('igSourceDescription').value=route.source_description||'';
+            document.getElementById('igCustomInfoQuestions').checked=Boolean(route.custom_info_questions_enabled);
             initSourceResponse('ig', route);
             Array.from(document.getElementById('igKnowledgeScope').options).forEach(option=>option.selected=(route.knowledge_scope||[]).includes(option.value));
             renderIgPriorityProducts(); onIgTopicChange(true);
@@ -10874,7 +10901,7 @@ THIS WEEK'S BENGAL SPECIALS
             const menuChoice=menuChoiceParts(document.getElementById('igMenuPicker').value);
             const sourceType=document.getElementById('igSourceType').value;
             if (!confirmSourceNoteMenu('ig')) return;
-            const payload={...sourceResponseFields('ig'),routing_id:igEditingId,source_type:sourceType,url:sourceType==='story'?'':document.getElementById('igRouteUrl').value.trim(),topic_id:document.getElementById('igTopicPicker').value,source_description:document.getElementById('igSourceDescription').value.trim(),menu_id:menuChoice.menu_id,menu_mode:menuChoice.menu_mode,media_id:document.getElementById('igMediaId').value.trim(),ad_id:document.getElementById('igAdId').value.trim(),campaign_id:document.getElementById('igCampaignId').value.trim(),preview_url:igMediaMetadata.preview_url,media_type:igMediaMetadata.media_type,escalation_policy:document.getElementById('igEscalationPolicy').value,priority_products:igPriority,knowledge_scope:Array.from(document.getElementById('igKnowledgeScope').selectedOptions).map(o=>o.value),active:document.getElementById('igActive').checked};
+            const payload={...sourceResponseFields('ig'),routing_id:igEditingId,source_type:sourceType,url:sourceType==='story'?'':document.getElementById('igRouteUrl').value.trim(),topic_id:document.getElementById('igTopicPicker').value,source_description:document.getElementById('igSourceDescription').value.trim(),custom_info_questions_enabled:document.getElementById('igCustomInfoQuestions').checked,menu_id:menuChoice.menu_id,menu_mode:menuChoice.menu_mode,media_id:document.getElementById('igMediaId').value.trim(),ad_id:document.getElementById('igAdId').value.trim(),campaign_id:document.getElementById('igCampaignId').value.trim(),preview_url:igMediaMetadata.preview_url,media_type:igMediaMetadata.media_type,escalation_policy:document.getElementById('igEscalationPolicy').value,priority_products:igPriority,knowledge_scope:Array.from(document.getElementById('igKnowledgeScope').selectedOptions).map(o=>o.value),active:document.getElementById('igActive').checked};
             const resp=await fetch('/admin/instagram-routes',{method:'POST',headers:{...getAuthHeaders(),'Content-Type':'application/json'},body:JSON.stringify(payload)});
             const data=await resp.json().catch(()=>({})); result.style.display='block';
             if(!resp.ok){result.className='result-box error';result.innerText=data.detail||'Could not save route.';return;}

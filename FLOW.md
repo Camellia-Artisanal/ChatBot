@@ -22,7 +22,8 @@ Meta webhook (signed)  POST /webhook/instagram
       │      order flows → mapping checklist (bundle) → Custom topic answers
       │      → approved Q&A (approved_qa.match) → menus → grounded/RAG fallbacks
       ├─ post-rules in app.py:
-      │      Custom mapping + unanswered price/details → client's note once
+      │      enabled Custom mapping + exact generic “tell me more” phrases → source note
+      │      unmatched price/details on a Custom mapping → client's note once (legacy fallback)
       │      not matched → handoff: get_or_create_handoff + default_handoff_message()
       └─ queue outbound sends (instagram_outbound_jobs), log conversation
 ```
@@ -38,6 +39,12 @@ Rules that hold the flow together:
   "What customers on this post will get" table (`POST /admin/instagram-routes/answer-preview`).
 - Every handoff sends only `default_handoff_message()` (Admin-editable). Approved answers
   that themselves hand off keep their approved wording.
+- Custom Post/Reel mappings can explicitly enable their own source description for a strict
+  allowlist of generic info requests (for example “Tell me more about this” and Meta's
+  “Hello, can I get more info on this?”). That opt-in can override a broad generic Q&A match;
+  price, delivery, booking, human-help, and explicit escalation requests keep their existing
+  approved-answer/handoff priority. Unknown phrasings are never semantically guessed into this
+  route. The option is stored per source route and is off by default.
 - No ad context: generic price questions get `general_price`; nothing mapping-specific leaks.
 - An explicit ADS referral without an ad ID or exact active route clears prior ad/topic
   context and hands off; it cannot fall through to a generic or previous-city answer.
