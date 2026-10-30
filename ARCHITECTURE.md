@@ -59,7 +59,8 @@ graphify update .                                     # refresh after code chang
    `admin_weekly_savoury.py`.
 5. **Handoff** — `handoff.py` (`default_handoff_message()` = the only handoff wording),
    `escalator.py`. An open handoff mutes the bot for that customer until staff press
-   **Resume AI** or it expires (72 h).
+   **Resume AI** or it expires (72 h). `human_notification_events` persists events, but
+   the current `send_human_alert()` transport is disabled and returns `skipped`.
 6. **Persistence** — `database.py` (`Database`, every table, migrations in `init_db`).
 
 ## Admin UI modules (HTML + SCRIPT strings injected into `/admin`)
@@ -68,6 +69,13 @@ graphify update .                                     # refresh after code chang
 Posts & Reels / Stories / mapping form), `admin_approved_qa.py` (Approved Q&A + categories),
 `admin_menu_review.py` (Menu Manager), `admin_weekly_savoury.py` (weekly upload → Publish),
 `admin_chatbot_control.py`, `admin_handoff_message.py`.
+
+The Dashboard's Setup Check is assembled by `setup_check.py`; route-specific findings carry
+their routing ID and source identity so the admin can open the matching editor directly.
+Pending customer escalations are also shown on Dashboard and in Candidates as a separate
+review list; they remain escalation records and are not treated as answer drafts.
+The exact Instagram default “more info on this” prompt without referral/source context fails
+closed to human review so a generic city-specific introduction is never sent as an ad reply.
 
 ## Key data
 

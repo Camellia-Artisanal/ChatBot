@@ -14,7 +14,8 @@ def test_custom_note_promising_a_menu_without_one_is_flagged(store):
     route(store, code="MenuPromise", media_id="1", source_description="Sharing the menu below", menu_mode="NONE")
     route(store, code="MenuFine", media_id="2", source_description="Thanks for asking!", menu_mode="NONE")
     problem = _kinds(store)["menu_promised"]
-    assert problem["count"] == 1 and "MenuPromise" in problem["items"][0]
+    assert problem["count"] == 1 and "MenuPromise" in problem["items"][0]["text"]
+    assert problem["items"][0]["routing_id"]
 
 
 def test_mapping_that_ticks_an_inactive_answer_is_flagged(store, monkeypatch):
@@ -31,7 +32,8 @@ def test_mapping_that_ticks_an_inactive_answer_is_flagged(store, monkeypatch):
 
     monkeypatch.setattr(setup_check.approved_qa, "listing", expired_listing)
     problem = _kinds(store)["dead_answers"]
-    assert problem["count"] == 1 and "(expired)" in problem["items"][0]
+    assert problem["count"] == 1 and "(expired)" in problem["items"][0]["text"]
+    assert problem["items"][0]["source_type"] == "post"
 
 
 def test_endpoint_and_dashboard_card(store, monkeypatch):
@@ -42,6 +44,24 @@ def test_endpoint_and_dashboard_card(store, monkeypatch):
     assert TestClient(app_module.app).get("/admin/setup-check").status_code in (401, 403)
     source = open(app_module.__file__, encoding="utf-8").read()
     assert 'id="dashSetupCheck"' in source and "loadSetupCheck();" in source
+    assert "data-setup-route" in source and "openSetupRoute" in source
+
+
+def test_dashboard_escalations_include_exact_mapped_source_action(store, monkeypatch):
+    from camellia.config import config
+    mapped = route(store, code="EscalatedQuestion", media_id="188001")
+    store.bind_instagram_ad("120000000000001", mapped["routing_id"], "test")
+    store.record_escalation("1907508513949156", "instagram", "What is the price per box?", "No exact approved answer",
+                            {"ad_id": "120000000000001"})
+    monkeypatch.setattr(config, "ADMIN_API_KEY", "setup-check-admin")
+    response = TestClient(app_module.app).get("/admin/escalations?status=pending", headers={"x-admin-key": "setup-check-admin"})
+    assert response.status_code == 200
+    escalation = response.json()["escalations"][0]
+    assert escalation["mapping_routing_id"] == mapped["routing_id"]
+    assert escalation["ad_id"] == "120000000000001"
+    source = open(app_module.__file__, encoding="utf-8").read()
+    assert 'id="dashEscalations"' in source and 'id="candidateEscalations"' in source
+    assert "renderEscalationReview" in source and "openEscalationMapping" in source
 
 
 def test_dashboard_menu_box_uses_the_current_weekly_menu_not_a_dish_count():

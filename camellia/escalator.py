@@ -15,7 +15,7 @@ class Escalator:
     - Answer only 'in syllabus' questions; else forward to human.
     - Escalation path is mandatory, not optional.
     - Logs escalation details in database with Customer Handoff Briefs for full client visibility.
-    - Sends automated alert message to owner/human contact.
+    - Persists notification events for staff. Delivery is currently disabled.
     """
 
     def handle_escalation(

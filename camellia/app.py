@@ -871,6 +871,21 @@ def _process_instagram_event(
             source_type="story_reply" if entry.source == "story_reply" else shared_source_type,
         )
         unbound_ad_referral = bool(entry.from_ad_click and not source_route)
+        # Instagram's default ad CTA can arrive as plain text without a
+        # referral block. Treat this exact prompt as an unattributed ad
+        # details request when there is no source context, instead of sending
+        # the generic (and potentially wrong-city) food introduction.
+        normalized_message = re.sub(r"[^a-z0-9]+", " ", str(message_text or "").lower()).strip()
+        contextless_ad_button = bool(
+            not entry.referral_present and not entry.ad_id and not source_route
+            and not isinstance(facts.get("source_route"), dict)
+            and not source_media_present
+            and normalized_message in {
+                "hello can i get more info on this",
+                "hi can i get more info on this",
+                "can i get more info on this",
+            }
+        )
         if trace.get("ad_id") and source_route:
             log.info(
                 "INSTAGRAM_AD_ROUTE ad_present=true ad_id_hash=%s binding_status=%s routing_id=%s source_type=%s",
@@ -899,13 +914,13 @@ def _process_instagram_event(
                 facts["unmapped_shared_attachment"] = False
                 facts["source_priority_cursor"] = 0
                 facts["active_product_context"] = None
-        elif unbound_ad_referral:
+        elif unbound_ad_referral or contextless_ad_button:
             # A trusted ad referral without an ID or exact active binding cannot
             # borrow the source context from an earlier conversation/ad.
             facts["source_route"] = None
             facts["source_context_superseded"] = True
-            facts["source_match_method"] = "ad_referral_unmapped"
-            source_match_method = "ad_referral_unmapped"
+            facts["source_match_method"] = "ad_referral_unmapped" if unbound_ad_referral else "contextless_ad_button"
+            source_match_method = facts["source_match_method"]
             facts["source_priority_cursor"] = 0
             facts["last_topic"] = None
             facts["active_product_context"] = None
@@ -995,17 +1010,18 @@ def _process_instagram_event(
             referral_source="ADS", referral_ad_id=trace["ad_id"], referral_ad_title=trace["ad_title"],
         )
 
-        if unbound_ad_referral:
+        if unbound_ad_referral or contextless_ad_button:
             # A trusted ad referral without an exact route must not borrow a
             # generic or previous-city answer, even if a similar Q&A exists.
             from camellia.handoff import default_handoff_message
             response_text = default_handoff_message()
             was_matched = False
-            template_id = "unmapped_ad_referral_handoff"
+            template_id = "unmapped_ad_referral_handoff" if unbound_ad_referral else "contextless_ad_button_handoff"
             image_url = None
             facts.update(
                 client_qa_id=None, ordered_response_blocks=[], source_context_used=False,
-                last_route_source="HUMAN_HANDOFF", last_grounding="unmapped_ad_referral",
+                last_route_source="HUMAN_HANDOFF",
+                last_grounding="unmapped_ad_referral" if unbound_ad_referral else "contextless_ad_button",
                 last_actions=["escalate_to_team"], knowledge_sufficient=False,
                 ad_product=None, last_answer_id=None,
             )
@@ -1044,7 +1060,7 @@ def _process_instagram_event(
         protected_flow = bool(
             facts.get("cart") or facts.get("order_draft") or facts.get("order_intake_draft")
         ) or template_id in ("order_draft_receipt", "order_next_steps", "order_intake_draft")
-        if (config.LLM_ASSISTED_RESOLUTION_ENABLED or config.LLM_AUTO_RESOLVE_SIMULATION_ENABLED) and not was_matched and not protected_flow and not source_route and template_id not in {"pending_menu_handoff", "unknown_price_handoff", "unmapped_ad_referral_handoff"}:
+        if (config.LLM_ASSISTED_RESOLUTION_ENABLED or config.LLM_AUTO_RESOLVE_SIMULATION_ENABLED) and not was_matched and not protected_flow and not source_route and template_id not in {"pending_menu_handoff", "unknown_price_handoff", "unmapped_ad_referral_handoff", "contextless_ad_button_handoff"}:
             assisted_suggestion = create_suggestion(
                 user_id=sender_id, channel="instagram", customer_message=customer_message,
                 deterministic_resolved=False, active_protected_flow=protected_flow,
@@ -1101,6 +1117,7 @@ def _process_instagram_event(
                 "order_next_steps",
                 "client_approved_order_ready_handoff",
                 "unmapped_ad_referral_handoff",
+                "contextless_ad_button_handoff",
             )
             or explicit_human_help
         )
@@ -1129,7 +1146,7 @@ def _process_instagram_event(
             contact_mode = (
                 "whatsapp_order" if intake_order_handoff else
                 "support_callback"
-                if not was_matched and template_id in (None, "pending_menu_handoff", "unknown_price_handoff", "unmapped_ad_referral_handoff")
+                if not was_matched and template_id in (None, "pending_menu_handoff", "unknown_price_handoff", "unmapped_ad_referral_handoff", "contextless_ad_button_handoff")
                 else handoff_contact_mode(customer_message, template_id=template_id, facts=facts)
             )
             reason = (
@@ -1137,6 +1154,8 @@ def _process_instagram_event(
                 if contact_mode == "whatsapp_order"
                 else "Unmapped Instagram Ad Referral"
                 if template_id == "unmapped_ad_referral_handoff"
+                else "Unattributed Instagram Details Request"
+                if template_id == "contextless_ad_button_handoff"
                 else "Generic Human Support"
                 if explicit_human_help
                 else "Unmatched Instagram Query / Sensitive Request"
@@ -1182,7 +1201,7 @@ def _process_instagram_event(
                     },
                 )
             order_summary = handoff.get("verified_order")
-            if template_id in ("order_draft_receipt", "client_approved_order_ready_handoff", "pending_menu_handoff", "unknown_price_handoff", "unmapped_ad_referral_handoff") or facts.get("client_qa_handoff_exact"):
+            if template_id in ("order_draft_receipt", "client_approved_order_ready_handoff", "pending_menu_handoff", "unknown_price_handoff", "unmapped_ad_referral_handoff", "contextless_ad_button_handoff") or facts.get("client_qa_handoff_exact"):
                 response_text = response_text.rstrip()
             else:
                 response_text = customer_facing_notice(
@@ -4817,6 +4836,26 @@ def get_escalations_list(limit: int = 50, status: Optional[str] = None, x_admin_
     """Returns recorded human escalations for client dashboard/records."""
     require_admin(x_admin_key, x_admin_pin)
     escalations = db.get_escalations(limit, status)
+    for escalation in escalations:
+        try:
+            context = json.loads(escalation.get("context_data") or "{}")
+        except (TypeError, ValueError):
+            context = {}
+        if not isinstance(context, dict):
+            context = {}
+        ad_id = str(context.get("ad_id") or "").strip()
+        escalation["mapping_routing_id"] = None
+        if ad_id:
+            binding = db.get_instagram_ad_binding(ad_id)
+            if binding and binding.get("status") == "BOUND" and binding.get("active"):
+                escalation["mapping_routing_id"] = binding.get("routing_id")
+            if not escalation["mapping_routing_id"]:
+                ad_route = next((route for route in db.list_instagram_source_routes()
+                                 if route.get("active") and route.get("source_type") == "ad"
+                                 and str(route.get("ad_id") or "") == ad_id), None)
+                if ad_route:
+                    escalation["mapping_routing_id"] = ad_route.get("routing_id")
+        escalation["ad_id"] = ad_id or None
     return {"count": len(escalations), "escalations": escalations}
 
 
@@ -8187,6 +8226,7 @@ def get_admin_dashboard():
                 <div class="admin-kpi"><div class="admin-kpi-label">Unmapped content</div><div class="admin-kpi-value" id="dashUnmapped">—</div><div class="admin-kpi-note">Stories, Posts &amp; Reels</div></div>
             </div>
             <div id="dashSetupCheck" style="margin:0 0 16px;"></div>
+            <div id="dashEscalations" style="margin:0 0 16px;"></div>
             <div class="dashboard-subcard" style="margin:0;background:#fbfcfd;border:1px solid var(--border);border-radius:14px;padding:18px;"><div class="admin-page-heading" style="margin-bottom:12px;"><div><h3 style="color:var(--primary);">System pulse</h3><p>Recent routing activity and health stay lightweight here; operational detail lives in the dedicated workspaces.</p></div><span class="ig-media-status" id="dashHealthStatus">Checking</span></div><div id="dashRecentActivity" class="handoff-list"><span class="ig-media-muted">Loading recent activity…</span></div></div>
         </div>
 
@@ -8678,6 +8718,7 @@ THIS WEEK'S BENGAL SPECIALS
             </div>
 
             <label>Candidate state <select id="candidateStatusFilter" onchange="loadCandidates()"><option value="PENDING_APPROVAL">Pending approval — not live</option><option value="APPROVED">Approved history</option><option value="REJECTED">Rejected history</option></select></label>
+            <div id="candidateEscalations" style="margin:14px 0;"></div>
             <div id="candidateActionFeedback" role="status" aria-live="polite"></div>
             <div style="overflow-x: auto;">
                 <table class="data-table">
@@ -9597,13 +9638,59 @@ THIS WEEK'S BENGAL SPECIALS
                 if (!response.ok) throw new Error('unavailable');
                 const problems = (await response.json()).problems || [];
                 box.innerHTML = problems.length
-                    ? `<div class="dashboard-subcard" style="background:#fff8ec;border:1px solid #f0c36d;border-radius:14px;padding:18px;"><b>⚠ Setup check — ${problems.length} thing${problems.length === 1 ? '' : 's'} sending customers to the manager</b>${problems.map(p => `<details style="margin-top:10px;"><summary><b>${escapeHtml(p.message)}</b> (${Number(p.count)})</summary><p style="margin:6px 0;"><b>Fix:</b> ${escapeHtml(p.fix)}</p><ul style="margin:4px 0 0 18px;">${p.items.map(item => `<li style="overflow-wrap:anywhere;">${escapeHtml(item)}</li>`).join('')}</ul></details>`).join('')}</div>`
+                    ? `<div class="dashboard-subcard" style="background:#fff8ec;border:1px solid #f0c36d;border-radius:14px;padding:18px;"><b>⚠ Setup check — ${problems.length} thing${problems.length === 1 ? '' : 's'} sending customers to the manager</b>${problems.map(p => `<details style="margin-top:10px;"><summary><b>${escapeHtml(p.message)}</b> (${Number(p.count)})</summary><p style="margin:6px 0;"><b>Fix:</b> ${escapeHtml(p.fix)}</p><ul style="margin:4px 0 0 18px;">${p.items.map(raw => { const item = typeof raw === 'string' ? {text:raw} : raw; const action = item.routing_id ? `<button class="btn-secondary" type="button" data-setup-route="${Number(item.routing_id)}" data-source-type="${escapeHtml(item.source_type || '')}" data-media-id="${escapeHtml(item.media_id || '')}" style="padding:3px 8px;font-size:.75rem;margin:3px 0 3px 8px;">Edit mapping</button>` : ''; return `<li style="overflow-wrap:anywhere;">${escapeHtml(item.text || '')}${action}</li>`; }).join('')}</ul></details>`).join('')}</div>`
                     : '<div class="dashboard-subcard" style="border:1px solid var(--border);border-radius:14px;padding:14px;">✅ Setup check: nothing is quietly sending customers to the manager.</div>';
+                box.querySelectorAll('[data-setup-route]').forEach(button => button.addEventListener('click', () => openSetupRoute(Number(button.dataset.setupRoute), button.dataset.sourceType, button.dataset.mediaId)));
             } catch (_) { box.innerHTML = ''; }
+        }
+        async function openSetupRoute(routingId, sourceType, mediaId) {
+            if (sourceType === 'story' && mediaId) {
+                switchTab('tab-instagram-stories', null);
+                setTimeout(() => openInstagramStoryMapping(mediaId), 150);
+                return;
+            }
+            await loadAdRoutes();
+            const route = (window.igRoutes || []).find(item => Number(item.routing_id) === Number(routingId));
+            if (route) openAdminRoute(route);
+            else { switchTab('tab-instagram-content', null); setInstagramContentSubview('routing'); document.getElementById('adRouteList')?.scrollIntoView({behavior:'smooth'}); }
+        }
+        function renderEscalationReview(container, escalations, dashboard = false) {
+            if (!container) return;
+            if (!escalations.length) { container.innerHTML = dashboard ? '' : '<div class="dashboard-subcard" style="padding:12px;border:1px solid var(--border);border-radius:12px;color:var(--text-muted);">No pending escalated questions.</div>'; return; }
+            const heading = dashboard ? 'Customer questions needing a human answer' : 'Escalated customer questions · separate from answer drafts';
+            container.innerHTML = `<div class="dashboard-subcard" style="background:#fff8ec;border:1px solid #f0c36d;border-radius:14px;padding:16px;"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;"><b>${heading} (${escalations.length})</b>${dashboard ? '<button class="btn-secondary" type="button" onclick="switchTab(\'tab-candidates\', null)">Review questions</button>' : ''}</div><p style="margin:5px 0 10px;color:var(--text-muted);">These questions were handed to the manager. Review the reason and map their source or add a verified answer; nothing here is automatically approved.</p>${escalations.map(e => `<div style="padding:10px 0;border-top:1px solid #ead8bb;"><b>${escapeHtml(e.user_message || 'Customer question unavailable')}</b><div style="font-size:.85rem;margin:3px 0;color:var(--text-muted);">${escapeHtml(e.channel || 'Instagram')} · ${escapeHtml(formatAdminTimestamp(e.created_at))} · ${escapeHtml(e.reason || 'No reason recorded')}</div><button class="btn-secondary" type="button" data-escalation-map="${Number(e.id)}" style="padding:5px 9px;font-size:.78rem;">${e.mapping_routing_id || e.ad_id ? 'Open mapping' : 'Review question'}</button></div>`).join('')}</div>`;
+            container.querySelectorAll('[data-escalation-map]').forEach(button => button.addEventListener('click', () => openEscalationMapping(Number(button.dataset.escalationMap), escalations)));
+        }
+        async function loadEscalationReview(containerId, dashboard = false) {
+            const container = document.getElementById(containerId); if (!container || !adminAuthenticated) return;
+            try {
+                const response = await fetch('/admin/escalations?status=pending&limit=20', {headers:getAuthHeaders(), cache:'no-store'});
+                if (!response.ok) throw new Error('unavailable');
+                renderEscalationReview(container, (await response.json()).escalations || [], dashboard);
+            } catch (_) { if (dashboard) container.innerHTML = ''; }
+        }
+        async function openEscalationMapping(escalationId, escalations) {
+            const escalation = escalations.find(item => Number(item.id) === Number(escalationId)); if (!escalation) return;
+            if (escalation.mapping_routing_id) {
+                await loadAdRoutes();
+                const route = (window.igRoutes || []).find(item => Number(item.routing_id) === Number(escalation.mapping_routing_id));
+                if (route) { openAdminRoute(route); return; }
+            }
+            if (escalation.ad_id) {
+                const input = document.getElementById('adsExactId');
+                if (input) input.value = escalation.ad_id;
+                if (typeof adsFilter !== 'undefined') adsFilter = 'all';
+                document.querySelectorAll('[data-ads-filter]').forEach(button => button.classList.toggle('active', button.dataset.adsFilter === 'all'));
+                switchTab('tab-ads', null);
+                return;
+            }
+            switchTab('tab-ai-resolution', null);
+            setTimeout(() => { const search = document.getElementById('aiResolutionSearch'); if (search) { search.value = escalation.user_message || ''; renderAiResolution(); } }, 150);
         }
         async function loadDashboardOverview() {
             if (!adminAuthenticated) return;
             loadSetupCheck();
+            loadEscalationReview('dashEscalations', true);
             try {
                 const responses = await Promise.all([
                     fetch('/admin/handoffs?limit=100&include_resumed=true', { headers: getAuthHeaders() }),
@@ -12606,6 +12693,7 @@ Non-Veg:
         async function loadCandidates() {
             const tbody = document.getElementById('candidatesTableBody');
             tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #888;">Loading suggested answers...</td></tr>';
+            loadEscalationReview('candidateEscalations');
 
             try {
                 const status = document.getElementById('candidateStatusFilter')?.value || 'PENDING_APPROVAL';

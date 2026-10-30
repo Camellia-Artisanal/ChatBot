@@ -8,6 +8,7 @@ manager handoff: the ad's Reel was mapped with only a welcome note. Two rules:
 import pytest
 
 from camellia import client_qa, instagram_routing
+from camellia.ad_gate import EntryPoint
 from camellia.instagram_routing import InstagramTopicError
 
 from test_ad_mapped_source_context import ad_customer, _ad_entry, _mapped_source, _process  # noqa: F401
@@ -75,6 +76,19 @@ def test_price_question_without_its_ad_gets_the_general_price_answer(ad_customer
     _process(ad_customer, message, entry)
     assert facts["client_qa_id"] == "general_price"
     assert db.get_active_handoff("instagram", sender) is None
+
+
+def test_meta_default_details_button_without_referral_hands_off_safely(ad_customer):
+    sender, _facts, db = ad_customer
+    message = "Hello, can I get more info on this?"
+    send = _process(ad_customer, message, EntryPoint(source="typed"))
+    handoff = db.get_active_handoff("instagram", sender)
+    conversation = db.get_conversations(limit=1, channel="instagram", user_id=sender)[0]
+    assert handoff is not None
+    assert conversation["template_id"] == "instagram_support_handoff"
+    assert "We cook freshly prepared Bengali food" not in conversation["bot_response"]
+    assert "Gurgaon" not in conversation["bot_response"] and "Delhi NCR" not in conversation["bot_response"]
+    assert not any(call.kwargs.get("image_url") for call in send.call_args_list)
 
 
 def test_explicit_human_request_still_reaches_the_manager(ad_customer):

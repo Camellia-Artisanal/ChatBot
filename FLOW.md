@@ -102,3 +102,18 @@ focused tests → full suite (parallel) → restore data/menu.json → commit (n
 → gh api repos/Camellia-Artisanal/ChatBot/deployments?sha=<sha> → statuses success
 → GET /health healthy → check the changed behaviour on the live admin/API
 ```
+
+## 7. Dashboard review actions
+
+```
+Dashboard Setup Check → issue rows carry routing IDs → Edit mapping opens the exact
+Posts/Reels or Story editor
+Pending escalation → Dashboard / Candidates review list → show customer question + reason
+  → exact ad binding opens its mapped source; ad ID without binding opens that ad
+  → otherwise open the escalation in AI Resolution for human review
+```
+
+Escalations stay separate from suggested answer drafts. Verified knowledge still requires
+a human to provide and approve the answer facts.
+The exact Meta “more info on this” button prompt without referral or mapped-source context
+uses a human handoff; it cannot fall through to the city-specific generic food introduction.

@@ -90,6 +90,15 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
   client's always-forward words (complaint, discount) even on a Custom-note mapping.
 - **Every logged message carries `decision_reason`** (which answer/rule, or the handoff ref
   and reason). Read it on `/admin/conversations` before guessing why a reply happened.
+- **Dashboard escalation questions are not answer drafts.** Show the customer question and
+  handoff reason, then take staff to the exact mapped source when the event has an ad binding;
+  otherwise locate the ad or open the escalation for human review. Never auto-approve a reply.
+- **Meta's default "more info on this" prompt may arrive without a referral block.** With no
+  exact source or existing session route, hand it to a person; do not send the city-specific
+  savoury intro from an unknown ad context.
+- **Do not claim staff push alerts are delivered.** `human_notification_events` is durable,
+  but `Escalator.send_human_alert()` currently returns `skipped` (`manual_handoff_only`);
+  no first-hit push or daily escalation report is configured.
 - **System Q&A (Approved Q&A → System Q&A tab):** greeting, thanks, OK, bye and the two
   clarifying questions read `system_replies.text(id)` (override id `system_reply.<id>`, same
   versioned store as the handoff message). Add new built-in conversation copy there, not as

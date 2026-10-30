@@ -20,6 +20,18 @@ def _label(route: Dict[str, Any]) -> str:
     return f"#{route.get('routing_id')} {topic} {where}".strip()
 
 
+def _route_item(route: Dict[str, Any], detail: str = "") -> Dict[str, Any]:
+    text = _label(route)
+    if detail:
+        text += f": {detail}"
+    return {
+        "text": text,
+        "routing_id": route.get("routing_id"),
+        "source_type": route.get("source_type"),
+        "media_id": route.get("media_id"),
+    }
+
+
 def _ids(route: Dict[str, Any]) -> List[str]:
     value = route.get("approved_qa_ids")
     if isinstance(value, str):
@@ -67,12 +79,12 @@ def check(database) -> List[Dict[str, Any]]:
         if str(route.get("response_mode") or "CUSTOM").upper() == "APPROVED_QA":
             gone = [i for i in ids if status.get(i) != "ACTIVE"]
             if gone:
-                dead.append(f"{_label(route)}: {', '.join(question.get(i, i) + ' (' + status.get(i, 'missing').lower() + ')' for i in gone)}")
+                dead.append(_route_item(route, ', '.join(question.get(i, i) + ' (' + status.get(i, 'missing').lower() + ')' for i in gone)))
             if not ids:
-                empty.append(_label(route))
+                empty.append(_route_item(route))
         elif ("menu" in str(route.get("source_description") or "").lower()
               and str(route.get("menu_mode") or "INHERIT").upper() == "NONE"):
-            menu.append(_label(route))
+            menu.append(_route_item(route))
     add("dead_answers", "Mappings tick answers that have expired or been archived, so those questions go to the manager.",
         "Approved Q&A: renew the answer's dates, or untick it on these mappings.", dead)
     add("no_answers", "Mappings set to Approved Q&A with nothing ticked.",
