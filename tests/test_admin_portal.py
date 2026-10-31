@@ -1058,7 +1058,7 @@ def test_expired_menu_is_never_shown_to_a_customer():
         ).json()
 
         text = reply.get("response", "")
-        assert "Manager of Kitchens" in text
+        assert text == "", "menu questions must stay silent when the current weekly menu is unavailable"
         assert "₹" not in text, "an expired menu must not quote prices a customer could order against"
         assert not (reply.get("image_url") or []), "an expired menu must not send a photo"
     finally:
@@ -1067,11 +1067,8 @@ def test_expired_menu_is_never_shown_to_a_customer():
         responder.reload_templates()
 
 
-def test_expired_weekly_menu_does_not_hide_the_sondesh_collections():
-    """
-    Sondesh is a separate, undated range and stays correct. Browsing must still
-    show it — only the weekly card drops out.
-    """
+def test_expired_weekly_menu_request_is_silent():
+    """A generic menu request stays silent when no current weekly menu exists."""
     with open(config.MENU_JSON_PATH, "r", encoding="utf-8") as f:
         original = f.read()
     try:
@@ -1081,11 +1078,8 @@ def test_expired_weekly_menu_does_not_hide_the_sondesh_collections():
             "/api/test-chat",
             json={"message": "show me the menu", "user_id": "expired_browse", "channel": "instagram_ad"},
         ).json()
-        urls = [i["url"] if isinstance(i, dict) else i for i in (reply.get("image_url") or [])]
-
-        assert any("AAMAR" in u for u in urls)
-        assert any("Signature" in u for u in urls)
-        assert not any("Thursday" in u or "Friday" in u or "/uploads/" in u for u in urls)
+        assert reply.get("response", "") == ""
+        assert not (reply.get("image_url") or [])
     finally:
         with open(config.MENU_JSON_PATH, "w", encoding="utf-8") as f:
             f.write(original)

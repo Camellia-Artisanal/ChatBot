@@ -143,7 +143,8 @@ def test_none_and_missing_inherit_never_send_generic_weekly(customer):
     assert reply(customer, "show me the menu") == ("Exact copy", True, "source_menu", None)
     route["menu_mode"] = "INHERIT"
     answer = reply(customer, "show me the menu")
-    assert not answer[1] and answer[3] is None
+    assert answer == ("", True, "weekly_menu_silent", None)
+    assert customer[1]["last_route_source"] == "NO_CURRENT_WEEKLY_MENU"
 
 
 def test_menu_only_requires_current_image_and_empty_mapping_is_rejected(customer):

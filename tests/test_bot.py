@@ -1817,7 +1817,11 @@ class TestCamelliaBot(unittest.TestCase):
             # from approved knowledge or hand off; it must not be ad-gate blocked.
             resp_ad, matched_ad, tmpl_ad, _ = responder.match_and_respond(q, user_id="ig_ad_user", channel="instagram", referral_source="ADS")
             self.assertNotEqual(tmpl_ad, "ad_gate_blocked", f"Ad IG DM was blocked for '{q}'")
-            self.assertTrue(resp_ad, f"Ad IG DM must be answered or handed off for '{q}'")
+            if "menu" in q.lower():
+                self.assertEqual(resp_ad, "", f"Unavailable weekly menu must not produce a reply for '{q}'")
+                self.assertEqual(tmpl_ad, "weekly_menu_silent")
+            else:
+                self.assertTrue(resp_ad, f"Non-menu ad DM must be answered or handed off for '{q}'")
 
         # WhatsApp has no responder route. Verify the public test surface's
         # explicit manual-only contract instead of calling the legacy responder.

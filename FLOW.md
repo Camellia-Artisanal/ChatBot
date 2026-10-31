@@ -32,6 +32,11 @@ Meta webhook (signed)  POST /webhook/instagram
 Rules that hold the flow together:
 - Approved Q&A text is sent word for word; blocks (TEXT / MENU / IMAGE_GROUP /
   `catalogue:<menu_id>`) are sent in order.
+- Approved Q&A response sequences can include a Reel selected from Camellia's
+  current synced Instagram inventory. The picker shows its thumbnail, caption and
+  date; the server rechecks owner/current status before preview, publish and send.
+  Reels use Meta's native media-share attachment, with the Reel URL as fallback
+  only when Meta explicitly rejects that attachment.
 - A mapping checklist only allows its ticked answers (+ General). Each answer's
   "On mapped posts/ads, use for" (Price / Details / Booking / Location / Date & time) and its
   question list decide what "How much does it cost?", "Tell me more"… get on that post
@@ -91,6 +96,8 @@ Menu → weekly workspace → choose/drop/paste image → preview + Publish Menu
   POST /admin/weekly-savoury/publish-image → menu_review.publish_weekly_image()
   image published as-is for 7 days; overlapping week superseded; open draft rejected
 Customers asking for the menu get the image; a single dish's price → handoff
+If there is no eligible current weekly menu, a weekly-menu browse request is recorded
+without a customer reply or handoff. Other questions continue through normal routing.
 ```
 
 ## 5. Menu catalogue

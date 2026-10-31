@@ -48,6 +48,9 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
 
 - **Approved wording is sent word for word.** The model may choose an approved answer,
   never reword one. Prices and tables are never paraphrased.
+- **Approved answer Reel blocks must come from current Camellia-synced, owner-verified
+  Instagram content.** Resolve again before publish/send; never accept an arbitrary Reel
+  URL or share media from another account. Keep each text/menu/Reel block in editor order.
 - **Every handoff sends only the Admin handoff text** (`default_handoff_message()`).
 - **Open handoffs mute the bot** for that customer until staff press Resume AI (or 72 h).
 - **Ads answer like their post/reel**; renewed ads use their mapped twin's mapping; a group
@@ -82,6 +85,9 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
   rarely type the question text, so pick a distinct label ("Kolkata lunch price").
 - **Weekly savoury menu is published as an image, no parsing.** Dish-level price questions
   go to the manager.
+- **No current weekly menu means silence only for a weekly-menu browse request.** Do not
+  send stale menu content or create a handoff for that request; keep non-menu questions
+  on their existing answer/handoff paths.
 - **Menu customer topics** decide "send <topic> menu" replies. Use "Mapped posts/ads only"
   for region-specific menus (no city concept exists). A menu with no topic is not
   customer-eligible.

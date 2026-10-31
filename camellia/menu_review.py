@@ -523,9 +523,15 @@ WEEKLY_SAVOURY_BROWSE = "WEEKLY_SAVOURY_BROWSE"
 def weekly_menu_browsing(message):
     """Explicit weekly/general browsing, independent of stale session context."""
     text = weekly_savoury._name(message)
-    return bool(can_candidate_own_turn(message, "approved_menu") and re.search(r"\bmenus?\b", text) and not re.search(
+    explicit_weekly_question = bool(
+        re.search(r"\b(?:weekly|this\s+week|current\s+week|savoury|savory|veg|vegetarian|non.?veg)\b", text)
+        and re.search(r"\b(?:do\s+you\s+have|is|are|what\s+(?:is|are)|can\s+(?:i|we)\s+(?:see|have)|show|send|give|available)\b", text)
+    )
+    return bool((can_candidate_own_turn(message, "approved_menu") or explicit_weekly_question)
+        and re.search(r"\bmenus?\b", text) and not re.search(
         r"\b(?:order|draft|whatsapp|price|cost|pay|payment|available|availability|ingredient|"
         r"ingredients|allergen|allergens|gluten|shelf|historical|archive|old|previous|last|"
+        r"a\s+la\s+carte|à\s+la\s+carte|la\s+carte|alacarte|"
         r"sondesh|sandesh|mishti|signature|aamar|bento|subscription|home table)\b", text))
 
 

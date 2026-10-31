@@ -151,14 +151,13 @@ def test_subscription_price_is_not_blocked_by_unrelated_weekly_draft(menu_env):
 def test_current_weekly_menu_request_is_blocked_while_weekly_replacement_pending(menu_env):
     _weekly_draft()
     reply, matched, route, _ = _reply("Show me the weekly menu", user="phase2b-faq")
-    assert not matched and route == "pending_menu_handoff"
-    assert "Manager of Kitchens" in reply
+    assert matched and route == "weekly_menu_silent" and reply == ""
 
 
-def test_current_weekly_menu_request_keeps_existing_behavior_without_pending_draft(menu_env):
+def test_current_weekly_menu_request_is_silent_when_no_current_menu_exists(menu_env):
     reply, matched, route, _ = _reply("Show me the weekly menu", user="phase2b-faq")
     assert route != "pending_menu_handoff"
-    assert matched and reply, (reply, route)
+    assert matched and reply == "" and route == "weekly_menu_silent", (reply, route)
 
 
 @pytest.mark.parametrize("question", [
@@ -212,7 +211,10 @@ def test_active_approved_chicken_price_outranks_pending_weekly_menu(menu_env, mo
 def test_explicit_chicken_availability_keeps_pending_menu_protection(menu_env, question):
     _weekly_draft()
     reply, matched, route, _ = _reply(question)
-    assert not matched and route == "pending_menu_handoff"
+    if "menu" in question.lower():
+        assert matched and reply == "" and route == "weekly_menu_silent"
+    else:
+        assert not matched and route == "pending_menu_handoff"
     assert "₹" not in reply
 
 

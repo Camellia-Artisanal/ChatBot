@@ -205,15 +205,11 @@ class Test25AgentStressScenarios(unittest.TestCase):
             # 10b: Ad Referral Click -> Allowed
             resp_ad = self.responder.respond("Hi send menu", user_id=user_id, channel=channel, referral_source="ADS", referral_ad_id="ad_diwali_123")
             self.assertTrue(resp_ad.was_matched)
-            # This test is about the gate: the identical message is silenced
-            # organically and answered after an ad click. It used to assert the
-            # brand name appeared in the reply, which pinned it to whichever
-            # template "Hi send menu" happened to hit — today the clarifier,
-            # which asks whether they want Sondesh or Meals and names neither
-            # the brand nor a wrong thing. Asserting a real reply came back
-            # keeps the gate covered without re-testing template copy.
+            # This test is about the gate: an ad referral is allowed into the
+            # responder; a missing weekly menu is deliberately silent.
             self.assertNotEqual(resp_ad.template_id, "ad_gate_blocked")
-            self.assertTrue(resp_ad.text.strip(), "an ad-referred DM got no reply")
+            self.assertEqual(resp_ad.template_id, "weekly_menu_silent")
+            self.assertEqual(resp_ad.text, "")
         finally:
             config.BYPASS_AD_GATE = orig_bypass
 

@@ -1009,6 +1009,11 @@ def _process_instagram_event(
             response_input, user_id=sender_id, channel="instagram",
             referral_source="ADS", referral_ad_id=trace["ad_id"], referral_ad_title=trace["ad_title"],
         )
+        silent_no_current_menu = bool(
+            template_id == "weekly_menu_silent"
+            and not is_human_help_request(customer_message)
+            and not responder.check_explicit_escalation_triggers(customer_message)
+        )
 
         if unbound_ad_referral or contextless_ad_button:
             # A trusted ad referral without an exact route must not borrow a
@@ -1024,6 +1029,18 @@ def _process_instagram_event(
                 last_grounding="unmapped_ad_referral" if unbound_ad_referral else "contextless_ad_button",
                 last_actions=["escalate_to_team"], knowledge_sufficient=False,
                 ad_product=None, last_answer_id=None,
+            )
+
+        if silent_no_current_menu:
+            # Missing weekly-menu content is an operational omission, not a
+            # customer support issue. Keep the inbound record for visibility,
+            # but do not create a handoff or queue an empty outbound message.
+            response_text, was_matched, template_id, image_url = "", True, "weekly_menu_silent", None
+            facts.update(
+                last_route_source="NO_CURRENT_WEEKLY_MENU",
+                last_grounding="weekly_menu_unavailable_silent",
+                last_actions=[],
+                knowledge_sufficient=False,
             )
 
         # An explicitly enabled Custom mapping owns only generic source-info
@@ -1079,6 +1096,22 @@ def _process_instagram_event(
             facts["source_note_sent_routing_id"] = mapped.get("routing_id")
             session_memory.touch(sender_id, "instagram")
 
+        if silent_no_current_menu:
+            # A source-specific note must not override the no-current-menu
+            # policy after the responder has classified this as a menu browse.
+            response_text, was_matched, template_id, image_url = "", True, "weekly_menu_silent", None
+            facts.update(
+                client_qa_id=None,
+                ordered_response_blocks=[],
+                source_context_used=False,
+                last_route_source="NO_CURRENT_WEEKLY_MENU",
+                last_grounding="weekly_menu_unavailable_silent",
+                last_actions=[],
+                knowledge_sufficient=False,
+                ad_product=None,
+                last_answer_id=None,
+            )
+
         # Human-gated assisted resolution: unresolved Instagram messages only.
         # The draft is durable and reviewable; it is never sent from this path.
         protected_flow = bool(
@@ -1129,7 +1162,7 @@ def _process_instagram_event(
         )
         informational_answer = bool(was_matched and (template_id in informational_templates or client_approved_answer))
         explicit_human_help = is_human_help_request(customer_message)
-        needs_escalation = (
+        needs_escalation = not silent_no_current_menu and (
             (not was_matched and not informational_answer)
             or (
                 not informational_answer
@@ -1272,7 +1305,9 @@ def _process_instagram_event(
         )
 
         ordered_blocks = facts.get("ordered_response_blocks") if facts.get("last_route_source") in {"EXACT_APPROVED", "SOURCE_DESCRIPTION", "CUSTOM_SEQUENCE"} else None
-        if ordered_blocks and not needs_escalation:
+        if silent_no_current_menu:
+            log.info("Suppressed reply for weekly menu request without a current menu.")
+        elif ordered_blocks and not needs_escalation:
             send_instagram_response_blocks(sender_id, ordered_blocks, inbound_message_id=conversation_id)
         else:
             _send_or_queue_instagram_reply(
@@ -2679,6 +2714,17 @@ def send_instagram_response_blocks(recipient_id: str, blocks: list, *, inbound_m
                 recipient_id, block.get("text", ""),
                 inbound_message_id=inbound_message_id, response_type="reply",
             )
+        elif block.get("kind") == "REEL":
+            reel_url = str(block.get("url") or "")
+            native_media_id = str(block.get("media_id") or "")
+            if (not reel_url or not native_media_id
+                    or home_table_native_reels.verified_media_id(reel_url) != native_media_id):
+                log.warning("Stopped approved response: selected Reel is no longer a verified Camellia asset.")
+                break
+            result = _send_or_queue_instagram_reply(
+                recipient_id, reel_url, native_media_id=native_media_id,
+                inbound_message_id=inbound_message_id, response_type="reply",
+            )
         else:
             result = _send_or_queue_instagram_reply(
                 recipient_id, "", image_url=block.get("urls") or ([block["url"]] if block.get("kind") == "IMAGE" else []),
@@ -2951,6 +2997,7 @@ def send_instagram_reply(
                 except Exception:
                     if not home_table_native_reels.explicitly_unavailable(last):
                         raise
+                    delivery_mode = "URL_FALLBACK"
                     send_text_body(text)
                 else:
                     if sent and not last.json().get("message_id"):
@@ -6248,9 +6295,53 @@ def _validate_custom_qa_answer(answer: str) -> None:
 @app.get("/admin/custom-qa/assets")
 def custom_qa_assets(x_admin_key: Optional[str] = Header(None), x_admin_pin: Optional[str] = Header(None)):
     require_admin(x_admin_key, x_admin_pin)
-    return {"assets": [{"menu_id": m["menu_id"], "name": m["name"]}
-                       for m in menu_catalogue.list_menus(include_inactive=False)
-                       if menu_images.current_url(m["menu_id"])]}
+    owner_id = config.instagram_media_owner_id()
+    sync_ready = bool(owner_id and db.has_successful_instagram_media_inventory_sync(owner_id))
+    from camellia import home_table_native_reels
+    sharing_ready = home_table_native_reels.native_sharing_enabled()
+    reels = []
+    if sync_ready and sharing_ready:
+        page = 1
+        while True:
+            items, total = db.list_instagram_media(
+                page=page, page_size=100, source_type="reel", owner_account_id=owner_id,
+            )
+            for item in items:
+                media_id = str(item.get("instagram_media_id") or "")
+                permalink = str(item.get("permalink") or "")
+                verified_id = home_table_native_reels.verified_media_id_for_item(item)
+                if (item.get("inventory_state") != "CURRENT"
+                        or str(item.get("owner_instagram_account_id") or "") != owner_id
+                        or not verified_id or verified_id != media_id):
+                    continue
+                reels.append({
+                    "media_id": media_id,
+                    "permalink": permalink,
+                    "shortcode": item.get("shortcode"),
+                    "caption": item.get("caption") or "Instagram Reel",
+                    "thumbnail_url": item.get("thumbnail_url"),
+                    "published_at": item.get("published_at"),
+                })
+            if page * 100 >= total or not items:
+                break
+            page += 1
+    return {
+        "assets": [{"menu_id": m["menu_id"], "name": m["name"],
+                    "image_url": menu_images.current_url(m["menu_id"])}
+                   for m in menu_catalogue.list_menus(include_inactive=False)
+                   if menu_images.current_url(m["menu_id"])],
+        "reels": reels,
+        "reel_sync_ready": sync_ready,
+        "reel_picker_message": (
+            "Choose from current, verified Camellia Reels."
+            if sync_ready and reels else
+            "This connected account is not verified for native Camellia Reel sharing."
+            if not sharing_ready else
+            "No verified Camellia Reels are available. Sync Posts & Reels first, then refresh this list."
+            if not sync_ready else
+            "The latest sync has no current Reels available to send."
+        ),
+    }
 
 
 @app.post("/admin/custom-qa")

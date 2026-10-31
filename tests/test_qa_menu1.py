@@ -60,11 +60,9 @@ def test_menu_browsing_preserves_order_draft_and_ignores_old_topic(current_menu,
     facts.update(order_intake_draft=draft, last_topic="sondesh", active_topic="subscription")
     before = copy.deepcopy(draft)
     answer = respond(query, uid)
-    assert answer[2] is None  # A text-only approval has no flyer to send.
-    assert "₹" not in answer[0]
-    assert "unchanged" not in answer[0].lower()
+    assert answer[0] == "" and answer[2] == "weekly_menu_silent" and answer[3] is None
     assert facts["order_intake_draft"] == before
-    assert f"version:{current_menu['version_id']}" in facts["last_knowledge_ids"][0]
+    assert facts["last_route_source"] == "NO_CURRENT_WEEKLY_MENU"
     assert respond("show me my order", uid)[2] == "order_intake_draft"
     assert facts["order_intake_draft"] == before
 
@@ -78,7 +76,10 @@ def test_pending_replacement_then_publish_hot_reload(current_menu):
         assert not rag_fallback_engine.retrieve_approved_menu(query).auto_response
         answer = respond(query)
         assert "₹100" not in answer[0] and "₹200" not in answer[0]
-        assert answer[2] == "pending_menu_handoff"
+        if query in BROWSE:
+            assert answer[0] == "" and answer[2] == "weekly_menu_silent" and answer[3] is None
+        else:
+            assert answer[2] == "pending_menu_handoff"
     new = _publish(draft, replace_version_id=old)
     assert not menu_review.pending_review_keys()
     assert weekly_savoury.current_version()["id"] == new["version_id"]

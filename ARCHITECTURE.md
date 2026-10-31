@@ -50,6 +50,8 @@ graphify update .                                     # refresh after code chang
      for customer copy; the model never rewrites approved wording.
    - `approved_qa.py` (+ `client_qa.py` built-in registry, `approved_qa_schema.py`):
      approved answers, admin overrides, variations, categories (contexts), `match()`.
+     Ordered answer sequences may include a Reel from current, owner-verified sync;
+     publish and send resolve the saved media ID again before using Meta media-share.
    - `rag_fallback.py`, `knowledge.py`, `semantic_fallback.py`, `grounded_answers.py`:
      fallbacks that may only use approved facts.
    - `ai_responder.py`, `router.py`, `triage.py`: LLM pieces; router/triage run in shadow.

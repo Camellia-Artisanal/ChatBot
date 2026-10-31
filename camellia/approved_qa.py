@@ -179,7 +179,9 @@ def _entry(qa_id, row):
         lead = (client_qa.ResponseBlock("TEXT", entry.answer),) if (entry.answer or "").strip() else ()
         entry = replace(entry, blocks=lead + tuple(
             client_qa.ResponseBlock("TEXT", block["text"]) if block["type"] == "text"
-            else client_qa.ResponseBlock("MENU", "catalogue:" + block["menu_id"]) for block in sequence))
+            else client_qa.ResponseBlock("MENU", "catalogue:" + block["menu_id"])
+            if block["type"] == "menu"
+            else client_qa.ResponseBlock("REEL", block["media_id"]) for block in sequence))
     return entry
 
 

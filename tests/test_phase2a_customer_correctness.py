@@ -175,7 +175,8 @@ def test_weekly_routes_have_no_stale_asset_or_attachment_claim(customer, monkeyp
                 "aamar_menu", "signature_menu",
             ]
         elif "menu" in message:
-            assert "finalising this week's menu" in text
+            assert text == ""
+            assert facts["last_route_source"] == "NO_CURRENT_WEEKLY_MENU"
         else:
             from camellia import client_qa
             assert text == client_qa.effective_entry(facts["client_qa_id"]).answer
@@ -204,11 +205,11 @@ def test_sondesh_topic_does_not_capture_explicit_weekly_menu(customer, monkeypat
 
     reply, _facts = customer(followup)
 
-    assert reply[2] == ("approved_menu" if eligible_url else "asset_request_weekly_menu")
+    assert reply[2] == ("approved_menu" if eligible_url else "weekly_menu_silent")
     if eligible_url:
         assert reply[3] == [eligible_url]
     else:
-        assert "finalising this week's menu" in reply[0]
+        assert reply[0] == ""
         assert reply[3] is None
 
 

@@ -1,7 +1,7 @@
-"""Optional ordered Custom Q&A replies referencing eligible catalogue assets."""
+"""Optional ordered replies referencing eligible menus and synced owned Reels."""
 import json
 import re
-from camellia import menu_catalogue, menu_images
+from camellia import menu_catalogue, menu_images, home_table_native_reels
 
 
 def validate(value):
@@ -25,8 +25,13 @@ def validate(value):
             if not menu_images.current_url(menu_id):
                 raise ValueError("Selected menu/image is unavailable or not customer-eligible")
             clean.append({"type": "menu", "menu_id": menu_id})
+        elif block.get("type") == "reel" and set(block) <= {"type", "media_id"}:
+            media_id = block.get("media_id")
+            if not isinstance(media_id, str) or not media_id.strip() or not home_table_native_reels.synced_reel(media_id):
+                raise ValueError("Choose a current, verified Reel from Camellia's synced Instagram content")
+            clean.append({"type": "reel", "media_id": media_id.strip()})
         else:
-            raise ValueError("Only text or catalogue menu blocks are supported; arbitrary URLs are forbidden")
+            raise ValueError("Only text, catalogue menu, or verified synced Reel blocks are supported; arbitrary URLs are forbidden")
     return clean
 
 
@@ -37,11 +42,18 @@ def resolve(value):
     for block in blocks:
         if block["type"] == "text":
             result.append({"kind": "TEXT", "text": block["text"]})
-        else:
+        elif block["type"] == "menu":
             url = menu_images.current_url(block["menu_id"])
             if not url:
                 raise ValueError("Selected menu/image is unavailable")
             result.append({"kind": "IMAGE", "url": url, "menu_id": block["menu_id"]})
+        else:
+            item = home_table_native_reels.synced_reel(block["media_id"])
+            if not item:
+                raise ValueError("Selected Reel is no longer current in Camellia's synced Instagram content")
+            result.append({"kind": "REEL", "media_id": block["media_id"],
+                           "url": item["permalink"], "thumbnail_url": item.get("thumbnail_url"),
+                           "caption": item.get("caption") or "Instagram Reel"})
     return result
 
 

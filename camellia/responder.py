@@ -3036,8 +3036,70 @@ class DeterministicResponder:
                 session_memory.add_turn(user_id, channel, user_message, re.sub(r"https://wa\.me/[^\s]+", "[Continue on WhatsApp]", continuity_reply))
                 return continuity_reply, True, "order_intake_draft", None
 
-        if channel == "instagram" and menu_review.weekly_menu_browsing(user_message):
+        source_menu_route = facts.get("source_route") if isinstance(facts.get("source_route"), dict) else {}
+        source_menu_active = bool(
+            source_menu_route.get("routing_id") and source_menu_route.get("active", True)
+            and not facts.get("source_context_superseded")
+        )
+        source_menu_id = source_menu_route.get("menu_id")
+        if (not source_menu_id and str(source_menu_route.get("menu_mode") or "").upper() == "INHERIT"
+                and source_menu_route.get("topic_id")):
+            source_topic = db.get_instagram_topic(source_menu_route["topic_id"])
+            source_menu_id = (source_topic or {}).get("default_menu_id")
+        source_menu_explicit = bool(
+            source_menu_route.get("routing_id") and source_menu_id
+            and str(source_menu_route.get("menu_mode") or "INHERIT").upper() != "NONE"
+            and not facts.get("source_context_superseded")
+        )
+        source_custom_menu_copy = bool(
+            source_menu_route.get("routing_id") and source_menu_route.get("active", True)
+            and str(source_menu_route.get("menu_mode") or "INHERIT").upper() == "NONE"
+            and str(source_menu_route.get("source_description") or "").strip()
+            and not facts.get("source_context_superseded")
+        )
+        source_menu_context = bool(
+            source_menu_active and (
+                source_menu_route.get("source_context") == "sondesh"
+                or re.search(r"\b(?:sondesh|sandesh|mishti)\b", str(source_menu_route.get("routing_topic") or ""), re.I)
+            )
+        ) or source_menu_explicit or source_custom_menu_copy or bool(facts.get("home_table_context")) or bool(
+            re.search(
+                r"(?:home\s*table|bengali_home_table)",
+                str(facts.get("active_topic") or facts.get("last_topic") or "") + " "
+                + str(source_menu_route.get("routing_topic") or ""),
+                re.I,
+            )
+        ) or bool(
+            not source_menu_active and re.search(
+                r"(?:sondesh|sandesh|mishti)",
+                str(facts.get("active_topic") or facts.get("last_topic") or ""),
+                re.I,
+            )
+        )
+        explicitly_weekly_menu = bool(re.search(
+            r"\b(?:weekly|this\s+week|current\s+week|savoury|savory)\b", user_message, re.I,
+        ))
+        current_weekly_image = current_weekly_url()
+        weekly_menu_should_own = bool(
+            not source_menu_context or explicitly_weekly_menu or current_weekly_image
+        )
+        if (channel == "instagram" and menu_review.weekly_menu_browsing(user_message)
+                and weekly_menu_should_own):
             facts["order_intake_declined"] = "explicit_menu_browsing"
+            if not current_weekly_image:
+                facts.update(
+                    last_route_source="NO_CURRENT_WEEKLY_MENU",
+                    last_grounding="weekly_menu_unavailable_silent",
+                    last_intents=[menu_review.WEEKLY_SAVOURY_BROWSE],
+                    knowledge_sufficient=False,
+                    last_llm_called=False,
+                    last_fallback_used=False,
+                    source_context_superseded=True,
+                    source_context_used=False,
+                    last_actions=[],
+                )
+                session_memory.add_turn(user_id, channel, user_message, "")
+                return "", True, "weekly_menu_silent", None
 
         source = facts.get("source_route") if isinstance(facts.get("source_route"), dict) else {}
         source_active = bool(source.get("routing_id") and source.get("active", True)
@@ -3530,8 +3592,9 @@ class DeterministicResponder:
                 session_memory.add_turn(user_id, channel, user_message, source_description)
                 return source_description, True, "source_description", None
 
-        if channel == "instagram" and menu_review.weekly_menu_browsing(user_message):
-            image = current_weekly_url()
+        if (channel == "instagram" and menu_review.weekly_menu_browsing(user_message)
+                and weekly_menu_should_own):
+            image = current_weekly_image
             if image:
                 facts.update(last_route_source="APPROVED_MENU", last_grounding="approved_menu_flyer",
                              active_topic="savoury", last_topic="savoury", knowledge_sufficient=True,
@@ -3541,30 +3604,22 @@ class DeterministicResponder:
                              last_actions=[BusinessAction.SEND_PRODUCT_IMAGE.value])
                 session_memory.add_turn(user_id, channel, user_message, "")
                 return "", True, "approved_menu", [image]
-            # A fresh explicit intent outranks an old order or source topic.
-            # Resolve approved rows and their associated flyer on every turn.
-            versions = [v for v in menu_review.customer_versions()
-                        if v["menu_key"] in weekly_savoury.LEGACY_WEEKLY_KEYS]
-            if len(versions) == 1:
-                version = versions[0]
-                approval = json.loads(version["approval_json"])
-                rows = approval["rows"]
-                if re.search(r"\b(?:non.?veg|non vegetarian)\b", lowered_text):
-                    rows = [r for r in rows if r["category"] == "non_vegetarian"]
-                elif re.search(r"\b(?:veg|vegetarian)\b", lowered_text):
-                    rows = [r for r in rows if r["category"] == "vegetarian"]
-                if rows:
-                    image = current_weekly_url()
-                    # Browsing sends the flyer; exact item prices remain an explicit intent.
-                    text = "" if image else self._generic_fallback()
-                    ref = f"approved_menu:{version['menu_key']}:version:{version['id']}"
-                    facts.update({"last_route_source": "APPROVED_MENU" if image else "HUMAN_HANDOFF", "last_knowledge_ids": [ref],
-                                  "last_grounding": "approved_menu_flyer" if image else "approved_menu_flyer_missing", "last_topic": "savoury",
-                                  "active_topic": "savoury", "last_intents": [menu_review.WEEKLY_SAVOURY_BROWSE], "knowledge_sufficient": bool(image),
-                                  "last_llm_called": False, "last_fallback_used": not bool(image),
-                                  "source_context_superseded": True, "source_context_used": False})
-                    session_memory.add_turn(user_id, channel, user_message, text)
-                    return text, bool(image), "approved_menu" if image else None, [image] if image else None
+            # Weekly menus are only customer-ready when the current flyer is
+            # eligible. Do not send stale menu details or turn this narrow
+            # request into a handoff; app.py records it without replying.
+            facts.update(
+                last_route_source="NO_CURRENT_WEEKLY_MENU",
+                last_grounding="weekly_menu_unavailable_silent",
+                last_intents=[menu_review.WEEKLY_SAVOURY_BROWSE],
+                knowledge_sufficient=False,
+                last_llm_called=False,
+                last_fallback_used=False,
+                source_context_superseded=True,
+                source_context_used=False,
+                last_actions=[],
+            )
+            session_memory.add_turn(user_id, channel, user_message, "")
+            return "", True, "weekly_menu_silent", None
 
         if channel == "instagram" and not stable_primary_answer and not _approved_chicken_kosha_price_question(user_message, facts):
             menu_result = rag_fallback_engine.retrieve_approved_menu(user_message)
@@ -3946,6 +4001,17 @@ class DeterministicResponder:
                         ordered_response_blocks.extend(client_qa.build_home_table_reel_blocks(block.value))
                         continue
                     ordered_response_blocks.append({"kind": "TEXT", "text": block.value})
+                    continue
+                if block.kind == "REEL":
+                    from camellia import custom_response_sequence
+                    try:
+                        reel_block = custom_response_sequence.resolve([{
+                            "type": "reel", "media_id": block.value,
+                        }])[0]
+                    except (ValueError, TypeError, IndexError):
+                        asset_missing.append("reel:" + block.value)
+                    else:
+                        ordered_response_blocks.append(reel_block)
                     continue
                 values = [value for value in asset_map.get(block.value, []) if value]
                 if block.value.startswith("catalogue:"):
