@@ -403,7 +403,8 @@ class AIResponder:
                         and provider_error_code == "json_validate_failed"
                     )
                     cooldown = _cooldown_for_status(resp.status_code)
-                    if cooldown and not on_side_model:
+                    # One bad generation says nothing about the key or the model.
+                    if cooldown and not on_side_model and provider_error_code != "json_validate_failed":
                         self._groq_cooldown_until = time.time() + cooldown
                         if resp.status_code in CONFIG_ERROR_HTTP_STATUSES:
                             log.error(
@@ -683,9 +684,10 @@ class AIResponder:
         )
         raw, ok, reason = self._query_groq(
             prompt,
-            model=config.GROQ_MODEL,
+            model=config.GROQ_ROUTER_MODEL,
             response_format={"type": "json_object"},
             max_tokens=700,
+            reasoning_effort="low",
         )
         if not ok:
             return [], False, reason

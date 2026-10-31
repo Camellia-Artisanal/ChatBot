@@ -1,12 +1,13 @@
 """Question variations in the Custom response box: exact, per source, never over an order."""
 import json
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from camellia import app as app_module, instagram_routing
 from camellia.ai_responder import ai_responder
+from camellia.config import config
 from camellia.instagram_routing import decode_route, matches_custom_response_variation, validate_route_payload
 
 from test_ad_mapped_source_context import ad_customer, _process  # noqa: F401
@@ -131,6 +132,19 @@ def test_a_failed_suggestion_says_so(store, outcome):  # noqa: F811
     response, _groq = _suggest({"reply": NOTE}, outcome)
     assert response.status_code == 503
     assert "by hand" in response.json()["detail"]
+
+
+def test_a_bad_json_generation_does_not_pause_customer_replies(monkeypatch):
+    response = MagicMock(status_code=400)
+    response.json.return_value = {"error": {"code": "json_validate_failed"}}
+    monkeypatch.setattr(ai_responder, "_groq_cooldown_until", 0.0)
+    monkeypatch.setattr(config, "GROQ_API_KEY", "test-key")
+    with patch("camellia.ai_responder.httpx.Client") as client:
+        client.return_value.__enter__.return_value.post.return_value = response
+        _text, ok, _reason = ai_responder._query_groq(
+            "x", model=config.GROQ_MODEL, response_format={"type": "json_object"})
+    assert not ok
+    assert ai_responder._groq_cooldown_until == 0.0
 
 
 @pytest.mark.parametrize("body", [{"reply": ""}, {"reply": NOTE, "existing": "Price?"}, {"reply": "x" * 4001}])
