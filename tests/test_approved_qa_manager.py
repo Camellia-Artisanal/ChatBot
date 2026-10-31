@@ -108,6 +108,13 @@ def test_primary_and_semantic_alias_conflicts_fail_closed(store, word):
         approved_qa.preview({"question": "Do you offer X?", "answer": "Other answer", "aliases": [word]})
 
 
+def test_a_conflict_names_the_wording_and_the_question_using_it(store):
+    first = publish(aliases=["How to book?"])
+    with pytest.raises(ValueError) as conflict:
+        approved_qa.preview({"question": "Booking?", "answer": "Other answer", "aliases": ["how to book"]})
+    assert str(conflict.value) == f'This wording already matches: {first["qa_id"]} ("how to book")'
+
+
 def test_restore_cannot_bypass_conflict_and_runtime_ambiguity_fails_closed(store):
     first = publish(aliases=["Tell me about X"])
     approved_qa.archive_or_restore(first["qa_id"], "owner")

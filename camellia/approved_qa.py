@@ -559,12 +559,12 @@ def _conflicts(candidate, rows):
                 # Immutable source has a few intentionally context-dependent duplicate primary questions.
                 if word_index == 0 and entry.qa_id in client_qa.REGISTRY_BY_ID and candidate.get("question") is None:
                     continue
-                raise ValueError(f"This wording already matches: {key}")
+                raise ValueError(f'This wording already matches: {key} ("{word}")')
         original = client_qa._match_base(word)
         if original and original.entry.qa_id != entry.qa_id and original.entry.qa_id in others:
             if word_index == 0 and entry.qa_id in client_qa.REGISTRY_BY_ID and candidate.get("question") is None:
                 continue
-            raise ValueError(f"This wording already matches: {original.entry.qa_id}")
+            raise ValueError(f'This wording already matches: {original.entry.qa_id} ("{word}")')
 
 
 def _token(candidate, rows):

@@ -1,8 +1,12 @@
 """Question variations in the Custom response box: exact, per source, never over an order."""
+import json
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
 
 from camellia import app as app_module, instagram_routing
+from camellia.ai_responder import ai_responder
 from camellia.instagram_routing import decode_route, matches_custom_response_variation, validate_route_payload
 
 from test_ad_mapped_source_context import ad_customer, _process  # noqa: F401
@@ -95,6 +99,45 @@ def test_media_save_keeps_stored_phrases_unless_the_box_is_sent(store, assets): 
                       ).json()["route"]["custom_response_variations"] == []
     reloaded = client.get(f"/admin/instagram-media/{item['id']}", headers=auth()).json()["item"]["mapping_route"]
     assert reloaded["custom_response_variations"] == []
+
+
+def _suggest(body, groq_reply=None):
+    outcome = groq_reply if groq_reply is not None else ("", False, "groq_http_500")
+    with patch.object(ai_responder, "get_active_provider", return_value="groq"), \
+            patch.object(ai_responder, "_query_groq", return_value=outcome) as groq:
+        response = TestClient(app_module.app).post(
+            "/admin/approved-qa/variation-suggestions", headers=auth(), json=body)
+    return response, groq
+
+
+def test_suggestions_keep_only_new_english_phrases(store):  # noqa: F811
+    phrases = ["Price?", "price!!", "How much?", "How’s the box?", "দাম কত?", "x" * 181, 5]
+    response, groq = _suggest({"reply": NOTE, "existing": ["PRICE"]},
+                              (json.dumps({"phrases": phrases}), True, "groq_rag"))
+    assert response.status_code == 200, response.text
+    assert response.json() == {"suggestions": ["How much?", "How's the box?"]}
+    assert NOTE in groq.call_args.args[0] and "PRICE" in groq.call_args.args[0]
+
+
+def test_suggesting_never_saves_a_phrase(ad_customer):
+    route = decode_route(_custom_route(ad_customer))
+    _suggest({"reply": NOTE}, ('{"phrases":["How much?"]}', True, "groq_rag"))
+    stored = ad_customer[2].get_instagram_source_route(int(route["routing_id"]))
+    assert decode_route(stored)["custom_response_variations"] == []
+
+
+@pytest.mark.parametrize("outcome", [("", False, "groq_http_500"), ("not json", True, "groq_rag"), ("[]", True, "groq_rag")])
+def test_a_failed_suggestion_says_so(store, outcome):  # noqa: F811
+    response, _groq = _suggest({"reply": NOTE}, outcome)
+    assert response.status_code == 503
+    assert "by hand" in response.json()["detail"]
+
+
+@pytest.mark.parametrize("body", [{"reply": ""}, {"reply": NOTE, "existing": "Price?"}, {"reply": "x" * 4001}])
+def test_a_bad_suggestion_request_never_reaches_the_model(store, body):  # noqa: F811
+    response, groq = _suggest(body)
+    assert response.status_code == 400
+    groq.assert_not_called()
 
 
 def test_admin_dashboard_has_a_box_on_every_custom_editor():

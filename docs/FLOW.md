@@ -56,7 +56,9 @@ Rules that hold the flow together:
 - Custom-response mappings may also store up to 30 admin-entered question variations. A
   punctuation/case-normalized exact match on that mapped source sends its custom response;
   it does not use fuzzy matching or apply to other Topics/sources. Human-help, explicit
-  escalation requests and an order in progress keep their priority.
+  escalation requests and an order in progress keep their priority. Suggest phrases drafts
+  English phrases from the reply; only the ones staff tick enter the box, and only Save stores
+  them. Matching stays exact.
 - No ad context: generic price questions get `general_price`; nothing mapping-specific leaks.
 - An explicit ADS referral without an ad ID or exact active route clears prior ad/topic
   context and hands off; it cannot fall through to a generic or previous-city answer.

@@ -62,6 +62,7 @@ function setSourceResponseMode(prefix) {
 async function initSourceResponse(prefix, route) {
  const state={selected:route.approved_qa_id || '',records:[],selectedIds:new Set(route.approved_qa_ids || (route.approved_qa_id?[route.approved_qa_id]:[])),context:(prefix==='igStory'?route.story_context:route.source_context)??null}; sourceResponseState[prefix]=state;
  document.querySelector(`input[name="${prefix}ResponseMode"][value="${route.response_mode || 'APPROVED_QA'}"]`).checked=true;
+ addVariationSuggest(prefix);
  document.getElementById(prefix+'QaSearch').value='';
  const select=document.getElementById(prefix+'ApprovedQaId'); select.replaceChildren(new Option('Select Approved Q&A','')); select.disabled=true;
  setSourceResponseMode(prefix);
@@ -81,6 +82,35 @@ async function initSourceResponse(prefix, route) {
   select.replaceChildren(new Option('Approved Q&A unavailable',''));
   document.getElementById(prefix+'QaPreview').textContent=error.message;
  }
+}
+// Suggestions only reach the box when ticked, and only Save stores them.
+function variationLines(box){return box.value.split(/\r?\n/).map(value=>value.trim()).filter(Boolean);}
+function addVariationSuggest(prefix){
+ const box=document.getElementById(prefix+'CustomResponseVariations');if(!box)return;
+ let list=document.getElementById(prefix+'VariationSuggestions');
+ if(list){list.replaceChildren();return;}
+ const button=document.createElement('button');button.type='button';button.className='btn-secondary';button.textContent='Suggest phrases';button.style.marginTop='8px';
+ list=document.createElement('div');list.id=prefix+'VariationSuggestions';list.setAttribute('role','status');list.style.marginTop='8px';
+ button.onclick=()=>suggestVariations(prefix,box,button,list);box.after(button,list);
+}
+async function suggestVariations(prefix,box,button,list){
+ const reply=(document.getElementById(SOURCE_NOTE_FIELDS[prefix][0])?.value||'').trim();
+ if(!reply){list.textContent='Write the custom response first.';return;}
+ button.disabled=true;list.textContent='Suggesting phrases...';
+ try{
+  const response=await fetch('/admin/approved-qa/variation-suggestions',{method:'POST',headers:{...getAuthHeaders(),'Content-Type':'application/json'},body:JSON.stringify({reply,existing:variationLines(box)})});
+  const data=await response.json();if(!response.ok)throw new Error(data.detail||'Suggestions are unavailable. Add phrases by hand.');
+  list.replaceChildren();
+  if(!data.suggestions.length){list.textContent='No new phrases to suggest.';return;}
+  const help=document.createElement('p');help.className='source-map-help';help.textContent='Tick the phrases this reply should answer, then save.';list.append(help);
+  for(const phrase of data.suggestions){
+   const row=document.createElement('label');row.style.cssText='display:flex;gap:8px;align-items:center;padding:4px 0;overflow-wrap:anywhere';
+   const check=document.createElement('input');check.type='checkbox';check.style.cssText='width:auto;flex:none';
+   check.onchange=()=>{const lines=variationLines(box).filter(line=>line!==phrase);if(check.checked)lines.push(phrase);box.value=lines.join('\n');};
+   row.append(check,document.createTextNode(phrase));list.append(row);
+  }
+ }catch(error){list.textContent=error.message;}
+ finally{button.disabled=false;}
 }
 function filterSourceQa(prefix) {
  const state=sourceResponseState[prefix]; if(!state)return;

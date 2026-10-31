@@ -1,10 +1,12 @@
 """Dedicated approved authority UI and guarded dry-run/publication routes."""
+import asyncio
 import logging
 from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from camellia import approved_qa
 from camellia import admin_chatbot_control
+from camellia.ai_responder import ai_responder
 
 
 def create_router(require_admin, actor):
@@ -53,6 +55,22 @@ def create_router(require_admin, actor):
     async def publish(request: Request, x_admin_key: Optional[str] = Header(None)):
         require_admin(x_admin_key)
         return call(approved_qa.publish, await body(request), actor())
+
+    @router.post("/variation-suggestions")
+    async def variation_suggestions(request: Request, x_admin_key: Optional[str] = Header(None)):
+        require_admin(x_admin_key)
+        data = await body(request)
+        reply = data.get("reply")
+        existing = data.get("existing", [])
+        if not isinstance(reply, str) or not reply.strip() or len(reply) > 4000:
+            raise HTTPException(400, "Write the custom response first")
+        if not isinstance(existing, list) or len(existing) > 30 or any(not isinstance(value, str) for value in existing):
+            raise HTTPException(400, "Send the phrases already in the box")
+        suggestions, ok, _reason = await asyncio.to_thread(
+            ai_responder.suggest_custom_response_variations, reply.strip(), existing)
+        if not ok:
+            raise HTTPException(503, "Suggestions are unavailable right now. Add phrases by hand.")
+        return {"suggestions": suggestions}
 
     @router.post("/contexts")
     async def add_context(request: Request, x_admin_key: Optional[str] = Header(None)):
@@ -260,8 +278,18 @@ function aqMarkDirty() {
 }
 function aqPayload() { return {create:aqCreating,...(aqDraft?.qa_id?{qa_id:aqDraft.qa_id}:{}),question:document.getElementById('aqQuestion').value,answer:document.getElementById('aqAnswer').value,context:document.getElementById('aqContext').value,aliases:document.getElementById('aqAliases').value.split('\n').map(v=>v.trim()).filter(Boolean),valid_from:document.getElementById('aqFrom').value||null,valid_until:document.getElementById('aqUntil').value||null,blocks:aqSequence,hidden_aliases:aqHidden,mapped_role:document.getElementById('aqMappedRole').value,mapped_questions:document.getElementById('aqMappedQuestions').value.split('\n').map(v=>v.trim()).filter(Boolean)}; }
 function aqSequencePreview(record) { const blocks=[{type:'text',text:record.answer,label:'Approved answer'},...(record.sequence||[])];return `<ol style="padding-left:22px">${blocks.map((block,index)=>{if(block.type==='text')return `<li style="padding:8px 0"><b>${index===0?'Approved answer':'Text message'}</b><pre style="white-space:pre-wrap;margin:5px 0">${escapeHtml(block.text||'')}</pre></li>`;if(block.type==='menu'){const asset=aqAssets.find(item=>item.menu_id===block.menu_id);return `<li style="padding:8px 0"><b>Menu / image · ${escapeHtml(asset?.name||block.menu_id)}</b>${asset?.image_url?`<img src="${escapeHtml(asset.image_url)}" alt="${escapeHtml(asset.name)} preview" style="display:block;max-width:220px;max-height:180px;object-fit:contain;margin-top:6px">`:''}</li>`;}const reel=aqReels.find(item=>item.media_id===block.media_id);return `<li style="padding:8px 0"><b>Camellia Reel · ${escapeHtml(reel?.caption||reel?.shortcode||'Synced Reel')}</b>${reel?.thumbnail_url?`<img src="${escapeHtml(reel.thumbnail_url)}" alt="Selected Reel preview" style="display:block;width:150px;height:130px;object-fit:cover;border-radius:7px;margin-top:6px">`:''}</li>`;}).join('')}</ol>`; }
-async function aqPreview() { try { const data=await aqApi('/preview','POST',aqPayload());aqDraft={...(aqDraft||{}),qa_id:data.qa_id};aqToken=data.preview_token;const button=document.getElementById('aqPublishButton');button.disabled=false;button.textContent='Publish Approved Q&A';document.getElementById('aqPreviewResult').innerHTML=`<p><strong>Preview ready.</strong> Review the answer sequence below, then click Publish Approved Q&amp;A.</p><h4>Current approved answer</h4><pre style="white-space:pre-wrap">${escapeHtml(data.current?.answer||'New Q&A')}</pre><h4>What customers will receive, in order</h4>${aqSequencePreview(data.proposed)}<p>${escapeHtml(data.proposed.status)} · From ${aqDate(data.proposed.valid_from)} · Until ${aqDate(data.proposed.valid_until)}</p><h4>Test result</h4><pre style="white-space:pre-wrap">${escapeHtml(JSON.stringify(data.test,null,2))}</pre>`;return true; }catch(e){aqToken=null;const button=document.getElementById('aqPublishButton');button.disabled=false;button.textContent='Preview Required Before Publish';document.getElementById('aqPreviewResult').textContent=e.message;return false;} }
-async function aqPublish() { if(!aqToken){await aqPreview();return;}try {await aqApi('/publish','POST',{...aqPayload(),preview_token:aqToken});document.getElementById('aqDialog').close();aqMessage('Approved Q&A published.');await loadApprovedQa();}catch(e){document.getElementById('aqPreviewResult').textContent=e.message;aqToken=null;const button=document.getElementById('aqPublishButton');button.disabled=false;button.textContent='Preview Required Before Publish';} }
+async function aqPreview() { try { const data=await aqApi('/preview','POST',aqPayload());aqDraft={...(aqDraft||{}),qa_id:data.qa_id};aqToken=data.preview_token;const button=document.getElementById('aqPublishButton');button.disabled=false;button.textContent='Publish Approved Q&A';document.getElementById('aqPreviewResult').innerHTML=`<p><strong>Preview ready.</strong> Review the answer sequence below, then click Publish Approved Q&amp;A.</p><h4>Current approved answer</h4><pre style="white-space:pre-wrap">${escapeHtml(data.current?.answer||'New Q&A')}</pre><h4>What customers will receive, in order</h4>${aqSequencePreview(data.proposed)}<p>${escapeHtml(data.proposed.status)} · From ${aqDate(data.proposed.valid_from)} · Until ${aqDate(data.proposed.valid_until)}</p><h4>Test result</h4><pre style="white-space:pre-wrap">${escapeHtml(JSON.stringify(data.test,null,2))}</pre>`;return true; }catch(e){aqToken=null;const button=document.getElementById('aqPublishButton');button.disabled=false;button.textContent='Preview Required Before Publish';aqShowPreviewError(e.message);return false;} }
+// Names the question already using this wording and opens it, so staff can move the wording.
+function aqShowPreviewError(message) {
+ const box=document.getElementById('aqPreviewResult');
+ const found=message.match(/already matches: (\S+) \("(.*)"\)$/s);
+ const record=found&&aqRecords.find(r=>r.qa_id===found[1]);
+ if(!record){box.textContent=message;return;}
+ const category=aqContexts.find(option=>option.value===record.context)?.label||record.context;
+ box.innerHTML=`<div role="alert"><p><strong>“${escapeHtml(found[2])}” is already used by another question.</strong> Remove it there, then preview this one again, or use different wording here.</p><p>Question: ${escapeHtml(record.question)}<br>Category: ${escapeHtml(category)}<br>ID: ${escapeHtml(record.qa_id)}</p><button type="button" class="btn-secondary" id="aqOpenConflict">Open that question</button></div>`;
+ document.getElementById('aqOpenConflict').onclick=()=>{if(!confirm('Open that question? This draft is not saved and will close.'))return;document.getElementById('aqDialog').close();aqEdit(record.qa_id);};
+}
+async function aqPublish() { if(!aqToken){await aqPreview();return;}try {await aqApi('/publish','POST',{...aqPayload(),preview_token:aqToken});document.getElementById('aqDialog').close();aqMessage('Approved Q&A published.');await loadApprovedQa();}catch(e){aqShowPreviewError(e.message);aqToken=null;const button=document.getElementById('aqPublishButton');button.disabled=false;button.textContent='Preview Required Before Publish';} }
 async function aqArchive(id) { if(!confirm('Delete this approved Q&A from customer matching? It will be archived with history preserved.'))return;try{await aqApi('/'+encodeURIComponent(id)+'/archive','POST');aqMessage('Q&A archived. Restore is available in history.');await loadApprovedQa();}catch(e){aqMessage(e.message,true);} }
 async function aqRestore(id,version) { if(!confirm('Restore this approved Q&A? Its validity and conflicts will be checked.'))return;try{await aqApi('/'+encodeURIComponent(id)+'/restore'+(version?'/'+version:''),'POST');document.getElementById('aqDialog').close();aqMessage('Approved Q&A restored.');await loadApprovedQa();}catch(e){aqMessage(e.message,true);} }
 // Reply sequence and built-in variations, editable like Custom Q&A (18 Oct).

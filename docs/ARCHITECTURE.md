@@ -84,6 +84,7 @@ breaks the whole page ([MEMORY.md](MEMORY.md)).
 | Fallback for that step | `openai/gpt-oss-20b` | `STRUCTURED_NLU_FALLBACK_MODEL` |
 | Grounded replies and refinement | `openai/gpt-oss-20b` | `GROQ_MODEL` |
 | Read menu images | `qwen/qwen3.8-27b` | `GROQ_VISION_MODEL` |
+| Draft question variations for staff to tick | `openai/gpt-oss-20b` | `GROQ_MODEL` |
 
 **AI selects, it does not author.** It reads meaning and emits no customer copy on that path.
 Any generated text must pass grounding checks against approved content. If Groq fails, the

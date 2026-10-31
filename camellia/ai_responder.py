@@ -32,6 +32,8 @@ TRANSIENT_COOLDOWN_SECONDS = 60.0
 CONFIG_ERROR_HTTP_STATUSES = (400, 401, 403, 404, 413)
 CONFIG_ERROR_COOLDOWN_SECONDS = 600.0
 
+_MAX_VARIATION_SUGGESTIONS = 12
+
 # Char ceiling for the full-RAG context. Groq's tokenizer ran ~3.07 chars/token
 # over this corpus (41,288 chars → 13,454 tokens, rejected as HTTP 413), so
 # 16,000 chars ≈ 5.2k tokens leaves headroom under even the tightest free-tier
@@ -658,6 +660,54 @@ class AIResponder:
             log.warning("Discarded ungrounded verified response: %s", grounding_reason)
             return "", False, grounding_reason
         return response, True, "grounded"
+
+    def suggest_custom_response_variations(
+        self, reply: str, existing: List[str]
+    ) -> Tuple[List[str], bool, str]:
+        """Draft English customer phrases for staff to tick; nothing here reaches a customer."""
+        from camellia.instagram_routing import normalize_custom_response_variation as normalize
+
+        if self.get_active_provider() == "none":
+            return [], False, "provider_unavailable"
+        prompt = (
+            "A food brand's Instagram bot sends the REPLY below to customers.\n"
+            'Return exactly one JSON object: {"phrases":["..."]}.\n\n'
+            "RULES:\n"
+            f"- List up to {_MAX_VARIATION_SUGGESTIONS} short English messages a customer might type, "
+            "each of which this reply fully answers.\n"
+            "- Skip any question the reply does not answer.\n"
+            "- Write as customers type: casual, short forms allowed.\n"
+            "- Do not rephrase these existing phrases: "
+            f"{json.dumps(existing, ensure_ascii=False)}\n\n"
+            f"REPLY:\n{reply}\n"
+        )
+        raw, ok, reason = self._query_groq(
+            prompt,
+            model=config.GROQ_MODEL,
+            response_format={"type": "json_object"},
+            max_tokens=700,
+        )
+        if not ok:
+            return [], False, reason
+        try:
+            phrases = json.loads(raw).get("phrases")
+        except (AttributeError, TypeError, json.JSONDecodeError):
+            return [], False, "invalid_json"
+        if not isinstance(phrases, list):
+            return [], False, "invalid_json"
+
+        seen = {normalize(phrase) for phrase in existing}
+        suggestions: List[str] = []
+        for phrase in phrases:
+            if not isinstance(phrase, str):
+                continue
+            phrase = phrase.replace("’", "'").strip()
+            key = normalize(phrase)
+            if not key or key in seen or len(phrase) > 180 or not phrase.isascii():
+                continue
+            seen.add(key)
+            suggestions.append(phrase)
+        return suggestions[:_MAX_VARIATION_SUGGESTIONS], True, "suggested"
 
     def refine_template_response(
         self,
