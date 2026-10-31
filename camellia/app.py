@@ -1879,7 +1879,7 @@ def _classify_unanswered_event(messaging_event: dict) -> Optional[str]:
         # A tapped prompt we could not turn into text. This is the one that
         # left a customer staring at silence after tapping "Show me the menu".
         return "postback_without_text"
-    if message.get("attachments"):
+    if message.get("attachments") or message.get("is_unsupported"):
         # A photo, sticker or voice note. A real person said something we
         # cannot read, and answering nothing is the worst available response.
         return "attachment_only"
@@ -2071,8 +2071,11 @@ def _instagram_event_key(account_id: Any, event: Dict[str, Any]) -> str:
     """Use Meta's message ID when present; hash the full event otherwise."""
     message = event.get("message") or {}
     postback = event.get("postback") or {}
-    message_id = message.get("mid") or postback.get("mid")
-    if message_id and not event.get("message_edit"):
+    edit = event.get("message_edit") or {}
+    # num_edit 0 is Meta's notice of a message it also delivers as itself: the
+    # two must share one job or the customer is answered twice.
+    message_id = message.get("mid") or postback.get("mid") or (None if edit.get("num_edit") else edit.get("mid"))
+    if message_id and not edit.get("num_edit"):
         identity = f"{account_id}:{message_id}"
     else:
         # Identical text without a Meta ID or event timestamp can be a real
@@ -4355,6 +4358,9 @@ async def save_instagram_media_mapping(item_id: int, request: Request, x_admin_k
     if not topic_id and body.get("response_mode", "CUSTOM") != "APPROVED_QA":
         raise HTTPException(status_code=400, detail="Choose a Topic.")
     existing = db.get_instagram_media_mapping(item_id, for_edit=True)
+    opened = str(body.get("expected_updated_at") or "")
+    if existing and opened and str(existing.get("updated_at") or "") > opened:
+        raise HTTPException(status_code=409, detail="Someone else changed this mapping after you opened it. Reopen it to see their change, then edit again.")
     source_type = "reel" if item["media_type"] == "VIDEO" else "post"
     if existing is None:
         existing = next((route for route in db.list_instagram_source_routes()
@@ -10287,6 +10293,7 @@ THIS WEEK'S BENGAL SPECIALS
                     ${sourceResponseHtml('igMedia')}
                     <div class="source-map-field"><label class="field-label" for="igMediaTopic">Topic</label><select class="field-control" id="igMediaTopic" onchange="renderSourceAssetCard('igMediaMenu','igMediaMenuSelected'); renderMediaTopicAnswers()">${topicOptions}</select><div class="source-secondary-actions"><button class="btn-secondary" type="button" onclick="openTopicModal('', 'igMediaTopic')">+ Add Topic</button><button class="btn-secondary" type="button" onclick="openManageTopics('igMediaTopic')">Manage Topics</button></div></div>
                     <div class="source-map-field" id="igMediaTopicAnswersField"><label class="field-label">When customers ask the price or details, reply with</label><p class="source-map-help">Approved answers, sent word for word. Turn on the option below the Custom response to use it for generic “tell me more” questions. These answers apply to every Post/Reel in this Topic.</p><div id="igMediaTopicAnswers" style="max-height:220px;overflow-y:auto;border:1px solid #e5e5e5;border-radius:8px;padding:8px;"></div></div>
+                    <input type="hidden" id="igMediaOpenedAt" value="${escapeHtml(item.mapping_route?.updated_at || '')}">
                     <div class="source-map-field"><label class="field-label" for="igMediaDescription">Description for this ${item.source_type}</label><p class="source-map-help">Used when someone asks what this ${item.source_type} is about.</p><textarea class="field-control" id="igMediaDescription" rows="5">${escapeHtml(item.source_description || '')}</textarea><label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;"><input type="checkbox" id="igMediaCustomInfoQuestions" ${item.mapping_route?.custom_info_questions_enabled ? 'checked' : ''}><span><b>Use this response for general “tell me more” questions</b><br><small class="source-map-help">Covers phrases like “Tell me more about this” and “Can I get more info?”. Specific questions still use approved answers.</small></span></label></div>
                     <div class="source-map-field"><label class="field-label" for="igMediaCustomResponseVariations">Question variations for this custom response</label><p class="source-map-help">Add one exact customer phrase per line. Only these phrases on this mapped source trigger this response; matching is case and punctuation insensitive.</p><textarea class="field-control" id="igMediaCustomResponseVariations" rows="4" placeholder="Price per head?&#10;How much each?">${escapeHtml((item.mapping_route?.custom_response_variations || []).join('\n'))}</textarea></div>
                     <div class="source-map-field"><label class="field-label" for="igMediaMenu">Menu / Image <span class="ig-media-muted">Optional</span></label><select class="field-control" id="igMediaMenu" onchange="renderSourceAssetCard('igMediaMenu','igMediaMenuSelected')">${menuOptions}</select><div class="source-secondary-actions"><button class="btn-secondary" type="button" onclick="openMenuModal('igMediaMenu')">+ Add Menu / Image</button></div><div class="source-asset-card" id="igMediaMenuSelected"></div></div>
@@ -10419,7 +10426,7 @@ THIS WEEK'S BENGAL SPECIALS
             if (!confirmSourceNoteMenu('igMedia')) return;
             const menu = document.getElementById('igMediaMenu').value;
             const menuChoice = menuChoiceParts(menu);
-            const payload = { ...sourceResponseFields('igMedia'), topic_id: document.getElementById('igMediaTopic').value, source_description: document.getElementById('igMediaDescription').value.trim(), custom_info_questions_enabled: document.getElementById('igMediaCustomInfoQuestions').checked, menu_id: menuChoice.menu_id, menu_mode: menuChoice.menu_mode, auto_reply_enabled: document.getElementById('igMediaAutoReply').checked };
+            const payload = { ...sourceResponseFields('igMedia'), expected_updated_at: document.getElementById('igMediaOpenedAt').value, topic_id: document.getElementById('igMediaTopic').value, source_description: document.getElementById('igMediaDescription').value.trim(), custom_info_questions_enabled: document.getElementById('igMediaCustomInfoQuestions').checked, menu_id: menuChoice.menu_id, menu_mode: menuChoice.menu_mode, auto_reply_enabled: document.getElementById('igMediaAutoReply').checked };
             const response = await fetch(`/admin/instagram-media/${id}/mapping`, { method: 'PUT', headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             if (!response.ok) { const data = await response.json().catch(() => ({})); alert(data.detail || 'Could not save mapping.'); return; }
             await saveMediaTopicAnswers();

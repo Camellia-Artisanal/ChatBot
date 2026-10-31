@@ -6,6 +6,7 @@ instagram_media.custom_route_id, so editing that post's mapping changes them all
 from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 
 from camellia.config import config
 
@@ -34,7 +35,7 @@ def attach(database, routing_id, *, item_ids=None, excluded_ids=(), search=None,
     if not route or route.get("archived_at") or route.get("source_type") not in {"post", "reel"}:
         raise HTTPException(404, "Choose a Post or Reel that has its own mapping.")
     wanted = None if item_ids is None else set(item_ids)
-    attached, already, skipped = 0, 0, 0
+    to_attach, already, skipped = [], 0, 0
     # Select all covers what the picker counted, so mapped posts are not reported as skipped.
     for item in _matching_media(database, search, source_type, "unmapped" if wanted is None else None):
         if item["id"] in excluded_ids or (wanted is not None and item["id"] not in wanted):
@@ -44,12 +45,9 @@ def attach(database, routing_id, *, item_ids=None, excluded_ids=(), search=None,
         elif item.get("mapping_route_id") or item.get("inventory_verification") == "LEGACY_UNVERIFIED":
             skipped += 1  # A post that already answers keeps its own mapping.
         else:
-            database.update_instagram_media_route(
-                item["id"], route_mode="CUSTOM", topic_id=route.get("topic_id"),
-                custom_route_id=routing_id, needs_review=False,
-            )
-            attached += 1
-    return {"attached": attached, "already_attached": already, "skipped_mapped": skipped}
+            to_attach.append(item["id"])
+    attached = database.attach_instagram_media(to_attach, routing_id, route.get("topic_id"))
+    return {"attached": attached, "already_attached": already, "skipped_mapped": skipped + len(to_attach) - attached}
 
 
 def _id_list(value, label):
@@ -74,8 +72,9 @@ def create_router(require_admin):
         select_all = body.get("all_matching") is True
         if not select_all and not body.get("item_ids"):
             raise HTTPException(400, "Tick at least one post")
-        return attach(
-            _db(), routing_id,
+        # Off the event loop: hundreds of posts here must not hold up customers' webhooks.
+        return await run_in_threadpool(
+            attach, _db(), routing_id,
             item_ids=None if select_all else _id_list(body.get("item_ids"), "item_ids"),
             excluded_ids=set(_id_list(body.get("excluded_ids", []), "excluded_ids")),
             search=str(body.get("search") or "").strip() or None, source_type=source_type,

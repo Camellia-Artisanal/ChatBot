@@ -14,6 +14,11 @@ BENTO_SOURCE = "bento_details_client"
 MIN_CONFIDENCE = 0.95
 
 
+# A handoff mutes the customer, so a reaction alone stays with the bot. These read as trouble.
+_UNHAPPY_EMOJI_RE = re.compile("[\U0001F620\U0001F621\U0001F92C\U0001F624\U0001F622\U0001F62D\U0001F61E\U0001F61F"
+                               "\U0001F614\U0001F612\U0001F641\u2639\U0001F44E\U0001F494\U0001F922\U0001F92E]")
+
+
 def system_reply(
     message: str, *, include_contextual_acknowledgement: bool = True,
 ) -> Optional[str]:
@@ -23,9 +28,11 @@ def system_reply(
         return system_replies.text("greeting")
     if re.fullmatch(r"(?:(?:okay|ok) )?(?:thanks|thank you|thank you so much|thx)", text):
         return system_replies.text("thanks")
-    if include_contextual_acknowledgement and re.fullmatch(
-        r"okay|ok|sure|great|nice|got it|yes|no|yep|nope|👍|😊|🙏", text,
-    ):
+    if (include_contextual_acknowledgement and message.strip()
+            and not _UNHAPPY_EMOJI_RE.search(message) and re.fullmatch(
+        r"(?:okay|ok|sure|great|nice|got it|yes|no|yep|nope|hmm+|(?:no )?wait|hold on"
+        r"|(?:one|just a) (?:sec|second|min|minute))?\W*", text,
+    )):
         return system_replies.text("acknowledgement")
     if re.fullmatch(r"bye|goodbye|see you|take care", text):
         return system_replies.text("goodbye")

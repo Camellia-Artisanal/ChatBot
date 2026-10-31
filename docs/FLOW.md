@@ -65,7 +65,9 @@ Rules that hold the flow together:
   mapping are skipped. Reels resolve by shortcode and ads by their creative. A shared photo post
   still needs Pairing, because its DM attachment ID does not identify the post, so its shared
   panel keeps Pair exact shared Post (an alias of the mapping, whatever its source type).
-  Deleting the mapping releases its posts for good.
+  Deleting the mapping releases its posts for good. Select all writes once, off the event loop,
+  and never takes a post another save just attached. A Post/Reel editor sends the
+  `expected_updated_at` it opened with: a newer mapping refuses the save (409), so staff reopen it.
 - No ad context: generic price questions get `general_price`; nothing mapping-specific leaks.
 - An explicit ADS referral without an ad ID or exact active route clears prior ad/topic
   context and hands off; it cannot fall through to a generic or previous-city answer.

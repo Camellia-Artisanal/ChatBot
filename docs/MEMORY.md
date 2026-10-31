@@ -131,6 +131,14 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
   (`handoff._HUMAN_HELP_RE`) matches only phrases asking for a person, never bare
   "someone"/"people"/"staff"/"support" (19 Oct: "sondesh for someone special" handed off).
   Strip a leading greeting before compound-question checks ("Hii! share the menu").
+- **A reaction is not a question (1 Nov).** Emoji or punctuation alone, "ok", "hmm", "wait" get the
+  System Q&A acknowledgement, even beside an open question or cart, because a handoff would mute
+  the customer. Unhappy emoji (`_UNHAPPY_EMOJI_RE`) still reach a person; a bare yes/no keeps its path.
+- **Mapped posts read Bengali and Hindi script (1 Nov).** `\b` fails after Indic vowel signs, so
+  native words sit in `_LOCAL_WORDING`/`_INDIC_WORDS`, guarded by the script range. Without that
+  guard "बादाम" reads as a price and "कबाब" as a date. Other reply wording stays English-only.
+- **An edit notice is not a second message.** Meta's `message_edit` with `num_edit` 0 shares its
+  message's job key, or the customer is answered twice; `num_edit` 1+ is a real change and is read.
 - **Handoffs on purpose:** photos/voice notes, catering/hosting quotes, shelf life, and the
   client's always-forward words (complaint, discount) even on a Custom-note mapping.
 - **Every logged message carries `decision_reason`** (which answer/rule, or the handoff ref

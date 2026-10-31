@@ -2072,6 +2072,18 @@ class Database:
             row = conn.execute("SELECT * FROM instagram_media WHERE id=?", (item_id,)).fetchone()
             return dict(row) if row else None
 
+    def attach_instagram_media(self, item_ids: List[int], routing_id: int, topic_id: Optional[str]) -> int:
+        """Point many posts at one mapping in one write. A post another save just took stays with it."""
+        now = datetime.utcnow().isoformat()
+        with self.get_connection() as conn:
+            changed = conn.executemany(
+                "UPDATE instagram_media SET route_mode='CUSTOM', topic_id=?, custom_route_id=?, needs_review=0, updated_at=? "
+                "WHERE id=? AND (route_mode<>'CUSTOM' OR custom_route_id IS NULL OR custom_route_id=?)",
+                [(topic_id, routing_id, now, item_id, routing_id) for item_id in item_ids],
+            ).rowcount
+            conn.commit()
+        return max(0, changed)
+
     def save_instagram_source_route(self, route: Dict[str, Any], routing_id: Optional[int] = None) -> Dict[str, Any]:
         """Create/update one source route, deduplicating URL and identifiers."""
         now = datetime.utcnow().isoformat()

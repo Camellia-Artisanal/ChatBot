@@ -20,10 +20,12 @@ _HOW_TO_ORDER_RE = re.compile(
     re.I,
 )
 _QUANTITY_RE = re.compile(r"\b(\d+\s*(?:box(?:es)?|packs?|pieces?|pcs|portions?|servings?|plates?)|\d+(?:\.\d+)?\s*(?:kg|grams?|gm|g))\b", re.I)
+_CLOCK_TIME = r"\d{1,2}(?::\d{2})?\s*(?:am|pm)"
 _SLOT_RE = re.compile(
     r"\b(?:(?:today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)"
-    r"\s+(?:morning|afternoon|lunch|dinner)|next\s+week|"
-    r"(?:morning|afternoon|lunch|dinner)\s+(?:today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b",
+    rf"\s+(?:morning|afternoon|lunch|dinner|evening|night|{_CLOCK_TIME})|next\s+week|"
+    r"(?:morning|afternoon|lunch|dinner|evening|night)\s+(?:today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)"
+    rf"|{_CLOCK_TIME})\b",
     re.I,
 )
 _AREA_RE = re.compile(r"\b(?:delhi\s+ncr|gurgaon|gurugram|delhi|noida|ghaziabad|faridabad|kolkata)\b", re.I)
@@ -543,6 +545,7 @@ def is_order_detail_message(message: str) -> bool:
     return bool(
         is_order_process_question(text) or is_order_request(text) or is_edit_request(text)
         or _EDIT_FIELD_RE.search(text) or _QUANTITY_RE.search(text) or _SLOT_RE.search(text) or _calendar_date(text)
+        or re.match(r"\s*(?:my\s+)?name\s+is\b", text, re.I)
         or _AREA_RE.search(text) or _PHONE_RE.search(text) or _PIN_RE.search(text)
         or _looks_like_address(text, _AREA_RE.search(text), None, None, None, None)
         or re.fullmatch(r"(?:make it |actually )?\d{1,4}|(?:today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|lunch|dinner)", text.strip(), re.I)

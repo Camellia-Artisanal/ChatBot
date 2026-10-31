@@ -233,21 +233,33 @@ _ROLE_WORDING = {"price": re.compile(r"\b(?:price|prices|pricing|cost|costs|rate
 # head" handed off because only the saved wording matched). Customers word these in
 # endless ways, so the type of question picks the one answer ticked for that type.
 # _ROLE_WORDING stays narrower: it also guesses a client answer's own type.
+# Indic vowel signs are not word characters, so \b cannot bound Bengali or Hindi words.
+_INDIC_WORDS = r"(?<![\u0900-\u09ff])(?:%s)(?![\u0900-\u09ff])"
+_LOCAL_WORDING = {
+    "price": re.compile(r"\b(?:kitna|kitne|kitni|da+m|taka|koto\s+(?:porbe|lagbe|pore|lage))\b|" + _INDIC_WORDS % (
+        r"দাম|দামটা|মূল্য|রেট|কত\s+টাকা|কত\s+দাম|কত\s+প[\u09a1\u09dc]\u09bc?(?:বে|ে)|কত\s+লাগ(?:বে|ে)"
+        r"|दाम|कीमत|क़ीमत|मूल्य|रेट|कितन[ाीे]"), re.I),
+    "details": re.compile(_INDIC_WORDS % r"বিস্তারিত|আর[ওো]\s+জানতে\s+চাই|जानकारी|विवरण|डिटेल्?स?"),
+}
 _ASKED_WORDING = {
     "price": re.compile(r"\b(?:price|prices|pricing|cost|costs|rate|rates|how\s+much|charges?|fees?"
-                        r"|kitna|kitne|kitni|da+m|taka|contribution|koto\s+(?:porbe|lagbe|pore|lage))\b", re.I),
-    "details": _ROLE_WORDING["details"],
+                        r"|contribution)\b|" + _LOCAL_WORDING["price"].pattern, re.I),
+    "details": re.compile(_ROLE_WORDING["details"].pattern + "|" + _LOCAL_WORDING["details"].pattern, re.I),
     "booking": re.compile(r"\b(?:book|booking|bookings|reserve|reservation|reservations|register|registration"
                           r"|sign\s+up|slots?)\b", re.I),
-    "location": re.compile(r"\b(?:where|location|venue|address|located|directions?|how\s+to\s+reach|kothay|kahan)\b", re.I),
-    "date": re.compile(r"\b(?:when|date|dates|what\s+time|timings?|which\s+day|kobe|kab)\b", re.I),
+    "location": re.compile(r"\b(?:where|location|venue|address|located|directions?|how\s+to\s+reach|kothay|kahan)\b|"
+                           + _INDIC_WORDS % r"কোথা[\u09af\u09df]\u09bc?|ঠিকানা|कहा[ँं]|ठिकाना", re.I),
+    "date": re.compile(r"\b(?:when|date|dates|what\s+time|timings?|which\s+day|kobe|kab)\b|"
+                       + _INDIC_WORDS % r"কবে|কখন|তারিখ|कब|तारीख", re.I),
 }
 # These mention a price or place but need a person or another answer, so they
 # never pick a ticked answer by type.
 _NOT_ASKED_RE = re.compile(
     r"\b(?:discounts?|offers?|coupons?|refunds?|cancel\w*|complain\w*|complaint|deliver\w*|ship\w*|courier|dispatch"
     r"|allerg\w*|shelf\s+life|how\s+long|how\s+much\s+(?:time|longer|sugar|spice|weight|quantity)"
-    r"|(?:kitna|kitne|kitni)\s+(?:time|samay|der|din))\b", re.I)
+    r"|(?:kitna|kitne|kitni)\s+(?:time|samay|der|din))\b|" + _INDIC_WORDS % (
+        r"ডেলিভার[িী]|ছা[\u09a1\u09dc]\u09bc?|ডিসকাউন্ট|অফার|ফেরত|অভিযোগ|কত\s+সম[\u09af\u09df]\u09bc?"
+        r"|डिल[ीि]वरी|छूट|डिस्काउंट|ऑफर|रिफंड|शिकायत|कितन[ाीे]\s+(?:समय|देर|दिन)"), re.I)
 # A Custom mapping's note answers details questions, so its Topic answers skip them.
 CUSTOM_FALLBACK_ROLES = frozenset({"price", "booking", "location", "date"})
 
@@ -257,6 +269,12 @@ def _asked_roles(message):
         return []  # A catering/hosting quote is priced by the manager.
     asked = [name for name, wording in _ASKED_WORDING.items() if wording.search(message or "")]
     return ["price"] if set(asked) == {"price", "details"} else asked  # "Price details" asks for the price.
+
+
+def local_wording_role(message):
+    """Price or details asked in Bengali, Hindi or romanised, which English-only readers miss."""
+    asked = _asked_roles(message)
+    return next((role for role in ("price", "details") if role in asked and _LOCAL_WORDING[role].search(message or "")), None)
 
 
 def _role(entry):

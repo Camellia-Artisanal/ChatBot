@@ -825,6 +825,10 @@ def source_referential_intent(text: str) -> Optional[str]:
     referential term (``this``, ``the reel``, ``above``, etc.) so an unrelated
     first message cannot borrow a nonexistent source.
     """
+    from camellia import approved_qa
+    local_role = approved_qa.local_wording_role(str(text or ""))
+    if local_role:
+        return local_role
     normalized = unicodedata.normalize("NFKC", str(text or "")).lower()
     normalized = normalized.replace("’", "'").replace("‘", "'")
     normalized = re.sub(r"\bi\s*['’]?\s*m\b", "im", normalized)
@@ -4169,7 +4173,9 @@ class DeterministicResponder:
                     contextual = self._contextual_resolution(user_message, user_id, channel)
                     if contextual is not None:
                         return contextual
-                elif not active_context:
+                # A yes or no may answer the open question, so only those keep
+                # looking. "ok" or a heart beside a cart needs no person.
+                if not active_context or not re.match(r"\s*(?:yes|no|yep|nope)\b", user_message, re.I):
                     facts.update({
                         "last_route_source": "SYSTEM_CONVERSATION",
                         "last_grounding": "system_conversation",
