@@ -200,6 +200,35 @@ async function applySharedPicker(){
  }catch(error){note.textContent=error.message;}
  finally{button.disabled=false;}
 }
+// Choosing a master category suggests its answers and menu. It only fills what is
+// empty, and only when staff change the category, so opening a mapping changes nothing.
+function applyCategorySuggestions(prefix){
+ const [,menuId,topicId]=SOURCE_NOTE_FIELDS[prefix],field=document.getElementById(topicId);
+ if(!field)return;
+ let note=document.getElementById(prefix+'CategoryNote');
+ if(!note){note=document.createElement('p');note.id=prefix+'CategoryNote';note.className='source-map-help';field.after(note);}
+ note.textContent='';
+ const topic=igTopics.find(item=>item.topic_id===field.value);
+ if(!topic)return;
+ const used=[],state=sourceResponseState[prefix];
+ if(topic.qa_context&&state&&sourceQaMultiple(prefix)&&!state.selectedIds.size){
+  state.context=topic.qa_context;
+  const context=document.getElementById(prefix+'QaContext');if(context)context.value=topic.qa_context;
+  if(state.records.length)renderStoryQa(prefix);
+  used.push('answers');
+ }
+ const category=igMenuCategoryRecords.find(item=>item.category_id===topic.menu_category_id);
+ const menus=category?igMenus.filter(item=>String(item.category||'').toLowerCase()===category.name.toLowerCase()):[];
+ const menuPicker=document.getElementById(menuId);
+ if(menus.length===1&&!topic.default_menu_id&&menuPicker&&['','__none__'].includes(menuPicker.value)&&!menuPicker.closest('.source-map-field')?.hidden){
+  menuPicker.value=menus[0].menu_id;
+  if(menuPicker.value===menus[0].menu_id){menuPicker.dispatchEvent(new Event('change'));used.push('the '+menus[0].name+' menu');}
+ }
+ if(used.length)note.textContent='Suggested from '+topic.name+': '+used.join(' and ')+'. You can change this before saving.';
+}
+document.addEventListener?.('change',event=>{
+ for(const prefix of Object.keys(SOURCE_NOTE_FIELDS)){if(SOURCE_NOTE_FIELDS[prefix][2]===event.target?.id)applyCategorySuggestions(prefix);}
+});
 function filterSourceQa(prefix) {
  const state=sourceResponseState[prefix]; if(!state)return;
  if(sourceQaMultiple(prefix)){renderStoryQa(prefix);return;}

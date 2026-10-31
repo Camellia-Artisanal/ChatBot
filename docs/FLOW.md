@@ -112,6 +112,8 @@ Category / context → Manage → add / rename / delete client categories (built
 Categories tab → Master categories (Topics): Add creates or links the Menu and Q&A categories,
   Save links records them, and no reply reads a link. Rename reaches a linked list only if it
   had the same name. Turn off hides a category from new mappings. Advanced keeps the other lists.
+  Choosing a category on a mapping shows its Q&A category first and picks its menu if it has one
+  menu. Only empty fields are filled, only on that change, and nothing is saved until Save.
 Categories tab → same add / rename / delete for Topics, Menu categories, Customer message
   topics and Q&A categories, with usage counts; a Topic in use must move to another first
 ```
