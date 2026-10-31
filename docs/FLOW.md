@@ -59,6 +59,12 @@ Rules that hold the flow together:
   escalation requests and an order in progress keep their priority. Suggest phrases drafts
   English phrases from the reply; only the ones staff tick enter the box, and only Save stores
   them. Matching stays exact.
+- One mapping can be shared. A mapped Post/Reel's editor offers Use this mapping on more posts:
+  search, tick or select all, and those cards point at the same route through
+  `instagram_media.custom_route_id`, so one edit reaches all of them. Cards with their own
+  mapping are skipped. Reels resolve by shortcode and ads by their creative. A shared photo post
+  still needs Pairing, because its DM attachment ID does not identify the post. Deleting the
+  mapping releases its posts for good.
 - No ad context: generic price questions get `general_price`; nothing mapping-specific leaks.
 - An explicit ADS referral without an ad ID or exact active route clears prior ad/topic
   context and hands off; it cannot fall through to a generic or previous-city answer.

@@ -6,6 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, Header, HTTPException, Request
 from camellia import approved_qa
 from camellia import admin_chatbot_control
+from camellia import admin_shared_mapping
 from camellia.ai_responder import ai_responder
 
 
@@ -111,6 +112,7 @@ def create_router(require_admin, actor):
     # customer-facing app module does not need another route-registration edit.
     # These routes keep their own /admin/chatbot-control prefix.
     router.routes.extend(admin_chatbot_control.create_router(require_admin, actor).routes)
+    router.routes.extend(admin_shared_mapping.create_router(require_admin).routes)
     return router
 
 

@@ -187,7 +187,7 @@ flowchart LR
 | Menus | `menu_catalogue.py`, `menu_review.py`, `menu_images.py`, `weekly_savoury.py` |
 | Handoff | `handoff.py`, `escalator.py` |
 | Sessions | `session_memory.py` |
-| Admin portal | `admin_ads.py`, `admin_source_response.py`, `admin_approved_qa.py`, `admin_menu_review.py`, `admin_weekly_savoury.py`, `admin_chatbot_control.py`, `admin_handoff_message.py`, `admin_categories.py`, `admin_security.py`, `setup_check.py` |
+| Admin portal | `admin_ads.py`, `admin_source_response.py`, `admin_approved_qa.py`, `admin_menu_review.py`, `admin_weekly_savoury.py`, `admin_chatbot_control.py`, `admin_shared_mapping.py`, `admin_handoff_message.py`, `admin_categories.py`, `admin_security.py`, `setup_check.py` |
 | Persistence | `database.py` (every table; migrations in `init_db`) |
 | Config and health | `config.py`, `monitoring.py` |
 

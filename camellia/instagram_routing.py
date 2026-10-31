@@ -651,7 +651,8 @@ def route_for_inbound(
             from camellia.instagram_story_qa import route_contract
             return decode_route(route_contract(db, route)), "story_media_id"
     if source_type == "reel" and shortcode:
-        route = db.find_instagram_source_route("shortcode", str(shortcode), source_type="reel")
+        route = (db.find_instagram_source_route("shortcode", str(shortcode), source_type="reel")
+                 or db.find_attached_media_route(shortcode=str(shortcode)))
         if route:
             return decode_route(source_contract(db, route)), "shared_media_url"
     if source_type == "post" and post_media_id:
@@ -686,12 +687,14 @@ def route_for_inbound(
         route = db.find_instagram_source_route(
             "media_id", str(media_id), source_type="story" if source_type == "story_reply" else None,
         )
+        if not route and source_type != "story_reply":
+            route = db.find_attached_media_route(media_id=str(media_id))
         if route:
             return decode_route(source_contract(db, route)), "media_id"
     if shortcode:
         route = db.find_instagram_source_route(
             "shortcode", str(shortcode), source_type="reel" if source_type == "reel" else None,
-        )
+        ) or db.find_attached_media_route(shortcode=str(shortcode))
         if route:
             return decode_route(source_contract(db, route)), "shared_media_url"
     if post_media_id and source_type != "post":

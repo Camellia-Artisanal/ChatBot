@@ -267,6 +267,13 @@ def sibling_routes(inventory, bindings, route_by_id):
     return {media: next(iter(shared.values())) for media, shared in found.items() if len(shared) == 1}
 
 
+def creative_routes(database, inventory, bindings, route_by_id):
+    """Twin mappings plus posts attached to a shared mapping; attached wins."""
+    attached = {media: route_by_id[routing_id] for media, routing_id in database.attached_media_routes().items()
+                if routing_id in route_by_id}
+    return {**sibling_routes(inventory, bindings, route_by_id), **attached}
+
+
 PRICE_PROBE = "How much does it cost?"
 
 
@@ -392,7 +399,7 @@ def ad_answer_gaps(database, days=7):
     route_by_id = {route["routing_id"]: route for route in routes}
     bindings = {row["ad_id"]: row for row in database.list_instagram_ad_bindings()}
     inventory = {row["ad_id"]: row for row in database.list_instagram_ads_inventory(ad_account_id())}
-    siblings = sibling_routes(inventory, bindings, route_by_id)
+    siblings = creative_routes(database, inventory, bindings, route_by_id)
     cache, gaps = {}, 0
     for ad_id in recent:
         item = ({**inventory[ad_id], "inventory_state": "CURRENT"}
@@ -473,7 +480,7 @@ def inherited_route_for_ad(database, ad_id, *, live_lookup=True):
         item = fetch_ad_creative(ad_id) or item
     return inherited_route(
         item, routes, binding,
-        sibling_routes(inventory, bindings, {route["routing_id"]: route for route in routes}),
+        creative_routes(database, inventory, bindings, {route["routing_id"]: route for route in routes}),
     )
 
 
@@ -723,7 +730,7 @@ def ads_workspace(database, view="active"):
     inventory = {row["ad_id"]: row for row in database.list_instagram_ads_inventory(ad_account_id())}
     observed = {row["ad_id"]: row for row in database.list_observed_instagram_ads()}
     rows, status_cache = [], {}
-    siblings = sibling_routes(inventory, bindings, route_by_id)
+    siblings = creative_routes(database, inventory, bindings, route_by_id)
     recent_ids = database.recently_messaged_ad_ids()
     for ad_id in sorted(inventory.keys() | observed.keys() | bindings.keys()):
         item = dict(inventory.get(ad_id) or {})

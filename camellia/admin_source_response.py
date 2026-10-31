@@ -112,6 +112,91 @@ async function suggestVariations(prefix,box,button,list){
  }catch(error){list.textContent=error.message;}
  finally{button.disabled=false;}
 }
+// One mapping on many Posts and Reels: a post using another post's mapping shows
+// that instead of its own form, so edits reach every post sharing it.
+const sharedPick={};
+function mediaOwnsRoute(item,route){return route.media_id===item.instagram_media_id||route.canonical_url===item.permalink||Boolean(item.shortcode&&route.shortcode===item.shortcode);}
+async function initSharedMapping(item){
+ const route=item.mapping_route,box=document.getElementById('contentDetailsActions');if(!route||!box)return;
+ const response=await fetch('/admin/instagram-media/shared-mapping/'+Number(route.routing_id),{headers:getAuthHeaders()});
+ const shared=await response.json().catch(()=>({}));if(!response.ok)return;
+ if(!mediaOwnsRoute(item,route)){
+  box.innerHTML='<div class="source-map-form"><div class="source-map-field"><b>This '+escapeHtml(item.source_type)+' uses a shared mapping</b><p class="source-map-help">It shares its reply, menu and phrases with '+Number(shared.shared_count)+' posts. Edit the shared mapping once and all of them change.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn-primary" type="button" id="sharedMappingEdit">Edit shared mapping</button><button class="btn-secondary" type="button" id="sharedMappingStop">Stop sharing</button></div><p id="sharedMappingNote" role="status"></p></div></div>';
+  document.getElementById('sharedMappingEdit').onclick=()=>openSharedSource(shared.source_item_id);
+  document.getElementById('sharedMappingStop').onclick=()=>stopSharingMapping(item);
+  return;
+ }
+ const panel=document.createElement('div');panel.className='source-map-field';
+ panel.innerHTML='<b>Use this mapping on more posts</b><p class="source-map-help">Shared with '+Number(shared.shared_count)+' other posts. Editing this mapping changes all of them, and deleting it removes it from them too. Works for customers who share a Reel or come from an ad. Posts with their own mapping are skipped.</p><button class="btn-secondary" type="button" id="sharedMappingOpen">Choose posts</button><div id="sharedMappingPicker"></div>';
+ box.querySelector('.source-map-form')?.append(panel);
+ document.getElementById('sharedMappingOpen').onclick=()=>openSharedPicker(Number(route.routing_id));
+}
+async function openSharedSource(itemId){
+ const note=document.getElementById('sharedMappingNote');
+ if(!itemId){note.textContent='The post that owns this mapping is not in Posts and Reels.';return;}
+ const response=await fetch('/admin/instagram-media/'+Number(itemId),{headers:getAuthHeaders()});
+ const data=await response.json().catch(()=>({}));
+ if(!response.ok||!data.item){note.textContent=data.detail||'Could not open the shared mapping.';return;}
+ openContentDetails('media',galleryMediaItem(data.item));
+}
+async function stopSharingMapping(item){
+ if(!confirm('Stop sharing this mapping on this '+item.source_type+'? It will have no mapping until you add one.'))return;
+ const response=await fetch('/admin/instagram-media/'+Number(item.id)+'/detach-mapping',{method:'POST',headers:getAuthHeaders()});
+ const data=await response.json().catch(()=>({}));
+ if(!response.ok){document.getElementById('sharedMappingNote').textContent=data.detail||'Could not stop sharing.';return;}
+ closeContentDetails();await loadInstagramContentGallery(true);
+}
+function openSharedPicker(routingId){
+ const state=sharedPick.state={routingId,selected:new Set(),excluded:new Set(),all:false,page:1,total:0};
+ document.getElementById('sharedMappingOpen').hidden=true;
+ const box=document.getElementById('sharedMappingPicker');
+ box.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><input class="field-control" id="sharedPickSearch" type="search" placeholder="Search captions" style="flex:1;min-width:160px"><select class="field-control" id="sharedPickType" style="width:auto"><option value="">Posts and Reels</option><option value="reel">Reels only</option><option value="post">Posts only</option></select></div><label style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="sharedPickAll" style="width:auto"> <span id="sharedPickAllLabel">Select all matching</span></label><div id="sharedPickList" style="max-height:40vh;overflow:auto;margin-top:8px"></div><button class="btn-secondary" type="button" id="sharedPickMore" hidden>Load more</button><div style="margin-top:8px"><button class="btn-primary" type="button" id="sharedPickApply">Apply to selected</button></div><p id="sharedPickNote" role="status"></p>';
+ let timer;const reload=()=>{clearTimeout(timer);timer=setTimeout(()=>loadSharedPicker(true),250);};
+ document.getElementById('sharedPickSearch').oninput=reload;
+ document.getElementById('sharedPickType').onchange=()=>loadSharedPicker(true);
+ document.getElementById('sharedPickAll').onchange=event=>{state.all=event.target.checked;state.excluded.clear();state.selected.clear();for(const box of document.querySelectorAll('#sharedPickList input'))box.checked=state.all;sharedPickCount();};
+ document.getElementById('sharedPickMore').onclick=()=>loadSharedPicker(false);
+ document.getElementById('sharedPickApply').onclick=applySharedPicker;
+ loadSharedPicker(true);
+}
+function sharedPickFilters(){return {search:document.getElementById('sharedPickSearch').value.trim(),source_type:document.getElementById('sharedPickType').value};}
+function sharedPickCount(){const state=sharedPick.state,count=state.all?state.total-state.excluded.size:state.selected.size;document.getElementById('sharedPickApply').textContent='Apply to '+count+' selected';}
+async function loadSharedPicker(reset){
+ const state=sharedPick.state,filters=sharedPickFilters(),list=document.getElementById('sharedPickList');
+ if(reset){state.page=1;state.all=false;state.selected.clear();state.excluded.clear();list.replaceChildren();document.getElementById('sharedPickAll').checked=false;}
+ const params=new URLSearchParams({page:state.page,page_size:50,mapping_status:'unmapped'});if(filters.search)params.set('search',filters.search);if(filters.source_type)params.set('source_type',filters.source_type);
+ const stamp=sharedPick.stamp=params.toString();
+ const response=await fetch('/admin/instagram-media?'+params,{headers:getAuthHeaders()});
+ const data=await response.json().catch(()=>({}));if(sharedPick.stamp!==stamp||sharedPick.state!==state)return;
+ if(!response.ok){document.getElementById('sharedPickNote').textContent=data.detail||'Could not load posts.';return;}
+ state.total=Number(data.total||0);state.page+=1;
+ document.getElementById('sharedPickAllLabel').textContent='Select all '+state.total+' matching';
+ document.getElementById('sharedPickMore').hidden=!data.has_more;
+ if(!data.items.length&&reset)list.textContent='No unmapped posts match.';
+ for(const item of data.items){
+  const row=document.createElement('label');row.style.cssText='display:flex;gap:8px;align-items:center;padding:4px 0';
+  const check=document.createElement('input');check.type='checkbox';check.style.cssText='width:auto;flex:none';check.checked=state.all;
+  check.onchange=()=>{const set=state.all?state.excluded:state.selected;if(check.checked===state.all)set.delete(item.id);else set.add(item.id);sharedPickCount();};
+  const picture=document.createElement('img');picture.alt='';picture.src=item.thumbnail_url||item.media_url||'';picture.style.cssText='width:44px;height:44px;object-fit:cover;border-radius:6px;flex:none';
+  const text=document.createElement('span');text.style.cssText='min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';text.textContent=(item.media_type==='VIDEO'?'Reel · ':'Post · ')+(item.caption||item.permalink||item.instagram_media_id);
+  row.append(check,picture,text);list.append(row);
+ }
+ sharedPickCount();
+}
+async function applySharedPicker(){
+ const state=sharedPick.state,note=document.getElementById('sharedPickNote'),button=document.getElementById('sharedPickApply');
+ const count=state.all?state.total-state.excluded.size:state.selected.size;
+ if(!count){note.textContent='Tick at least one post.';return;}
+ if(!confirm('Use this mapping on '+count+' posts? Customers from those Reels and ads will get this reply.'))return;
+ button.disabled=true;
+ try{
+  const response=await fetch('/admin/instagram-media/attach-mapping',{method:'POST',headers:{...getAuthHeaders(),'Content-Type':'application/json'},body:JSON.stringify({routing_id:state.routingId,...(state.all?{all_matching:true,excluded_ids:[...state.excluded],...sharedPickFilters()}:{item_ids:[...state.selected]})})});
+  const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.detail||'Could not apply the mapping.');
+  note.textContent='Added '+data.attached+' posts. Skipped '+data.skipped_mapped+' with their own mapping.';
+  await loadSharedPicker(true);
+ }catch(error){note.textContent=error.message;}
+ finally{button.disabled=false;}
+}
 function filterSourceQa(prefix) {
  const state=sourceResponseState[prefix]; if(!state)return;
  if(sourceQaMultiple(prefix)){renderStoryQa(prefix);return;}

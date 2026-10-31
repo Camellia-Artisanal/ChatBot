@@ -1886,6 +1886,45 @@ class Database:
                 ORDER BY r.active DESC, r.routing_id ASC LIMIT 1""", (item_id,)).fetchone()
         return dict(row) if row else None
 
+    _ATTACHED_MEDIA = """FROM instagram_media m JOIN instagram_source_routes r ON r.routing_id=m.custom_route_id
+        WHERE m.route_mode='CUSTOM' AND r.active=1 AND r.archived_at IS NULL AND r.source_type IN ('post','reel')"""
+
+    def find_attached_media_route(self, *, shortcode: Optional[str] = None,
+                                  media_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """The shared mapping a Post/Reel is attached to; two candidates settle nothing."""
+        field, value = ("m.shortcode", shortcode) if shortcode else ("m.instagram_media_id", media_id)
+        if not value:
+            return None
+        with self.get_connection() as conn:
+            rows = conn.execute(f"SELECT DISTINCT r.* {self._ATTACHED_MEDIA} AND {field}=? LIMIT 2", (value,)).fetchall()
+        return dict(rows[0]) if len(rows) == 1 else None
+
+    def attached_media_routes(self) -> Dict[str, int]:
+        """Instagram media ID -> routing ID, for ads promoting an attached Post/Reel."""
+        with self.get_connection() as conn:
+            rows = conn.execute(f"SELECT m.instagram_media_id, r.routing_id {self._ATTACHED_MEDIA}").fetchall()
+        return {row["instagram_media_id"]: int(row["routing_id"]) for row in rows if row["instagram_media_id"]}
+
+    def count_attached_media(self, routing_id: int) -> int:
+        """Other Posts/Reels sharing this mapping; the mapping's own post is not counted."""
+        with self.get_connection() as conn:
+            return int(conn.execute(
+                f"SELECT COUNT(*) AS n FROM instagram_media WHERE custom_route_id=? AND NOT EXISTS "
+                f"(SELECT 1 FROM instagram_source_routes r WHERE r.routing_id=? AND "
+                f"{self._instagram_media_route_match(include_custom_pointer=False)})",
+                (routing_id, routing_id),
+            ).fetchone()["n"])
+
+    def find_mapping_source_media(self, routing_id: int) -> Optional[Dict[str, Any]]:
+        """The Post/Reel whose own mapping this is, where its shared posts edit it."""
+        with self.get_connection() as conn:
+            row = conn.execute(
+                f"SELECT instagram_media.* FROM instagram_media, instagram_source_routes r WHERE r.routing_id=? AND "
+                f"{self._instagram_media_route_match(include_custom_pointer=False)} LIMIT 1",
+                (routing_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
     def get_instagram_ads_sync(self, account_id: str) -> Dict[str, Any]:
         with self.get_connection() as conn:
             row = conn.execute("SELECT * FROM instagram_ads_syncs WHERE ad_account_id=?", (account_id,)).fetchone()
@@ -3127,6 +3166,11 @@ class Database:
             cursor = conn.execute(
                 "UPDATE instagram_source_routes SET archived_at=?, updated_at=? WHERE routing_id=?",
                 (now, now, routing_id),
+            )
+            # Restoring a mapping must not silently re-attach the posts sharing it.
+            conn.execute(
+                "UPDATE instagram_media SET route_mode='DEFAULT', custom_route_id=NULL, updated_at=? WHERE custom_route_id=?",
+                (now, routing_id),
             )
             conn.commit()
         return cursor.rowcount > 0

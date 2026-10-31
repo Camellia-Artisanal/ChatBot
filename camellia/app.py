@@ -10274,6 +10274,7 @@ THIS WEEK'S BENGAL SPECIALS
                 initSourceResponse('igMedia', item.mapping_route || {});
                 renderSourceAssetCard('igMediaMenu', 'igMediaMenuSelected');
                 renderMediaTopicAnswers();
+                initSharedMapping(item);
                 drawer.classList.add('open', 'source-mapping-drawer'); backdrop.classList.add('open'); drawer.setAttribute('aria-hidden', 'false'); backdrop.setAttribute('aria-hidden', 'false'); return;
             }
             const isStory = kind === 'story'; const route = isStory ? item : item; const drawer = document.getElementById('contentDetailsDrawer'); const backdrop = document.getElementById('contentDetailsBackdrop');

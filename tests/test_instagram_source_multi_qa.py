@@ -380,7 +380,7 @@ function inputs(node){return [...(node.tag==='input'?[node]:[]),...(node.childre
  if(requests!==3)throw Error('unexpected write');console.log('PASS');
 })().catch(error=>{console.error(error);process.exit(1)});
 '''
-    result=subprocess.run([node,'-e',harness+script+checks],capture_output=True,text=True)
+    result=subprocess.run([node], input=harness+script+checks, capture_output=True, text=True, encoding='utf-8')
     assert result.returncode==0,result.stderr
     assert 'PASS' in result.stdout
     for prefix in ('ig','igMedia','igStory'):

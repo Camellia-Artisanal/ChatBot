@@ -337,7 +337,7 @@ function inputs(node){return [...(node.tag==='input'?[node]:[]),...(node.childre
  console.log('PASS');
 })().catch(error=>{console.error(error);process.exit(1)});
 '''
-    result=subprocess.run([node,'-e',harness+script+check],capture_output=True,text=True)
+    result=subprocess.run([node], input=harness+script+check, capture_output=True, text=True, encoding='utf-8')
     assert result.returncode==0,result.stderr
     assert 'igStoryQaChecklist' in selector_html('igStory')
     assert 'igQaChecklist' in selector_html('ig') and 'igMediaQaChecklist' in selector_html('igMedia')
@@ -367,5 +367,5 @@ elements.igMenuPicker.value='aamar';if(sourceNoteMenuMissing('ig'))throw Error('
 elements.igMenuPicker.value='__none__';elements.igSourceDescription.value='Thanks for asking';if(sourceNoteMenuMissing('ig'))throw Error('no menu word');
 elements.igSourceDescription.value='menu below';mode='APPROVED_QA';if(sourceNoteMenuMissing('ig'))throw Error('approved mode');
 '''
-    result = subprocess.run([node, '-e', harness + script + check], capture_output=True, text=True)
+    result = subprocess.run([node], input=harness + script + check, capture_output=True, text=True, encoding='utf-8')
     assert result.returncode == 0, result.stderr
