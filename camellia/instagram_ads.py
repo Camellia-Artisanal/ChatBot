@@ -302,8 +302,9 @@ def price_answer_status(database, route, cache=None):
             facts = {"last_topic": context, "home_table_context": context == "home_table"}
             # Same rule as the live reply: a checklist answers its "use for"
             # questions (18 Oct: Kolkata ads answered, cards said manager).
-            if approved_qa.match(PRICE_PROBE, facts, rows=rows, allowed_qa_ids=set(allowed),
-                                 product_fallback=bool(route.get("qa_bundle"))):
+            custom = route.get("response_mode") != "APPROVED_QA"
+            if approved_qa.match(PRICE_PROBE, facts, rows=rows, allowed_qa_ids=set(allowed), product_fallback=True,
+                                 fallback_roles=approved_qa.CUSTOM_FALLBACK_ROLES if custom else None):
                 status = "APPROVED"
     except Exception:
         status = None
@@ -316,6 +317,37 @@ def price_answer_status(database, route, cache=None):
     if cache is not None:
         cache[key] = status
     return status
+
+
+def price_gap_reason(database, route, status):
+    """Why a price question from this ad reaches the manager, in the client's words."""
+    if status not in {"NONE", "NOTE"}:
+        return None
+    if not route:
+        return "This ad has no mapping."
+    if not route.get("active", True):
+        return "This ad's mapping is switched off."
+    from camellia import approved_qa
+    if route.get("response_mode") == "APPROVED_QA":
+        ticked = set(route.get("approved_qa_ids") or [route.get("approved_qa_id")]) - {None}
+    else:
+        topic = database.get_instagram_topic(route["topic_id"]) if route.get("topic_id") else None
+        ticked = set(json.loads((topic or {}).get("default_approved_qa_ids") or "[]"))
+        if not ticked:
+            return "This mapping's Topic has no default answers."
+    if not ticked:
+        return "No answers are ticked on this mapping."
+    rows = approved_qa.overlays(strict=True)
+    live = {entry.qa_id for entry in approved_qa.registry(rows)} & ticked
+    if not live:
+        return "The ticked answers have expired or been archived."
+    settings = approved_qa.mapped_settings(rows)
+    priced = [key for key in live if settings.get(key, (None,))[0] == "price"]
+    if not priced:
+        return 'No ticked answer is set to "Price questions".'
+    if len(priced) > 1:
+        return f'{len(priced)} ticked answers are set to "Price questions". Keep one.'
+    return None
 
 
 def answer_media_item(database, route, item):
@@ -709,9 +741,11 @@ def ads_workspace(database, view="active"):
                     history=[{key: event.get(key) for key in ("routing_id", "action", "occurred_at")} for event in database.list_instagram_ad_binding_history(ad_id)])
         live, inherited = effective_routes(item, binding, route_by_id, routes, siblings)
         media = answer_media_item(database, live or inherited, item)
+        answer_status = "DISABLED" if binding_disabled(binding) else price_answer_status(database, live or inherited, status_cache)
         item.update(answers_from="mapping" if live else "post" if inherited else None,
                     effective_mapping=live or inherited,
-                    answer_status="DISABLED" if binding_disabled(binding) else price_answer_status(database, live or inherited, status_cache),
+                    answer_status=answer_status,
+                    answer_reason=price_gap_reason(database, live or inherited, answer_status),
                     answer_media_item_id=media["id"] if media else None,
                     recently_messaged=ad_id in recent_ids)
         rows.append(item)

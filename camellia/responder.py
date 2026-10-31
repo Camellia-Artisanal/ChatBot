@@ -2933,7 +2933,7 @@ class DeterministicResponder:
                                 }
                                 legacy_source_match = approved_qa.match(
                                     user_message, narrow_facts, rows=rows,
-                                    allowed_qa_ids={selected_id},
+                                    allowed_qa_ids={selected_id}, product_fallback=True,
                                 )
                             else:
                                 legacy_source_unavailable = True
@@ -2962,7 +2962,8 @@ class DeterministicResponder:
                         context = entries[0].context
                         legacy_source_match = approved_qa.match(
                             wording, {"last_topic": context, "home_table_context": context == "home_table"},
-                            rows=rows, allowed_qa_ids=set(topic_ids),
+                            rows=rows, allowed_qa_ids=set(topic_ids), product_fallback=True,
+                            fallback_roles=approved_qa.CUSTOM_FALLBACK_ROLES,
                         )
                 except Exception:
                     legacy_source_match = None
