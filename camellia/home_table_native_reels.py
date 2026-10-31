@@ -18,9 +18,11 @@ VERIFIED_MEDIA = {
 
 
 def native_sharing_enabled():
-    return (config.instagram_media_owner_id() == VERIFIED_ACCOUNT_ID
-            and config.INSTAGRAM_EXPECTED_USERNAME == "camellia.artisanal"
-            and config.instagram_auth_mode() == "instagram_login")
+    """VERIFIED_ACCOUNT_ID is the webhook account (INSTAGRAM_ACCOUNT_ID). The
+    Instagram Login /me ID (INSTAGRAM_GRAPH_ACCOUNT_ID) is a different number
+    for the same account; comparing it here refused every Reel (31 Oct). The
+    inventory itself stays scoped to that bound /me owner ID."""
+    return bool(_legacy_native_sharing_enabled() and config.instagram_media_owner_id())
 
 
 def _legacy_native_sharing_enabled():
