@@ -84,6 +84,8 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
 - **A not-yet-synced ad still answers like its mapped Post/Reel.** With no inventory row (or
   no creative), `instagram_ads.fetch_ad_creative` reads that one ad live from Meta (4 s
   timeout, same ad account only, cached 10 min) before the unmapped-ad handoff (31 Oct).
+  It blocks, so only the background worker may use it: the async webhook handler passes
+  `live_lookup=False`. A Meta failure is remembered for 30 s, not 10 min.
 - **Native Reel sharing is verified on `INSTAGRAM_ACCOUNT_ID` (webhook ID).** The Instagram
   Login `/me` ID (`INSTAGRAM_GRAPH_ACCOUNT_ID`) is a different number for the same account;
   comparing it to `VERIFIED_ACCOUNT_ID` blocked the Reel picker in production (31 Oct).

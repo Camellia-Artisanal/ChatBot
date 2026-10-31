@@ -2324,7 +2324,9 @@ def _dispatch_instagram_payload(payload: dict, background_tasks: BackgroundTasks
                     consumed_posts = db.record_instagram_ads_referral_seen(
                         sender_id, str(entry_point.ad_id), _instagram_event_key(entry_id, messaging_event),
                     )
-                    exact_route, _ = route_for_inbound(ad_id=str(entry_point.ad_id), media_id=None)
+                    exact_route, _ = route_for_inbound(
+                        ad_id=str(entry_point.ad_id), media_id=None, live_lookup=False,
+                    )
                     binding_status = db.instagram_ad_binding_status(str(entry_point.ad_id))
                     if binding_status == "UNBOUND":
                         observed = db.observe_instagram_ad(str(entry_point.ad_id), entry_point.ad_title)

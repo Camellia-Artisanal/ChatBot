@@ -375,6 +375,7 @@ def ad_answer_gaps(database, days=7):
 
 _LIVE_AD_CACHE = {}
 _LIVE_AD_CACHE_SECONDS = 600
+_LIVE_AD_RETRY_SECONDS = 30
 
 
 def fetch_ad_creative(ad_id):
@@ -385,14 +386,15 @@ def fetch_ad_creative(ad_id):
     and the refresh only starts after that message. Read-only, short timeout,
     and the ad must belong to the configured ad account; any failure returns
     None so the existing handoff still applies. Not persisted: the normal
-    sync stores the ad.
+    sync stores the ad. Blocking, so never call it from the webhook handler; a
+    Meta failure is remembered briefly, not for the full cache time.
     """
     account, token = ad_account_id(), config.META_MARKETING_ACCESS_TOKEN
     ad_id = str(ad_id or "")
     if not token or not account or not re.fullmatch(r"[0-9]+", ad_id):
         return None
     cached = _LIVE_AD_CACHE.get(ad_id)
-    if cached and time.monotonic() - cached[0] < _LIVE_AD_CACHE_SECONDS:
+    if cached and time.monotonic() < cached[0]:
         return cached[1]
     item = None
     url = f"https://graph.facebook.com/{config.INSTAGRAM_API_VERSION}/{ad_id}"
@@ -420,18 +422,19 @@ def fetch_ad_creative(ad_id):
         }
         if not (item["effective_instagram_media_id"] or item["instagram_permalink_url"]):
             item = None
-    _LIVE_AD_CACHE[ad_id] = (time.monotonic(), item)
+    seconds = _LIVE_AD_RETRY_SECONDS if payload is None else _LIVE_AD_CACHE_SECONDS
+    _LIVE_AD_CACHE[ad_id] = (time.monotonic() + seconds, item)
     log.info("INSTAGRAM_AD_LIVE_LOOKUP found=%s", bool(item))
     return item
 
 
-def inherited_route_for_ad(database, ad_id):
+def inherited_route_for_ad(database, ad_id, *, live_lookup=True):
     routes = [decode_route(row) for row in database.list_instagram_source_routes()]
     bindings = {row["ad_id"]: row for row in database.list_instagram_ad_bindings()}
     inventory = {row["ad_id"]: row for row in database.list_instagram_ads_inventory(ad_account_id())}
     item = database.get_instagram_ad_inventory_row(ad_id)
     binding = database.get_instagram_ad_binding(ad_id)
-    if not binding_disabled(binding) and not (
+    if live_lookup and not binding_disabled(binding) and not (
         item and (item.get("effective_instagram_media_id") or item.get("instagram_permalink_url"))
     ):
         # Not synced yet (or synced without its creative): ask Meta now.
