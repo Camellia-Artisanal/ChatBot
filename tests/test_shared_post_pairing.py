@@ -248,10 +248,10 @@ def test_unmapped_reel_uses_shared_media_handoff_not_attachment_limitation(post_
     assert handed_off == [("uid_reel", {"source_type": "reel", "media_id": None, "shortcode": "unconfigured"})]
 
 
-@pytest.mark.parametrize("source_type,media_id,shortcode", [
-    ("post", THIRD_PARTY_MEDIA_ID, None), ("reel", None, "unmapped-reel"),
+@pytest.mark.parametrize("source_type,media_id,shortcode,expects_notice", [
+    ("post", THIRD_PARTY_MEDIA_ID, None, True), ("reel", None, "unmapped-reel", False),
 ])
-def test_unmapped_identifiable_share_creates_one_waiting_handoff_notice(post_route, monkeypatch, source_type, media_id, shortcode):
+def test_unmapped_identifiable_share_creates_one_waiting_handoff(post_route, monkeypatch, source_type, media_id, shortcode, expects_notice):
     database, _routing_id = post_route
     monkeypatch.setattr(app_module.instagram_chatbot_control, "is_sender_allowed", lambda *_a, **_k: True)
     monkeypatch.setattr(app_module, "_cached_instagram_identity", lambda sender, *_a, **_k: {
@@ -268,14 +268,20 @@ def test_unmapped_identifiable_share_creates_one_waiting_handoff_notice(post_rou
 
     handoff = database.get_active_handoff("instagram", "uid_handoff")
     assert handoff and handoff["status"] == "WAITING_FOR_HUMAN"
-    assert len(sent) == 1
-    assert "Manager of Kitchens" in sent[0][1]
-    assert not any(phrase in sent[0][1].lower() for phrase in ("can't open", "cannot open", "can't access", "can't see"))
+    conversations = database.get_conversations(limit=5, channel="instagram", user_id="uid_handoff")
+    assert len(sent) == int(expects_notice)
+    assert conversations[0]["bot_response"] == (sent[0][1] if expects_notice else "")
+    if expects_notice:
+        assert "Manager of Kitchens" in sent[0][1]
+        assert not any(phrase in sent[0][1].lower() for phrase in ("can't open", "cannot open", "can't access", "can't see"))
+    else:
+        assert conversations[0]["template_id"] == "shared_media_handoff_silent"
+        assert conversations[0]["was_matched"] == 0
 
     app_module._handoff_unmapped_shared_media(
         "uid_handoff", source_type=source_type, media_id=media_id, shortcode=shortcode,
     )
-    assert len(sent) == 1
+    assert len(sent) == int(expects_notice)
 
 
 def test_text_with_unmapped_shared_post_still_sends_only_the_handoff(post_route, monkeypatch):

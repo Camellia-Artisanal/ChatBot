@@ -1436,19 +1436,29 @@ def _handoff_unmapped_shared_media(
             },
         )
     mark_referred(handoff["handoff_ref"])
-    notice = customer_facing_notice()
-    session_memory.add_turn(sender_id, "instagram", customer_message, notice)
+    # Unmapped shared Reels should reach staff without sending generic
+    # handoff copy back to the customer. Keep the active handoff and inbound
+    # audit row so the operator can still follow up.
+    silent_reel_handoff = source_type == "reel"
+    notice = "" if silent_reel_handoff else customer_facing_notice()
+    if notice:
+        session_memory.add_turn(sender_id, "instagram", customer_message, notice)
     conversation_id = db.log_conversation(
-        sender_id, "instagram", customer_message, notice, True, "shared_media_handoff",
-        decision_reason=json.dumps({"handoff": handoff["handoff_ref"] + " · " + reason}),
+        sender_id, "instagram", customer_message, notice, bool(notice),
+        "shared_media_handoff_silent" if silent_reel_handoff else "shared_media_handoff",
+        decision_reason=json.dumps({
+            "handoff": handoff["handoff_ref"] + " · " + reason,
+            **({"customer_notice": "suppressed_for_unmapped_shared_reel"} if silent_reel_handoff else {}),
+        }),
         message_source=message_source, source_type=source_type, media_id=media_id,
         shortcode=shortcode, source_match_method=match_method,
         source_context_available=False, source_context_used=False,
         source_media_present=True, customer_text_accompanied_media=bool(customer_text),
     )
-    _send_or_queue_instagram_reply(
-        sender_id, notice, inbound_message_id=conversation_id, response_type="handoff",
-    )
+    if notice:
+        _send_or_queue_instagram_reply(
+            sender_id, notice, inbound_message_id=conversation_id, response_type="handoff",
+        )
 
 
 def _apply_source_context(sender_id: str, route: Dict[str, Any], match_method: str) -> None:

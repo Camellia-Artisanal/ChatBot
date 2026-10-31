@@ -364,7 +364,8 @@ def test_mapped_media_explicit_product_and_guard_override_the_source(story_db):
     assert all("Manager of Kitchens" in text for text in sent)
 
 
-def test_unknown_media_hands_off_vague_share_without_claiming_product_access(story_db):
+def test_unknown_media_hands_off_silently_without_claiming_product_access(story_db, monkeypatch):
+    monkeypatch.setattr("camellia.handoff.db", story_db)
     explicit_uid = "unknown-explicit-" + uuid.uuid4().hex[:8]
     vague_uid = "unknown-vague-" + uuid.uuid4().hex[:8]
     sent = []
@@ -379,9 +380,13 @@ def test_unknown_media_hands_off_vague_share_without_claiming_product_access(sto
             EntryPoint(source="shared_media"),
             {"shortcode": "another-unmapped-reel"}, None, "reel",
         )
-    assert "Manager of Kitchens" in sent[0]
-    assert "Manager of Kitchens" in sent[1]
-    assert "jolbhora" not in sent[1].lower()
+    assert sent == []
+    assert story_db.get_active_handoff("instagram", explicit_uid)
+    assert story_db.get_active_handoff("instagram", vague_uid)
+    for uid in (explicit_uid, vague_uid):
+        row = story_db.get_conversations(limit=1, channel="instagram", user_id=uid)[0]
+        assert row["template_id"] == "shared_media_handoff_silent"
+        assert row["bot_response"] == ""
 
 
 def test_standalone_tell_me_more_and_unsupported_attachment_keep_safe_fallbacks(story_db):
@@ -494,7 +499,7 @@ def test_mapped_shared_post_audit_retains_exact_source_media_id(story_db):
 
 
 @pytest.mark.parametrize("source_type", ["reel", "post", "story"])
-def test_unknown_media_without_text_stays_silent_and_never_guesses(story_db, source_type):
+def test_unknown_media_without_text_stays_silent_and_never_guesses(story_db, monkeypatch, source_type):
     identifiers = {
         "reel": {"shortcode": "unknown-audit-reel"},
         "post": {"media_id": "unknown-audit-post"},
@@ -502,6 +507,8 @@ def test_unknown_media_without_text_stays_silent_and_never_guesses(story_db, sou
     }[source_type]
     uid = f"unknown-audit-{source_type}-" + uuid.uuid4().hex[:8]
     sent = []
+    if source_type == "reel":
+        monkeypatch.setattr("camellia.handoff.db", story_db)
 
     def observe_send(*args, **kwargs):
         with story_db.get_connection() as conn:
@@ -523,6 +530,13 @@ def test_unknown_media_without_text_stays_silent_and_never_guesses(story_db, sou
 
     if source_type == "story":
         assert sent == []
+    elif source_type == "reel":
+        assert sent == []
+        assert story_db.get_active_handoff("instagram", uid)
+        row = story_db.get_conversations(limit=1, channel="instagram", user_id=uid)[0]
+        assert row["bot_response"] == ""
+        assert row["template_id"] == "shared_media_handoff_silent"
+        assert row["source_type"] == "reel"
     else:
         assert len(sent) == 1
         row = sent[0][1]

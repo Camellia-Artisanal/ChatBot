@@ -17,6 +17,7 @@ Meta webhook (signed)  POST /webhook/instagram
       │      3. inherited post/reel mapping, then mapped twin ad  → "ad_creative"
       │      4. story / shared post / reel ids     → "story_media_id" / "shared_*"
       │    explicit ADS referral without exact route → clear prior context and hand off
+      │    unmapped shared Reel → active staff handoff, no customer-facing notice
       ├─ responder.match_and_respond(...)                  responder.py
       │      first layer that owns the turn answers:
       │      order flows → mapping checklist (bundle) → Custom topic answers

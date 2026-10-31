@@ -103,6 +103,7 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
 - **Meta's default "more info on this" prompt may arrive without a referral block.** With no
   exact source or existing session route, hand it to a person; do not send the city-specific
   savoury intro from an unknown ad context.
+- **Unmapped shared Reels go to staff silently.** Keep the active handoff and inbound conversation record so staff can follow up, but do not send or log the generic handoff notice as a customer reply.
 - **Do not claim staff push alerts are delivered.** `human_notification_events` is durable,
   but `Escalator.send_human_alert()` currently returns `skipped` (`manual_handoff_only`);
   no first-hit push or daily escalation report is configured.
