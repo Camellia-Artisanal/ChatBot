@@ -864,6 +864,7 @@ class Database:
                 campaign_id TEXT,
                 routing_topic TEXT NOT NULL DEFAULT '',
                 source_description TEXT NOT NULL DEFAULT '',
+                custom_response_variations_json TEXT NOT NULL DEFAULT '[]',
                 approved_opening_message TEXT NOT NULL DEFAULT '',
                 knowledge_scope TEXT NOT NULL DEFAULT '[]',
                 escalation_policy TEXT NOT NULL DEFAULT 'human_if_unsupported',
@@ -1308,6 +1309,7 @@ class Database:
             self._ensure_column(cursor, "instagram_source_routes", "preview_url", "TEXT")
             self._ensure_column(cursor, "instagram_source_routes", "media_type", "TEXT")
             self._ensure_column(cursor, "instagram_source_routes", "custom_info_questions_enabled", "INTEGER NOT NULL DEFAULT 0")
+            self._ensure_column(cursor, "instagram_source_routes", "custom_response_variations_json", "TEXT NOT NULL DEFAULT '[]'")
 
             # Admin-only visual fallback for connected media whose Meta
             # preview is unavailable. This table is deliberately separate
@@ -2046,7 +2048,8 @@ class Database:
             route.get("topic_id"), route.get("menu_id"), menu_mode,
             route.get("preview_url"), route.get("media_type"),
             route.get("response_mode") or "CUSTOM", route.get("approved_qa_id"),
-            int(bool(route.get("custom_info_questions_enabled", False))), now,
+            int(bool(route.get("custom_info_questions_enabled", False))),
+            json.dumps(route.get("custom_response_variations", [])), now,
         )
         from camellia import approved_qa, instagram_story_qa, instagram_source_qa
         bundle_write = "approved_qa_ids" in route
@@ -2118,8 +2121,8 @@ class Database:
                     (source_type, canonical_url, shortcode, media_id, ad_id, campaign_id,
                      routing_topic, source_description, approved_opening_message, knowledge_scope, escalation_policy, priority_products,
                     active, topic_id, menu_id, menu_mode, preview_url, media_type, response_mode, approved_qa_id,
-                    custom_info_questions_enabled, created_at, updated_at)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    custom_info_questions_enabled, custom_response_variations_json, created_at, updated_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     values[:-1] + (now, now),
                 )
                 routing_id = int(cursor.lastrowid)
@@ -2128,7 +2131,8 @@ class Database:
                     """UPDATE instagram_source_routes SET source_type=?, canonical_url=?, shortcode=?,
                     media_id=?, ad_id=?, campaign_id=?, routing_topic=?, source_description=?, approved_opening_message=?, knowledge_scope=?,
                     escalation_policy=?, priority_products=?, active=?, topic_id=?, menu_id=?, menu_mode=?,
-                    preview_url=?, media_type=?, response_mode=?, approved_qa_id=?, custom_info_questions_enabled=?, updated_at=?, archived_at=NULL
+                    preview_url=?, media_type=?, response_mode=?, approved_qa_id=?, custom_info_questions_enabled=?,
+                    custom_response_variations_json=?, updated_at=?, archived_at=NULL
                     WHERE routing_id=?""",
                     values + (routing_id,),
                 )
@@ -3015,7 +3019,7 @@ class Database:
         with self.get_connection() as conn:
             join = "LEFT JOIN instagram_source_routes r ON r.routing_id=(SELECT rr.routing_id FROM instagram_source_routes rr WHERE rr.source_type='story' AND rr.media_id=s.story_media_id ORDER BY rr.updated_at DESC, rr.routing_id DESC LIMIT 1) LEFT JOIN instagram_topics t ON t.topic_id=r.topic_id"
             total = int(conn.execute(f"SELECT COUNT(*) AS n FROM instagram_story_sources s {join} WHERE {where}", params).fetchone()["n"])
-            sql = f"SELECT s.story_media_id, s.temporary_url, s.story_status, s.first_seen, s.last_seen, s.last_sender_id, s.last_event_metadata, s.media_type, s.permalink, s.published_at, s.source, s.sync_miss_count, s.last_confirmed_active_at, s.story_sequence_number, s.story_sequence_date, r.routing_id, r.topic_id, COALESCE(NULLIF(r.routing_topic,''), t.name) AS routing_topic, r.source_description, r.response_mode, r.approved_qa_id, r.menu_id, r.menu_mode, r.active AS route_active, r.archived_at AS route_archived_at FROM instagram_story_sources s {join} WHERE {where} ORDER BY {sort_column} {direction}, s.story_media_id"
+            sql = f"SELECT s.story_media_id, s.temporary_url, s.story_status, s.first_seen, s.last_seen, s.last_sender_id, s.last_event_metadata, s.media_type, s.permalink, s.published_at, s.source, s.sync_miss_count, s.last_confirmed_active_at, s.story_sequence_number, s.story_sequence_date, r.routing_id, r.topic_id, COALESCE(NULLIF(r.routing_topic,''), t.name) AS routing_topic, r.source_description, r.custom_response_variations_json, r.response_mode, r.approved_qa_id, r.menu_id, r.menu_mode, r.active AS route_active, r.archived_at AS route_archived_at FROM instagram_story_sources s {join} WHERE {where} ORDER BY {sort_column} {direction}, s.story_media_id"
             if page_size is not None:
                 sql += " LIMIT ? OFFSET ?"
                 params = [*params, page_size, (page - 1) * page_size]
@@ -3023,6 +3027,10 @@ class Database:
             output = []
             for row in rows:
                 item = dict(row)
+                try:
+                    item["custom_response_variations"] = json.loads(item.pop("custom_response_variations_json") or "[]")
+                except (json.JSONDecodeError, TypeError):
+                    item["custom_response_variations"] = []
                 route_active = item.pop("route_active")
                 route_archived_at = item.pop("route_archived_at")
                 route = item.get("routing_id")

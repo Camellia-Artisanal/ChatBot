@@ -99,6 +99,10 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
   The Question is then a heading (31 Oct: a Kolkata story-telling answer headed "tell me
   more" answered every bare "tell me more"). Where the answer is ticked on a post/ad its
   heading still counts. General and built-in answers still match on their Question.
+- **Custom-response question variations are exact and source-scoped.** Only use operator-entered
+  phrases on the currently matched active source route; normalize case and punctuation in any
+  script (Bengali/Hindi included), never use fuzzy matching or let a variation answer from another
+  post/ad/Topic. Human-help, explicit escalation and an order in progress still win.
 - **New Approved Q&A wording must not match an existing answer** (`_conflicts`); customers
   rarely type the question text, so pick a distinct label ("Kolkata lunch price").
 - **Weekly savoury menu is published as an image, no parsing.** Dish-level price questions

@@ -43,18 +43,19 @@ function sourceResponseHtml(prefix) { return prefix==='igStory' ? __STORY_SELECT
 function sourceQaMultiple(prefix){return prefix==='igStory'||prefix==='igMedia'||(prefix==='ig'&&['post','reel','ad'].includes(document.getElementById('igSourceType')?.value||'post'));}
 function sourceResponseFields(prefix) {
  const mode=document.querySelector(`input[name="${prefix}ResponseMode"]:checked`)?.value || 'CUSTOM';
+ const variations=(document.getElementById(prefix+'CustomResponseVariations')?.value||'').split(/\r?\n/).map(value=>value.trim()).filter(Boolean);
  if(sourceQaMultiple(prefix) && mode==='APPROVED_QA'){
   const state=sourceResponseState[prefix];
-   return {response_mode:mode,approved_qa_ids:Array.from(state?.selectedIds||[]),[prefix==='igStory'?'story_context':'source_context']:state?.context||document.getElementById(prefix+'QaContext')?.value||'general'};
+   return {response_mode:mode,custom_response_variations:variations,approved_qa_ids:Array.from(state?.selectedIds||[]),[prefix==='igStory'?'story_context':'source_context']:state?.context||document.getElementById(prefix+'QaContext')?.value||'general'};
  }
- return {response_mode:mode, approved_qa_id:mode==='APPROVED_QA' ? document.getElementById(prefix+'ApprovedQaId')?.value || '' : null};
+ return {response_mode:mode,custom_response_variations:variations, approved_qa_id:mode==='APPROVED_QA' ? document.getElementById(prefix+'ApprovedQaId')?.value || '' : null};
 }
 function setSourceResponseMode(prefix) {
  if(!sourceResponseState[prefix]){initSourceResponse(prefix,sourceResponseFields(prefix));return;}
  const approved=sourceResponseFields(prefix).response_mode==='APPROVED_QA';
  document.getElementById(prefix+'QaFields').hidden=!approved;
  if(prefix!=='igStory'){const multi=sourceQaMultiple(prefix);document.getElementById(prefix+'QaBundleFields').hidden=!multi;document.getElementById(prefix+'ApprovedQaId').hidden=multi;document.getElementById(prefix+'QaSingleLabel').hidden=multi;}
- const ids={ig:['igTopicPicker','igSourceDescription','igTopicDescription','igMenuPicker'],igStory:['igStoryTopicPicker','igStorySourceDescription','igStoryMenuPicker'],igMedia:['igMediaTopic','igMediaTopicAnswers','igMediaDescription','igMediaMenu']}[prefix];
+ const ids={ig:['igTopicPicker','igSourceDescription','igCustomResponseVariations','igTopicDescription','igMenuPicker'],igStory:['igStoryTopicPicker','igStorySourceDescription','igStoryCustomResponseVariations','igStoryMenuPicker'],igMedia:['igMediaTopic','igMediaTopicAnswers','igMediaDescription','igMediaCustomResponseVariations','igMediaMenu']}[prefix];
  for(const id of ids){const element=document.getElementById(id); if(element)element.closest('.source-map-field')?.toggleAttribute('hidden',approved);}
  previewSourceQa(prefix);
 }

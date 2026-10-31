@@ -14,6 +14,7 @@ what a customer meant.
 
 import json
 import re
+import unicodedata
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlsplit
 
@@ -497,6 +498,29 @@ def validate_route_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     custom_info_questions_enabled = bool(
         custom_info_questions_enabled and response_mode == "CUSTOM" and source_description
     )
+    raw_custom_variations = payload.get("custom_response_variations", [])
+    if raw_custom_variations is None:
+        raw_custom_variations = []
+    if not isinstance(raw_custom_variations, list):
+        raise ValueError("custom_response_variations must be a list of customer question phrases.")
+    if len(raw_custom_variations) > 30:
+        raise ValueError("Add no more than 30 custom response question variations.")
+    custom_response_variations = []
+    seen_custom_variations = set()
+    for phrase in raw_custom_variations:
+        if not isinstance(phrase, str):
+            raise ValueError("Each custom response variation must be text.")
+        phrase = phrase.strip()
+        if not phrase or len(phrase) > 180:
+            raise ValueError("Each variation must be 1 to 180 characters.")
+        normalized_variation = normalize_custom_response_variation(phrase)
+        if not normalized_variation:
+            raise ValueError("Each custom response variation must include letters or numbers.")
+        if normalized_variation not in seen_custom_variations:
+            seen_custom_variations.add(normalized_variation)
+            custom_response_variations.append(phrase)
+    if response_mode == "CUSTOM" and custom_response_variations and not source_description:
+        raise ValueError("Add a custom response before adding its question variations.")
 
     media_id = str(payload.get("story_media_id") or payload.get("media_id") or "").strip() or None
     if source_type == "story":
@@ -521,6 +545,7 @@ def validate_route_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         "routing_topic": routing_topic,
         "source_description": source_description,
         "custom_info_questions_enabled": custom_info_questions_enabled,
+        "custom_response_variations": custom_response_variations,
         "knowledge_scope": scope,
         "escalation_policy": escalation,
         "priority_products": priority,
@@ -554,6 +579,14 @@ def decode_route(row: Dict[str, Any]) -> Dict[str, Any]:
     route["approved_qa_id"] = route.get("approved_qa_id")
     route["active"] = bool(route.get("active"))
     route["custom_info_questions_enabled"] = bool(route.get("custom_info_questions_enabled"))
+    try:
+        route["custom_response_variations"] = (
+            json.loads(route.get("custom_response_variations_json") or "[]")
+            if isinstance(route.get("custom_response_variations_json"), str)
+            else list(route.get("custom_response_variations") or [])
+        )
+    except (json.JSONDecodeError, TypeError):
+        route["custom_response_variations"] = []
     route["menu_mode"] = str(route.get("menu_mode") or "").strip().upper()
     if route["menu_mode"] not in _MENU_MODES:
         route["menu_mode"] = "SELECTED" if route.get("menu_id") else "INHERIT"
@@ -562,6 +595,20 @@ def decode_route(row: Dict[str, Any]) -> Dict[str, Any]:
         item for item in route["priority_products"] if item not in available
     ]
     return route
+
+
+def normalize_custom_response_variation(value):
+    """Normalize exact admin-supplied trigger phrases without semantic matching."""
+    normalized = unicodedata.normalize("NFKC", str(value or "")).casefold()
+    return re.sub(r"[\W_]+", " ", normalized).strip()
+
+
+def matches_custom_response_variation(route, message):
+    normalized = normalize_custom_response_variation(message)
+    return bool(normalized and normalized in {
+        normalize_custom_response_variation(value)
+        for value in (route or {}).get("custom_response_variations", [])
+    })
 
 
 def decode_topic(row: Dict[str, Any]) -> Dict[str, Any]:

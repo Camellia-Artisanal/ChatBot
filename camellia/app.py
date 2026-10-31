@@ -68,6 +68,7 @@ from camellia.instagram_routing import (
     RESPONSE_ORDERS,
     shared_post_media_id,
     shared_reel_identity,
+    matches_custom_response_variation,
     update_topic,
     validate_route_payload,
     prepare_source_response,
@@ -1049,9 +1050,16 @@ def _process_instagram_event(
         # to their selected Approved Q&A answers or the normal handoff path.
         mapped = facts.get("source_route") if isinstance(facts.get("source_route"), dict) else {}
         note = str(mapped.get("source_description") or "").strip()
-        if (mapped.get("custom_info_questions_enabled") and note and mapped.get("active", True)
+        # An admin-entered variation of this exact route sends the same note,
+        # but never interrupts an order: "yes" can be a phrase on one post.
+        order_in_progress = bool(
+            facts.get("cart") or facts.get("order_intake_draft")
+        ) or template_id in ("order_draft_receipt", "order_next_steps", "order_intake_draft")
+        variation_match = not order_in_progress and matches_custom_response_variation(mapped, customer_message)
+        general_info_match = bool(mapped.get("custom_info_questions_enabled")
+                                  and responder_module.is_general_source_info_question(customer_message))
+        if ((variation_match or general_info_match) and note and mapped.get("active", True)
                 and mapped.get("response_mode", "CUSTOM") == "CUSTOM"
-                and responder_module.is_general_source_info_question(customer_message)
                 and not unbound_ad_referral and not contextless_ad_button
                 and not facts.get("source_context_superseded")
                 and not is_human_help_request(customer_message)
@@ -1060,10 +1068,13 @@ def _process_instagram_event(
             if str(mapped.get("menu_mode") or "INHERIT").upper() == "INHERIT" and not menu_id and mapped.get("topic_id"):
                 menu_id = (db.get_instagram_topic(mapped["topic_id"]) or {}).get("default_menu_id")
             image_url = menu_images.current_url(str(menu_id)) if menu_id and str(mapped.get("menu_mode") or "").upper() != "NONE" else None
-            response_text, was_matched, template_id = note, True, "source_description"
+            response_text, was_matched = note, True
+            template_id = "source_description_variation" if variation_match else "source_description"
             facts.update(
                 client_qa_id=None, ordered_response_blocks=[], source_context_used=True,
-                last_route_source="SOURCE_DESCRIPTION", last_grounding="explicit_admin_source_description",
+                last_route_source="SOURCE_DESCRIPTION_VARIATION" if variation_match else "SOURCE_DESCRIPTION",
+                last_grounding=("explicit_admin_source_description_variation" if variation_match
+                                else "explicit_admin_source_description"),
                 last_actions=[], knowledge_sufficient=True, ad_product=None, last_answer_id=None,
                 source_note_sent_routing_id=mapped.get("routing_id"),
             )
@@ -1147,6 +1158,7 @@ def _process_instagram_event(
             "system_conversation",
             "grounded_derived",
             "source_description",
+            "source_description_variation",
             "opening_hours",
             "subscription_details",
             "sondesh_dispatch_time",
@@ -4328,6 +4340,9 @@ async def save_instagram_media_mapping(item_id: int, request: Request, x_admin_k
         "priority_products": json.loads(existing["priority_products"]) if existing else [],
         "knowledge_scope": json.loads(existing["knowledge_scope"]) if existing else [],
     }
+    # Left out, prepare_source_response keeps the stored phrases.
+    if "custom_response_variations" in body:
+        route_body["custom_response_variations"] = body["custom_response_variations"]
     try:
         if "approved_qa_ids" in body:
             route_body.update(approved_qa_ids=body["approved_qa_ids"], source_context=body.get("source_context"))
@@ -8504,6 +8519,7 @@ def get_admin_dashboard():
             </div>
 
             <div class="source-map-field"><label class="field-label" id="igSourceDescriptionLabel" for="igSourceDescription">Description for this post</label><p class="source-map-help" id="igSourceDescriptionHelp">Used when someone asks what this post is about.</p><textarea class="field-control" id="igSourceDescription" rows="4"></textarea><label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;"><input type="checkbox" id="igCustomInfoQuestions"><span><b>Use this response for general “tell me more” questions</b><br><small class="source-map-help">Covers phrases like “Tell me more about this” and “Can I get more info?”. Specific questions still use approved answers.</small></span></label></div>
+            <div class="source-map-field"><label class="field-label" for="igCustomResponseVariations">Question variations for this custom response</label><p class="source-map-help">Add one exact customer phrase per line. Only these phrases on this mapped source trigger this response; matching is case and punctuation insensitive.</p><textarea class="field-control" id="igCustomResponseVariations" rows="4" placeholder="Price per head?&#10;How much each?"></textarea></div>
 
             <div class="source-map-field">
                 <label class="field-label" for="igMenuPicker">Menu / Image <span class="ig-media-muted">Optional</span></label>
@@ -8610,6 +8626,7 @@ def get_admin_dashboard():
                         <small id="igStoryTopicEmptyHelp" class="ig-media-muted" style="display:none; margin-top:6px;">No active Topics are configured yet. Create a Topic above, then choose it here.</small>
                     </div>
                     <div class="source-map-field"><label class="field-label" for="igStorySourceDescription">Description for this story</label><p class="source-map-help">Used when someone asks what this story is about.</p><textarea class="field-control" id="igStorySourceDescription" rows="4"></textarea></div>
+                    <div class="source-map-field"><label class="field-label" for="igStoryCustomResponseVariations">Question variations for this custom response</label><p class="source-map-help">Add one exact customer phrase per line. Only these phrases on this mapped Story trigger this response; matching is case and punctuation insensitive.</p><textarea class="field-control" id="igStoryCustomResponseVariations" rows="4" placeholder="Price per head?&#10;How much each?"></textarea></div>
                     <div class="source-map-field">
                         <label class="field-label" for="igStoryMenuPicker">Menu / Image <span class="ig-media-muted">Optional</span></label>
                             <select class="field-control" id="igStoryMenuPicker" onchange="renderSourceAssetCard('igStoryMenuPicker','igStoryMenuSelected')"><option value="__none__">Choose menu or image</option></select>
@@ -10238,6 +10255,7 @@ THIS WEEK'S BENGAL SPECIALS
                     <div class="source-map-field"><label class="field-label" for="igMediaTopic">Topic</label><select class="field-control" id="igMediaTopic" onchange="renderSourceAssetCard('igMediaMenu','igMediaMenuSelected'); renderMediaTopicAnswers()">${topicOptions}</select><div class="source-secondary-actions"><button class="btn-secondary" type="button" onclick="openTopicModal('', 'igMediaTopic')">+ Add Topic</button><button class="btn-secondary" type="button" onclick="openManageTopics('igMediaTopic')">Manage Topics</button></div></div>
                     <div class="source-map-field" id="igMediaTopicAnswersField"><label class="field-label">When customers ask the price or details, reply with</label><p class="source-map-help">Approved answers, sent word for word. Turn on the option below the Custom response to use it for generic “tell me more” questions. These answers apply to every Post/Reel in this Topic.</p><div id="igMediaTopicAnswers" style="max-height:220px;overflow-y:auto;border:1px solid #e5e5e5;border-radius:8px;padding:8px;"></div></div>
                     <div class="source-map-field"><label class="field-label" for="igMediaDescription">Description for this ${item.source_type}</label><p class="source-map-help">Used when someone asks what this ${item.source_type} is about.</p><textarea class="field-control" id="igMediaDescription" rows="5">${escapeHtml(item.source_description || '')}</textarea><label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;"><input type="checkbox" id="igMediaCustomInfoQuestions" ${item.mapping_route?.custom_info_questions_enabled ? 'checked' : ''}><span><b>Use this response for general “tell me more” questions</b><br><small class="source-map-help">Covers phrases like “Tell me more about this” and “Can I get more info?”. Specific questions still use approved answers.</small></span></label></div>
+                    <div class="source-map-field"><label class="field-label" for="igMediaCustomResponseVariations">Question variations for this custom response</label><p class="source-map-help">Add one exact customer phrase per line. Only these phrases on this mapped source trigger this response; matching is case and punctuation insensitive.</p><textarea class="field-control" id="igMediaCustomResponseVariations" rows="4" placeholder="Price per head?&#10;How much each?">${escapeHtml((item.mapping_route?.custom_response_variations || []).join('\n'))}</textarea></div>
                     <div class="source-map-field"><label class="field-label" for="igMediaMenu">Menu / Image <span class="ig-media-muted">Optional</span></label><select class="field-control" id="igMediaMenu" onchange="renderSourceAssetCard('igMediaMenu','igMediaMenuSelected')">${menuOptions}</select><div class="source-secondary-actions"><button class="btn-secondary" type="button" onclick="openMenuModal('igMediaMenu')">+ Add Menu / Image</button></div><div class="source-asset-card" id="igMediaMenuSelected"></div></div>
                     <div class="source-map-field"><b>Use as chatbot context</b><div class="source-switch-row"><span class="source-map-help">Use this mapped Story, Post or Reel to understand short follow-up messages like “tell me more” or “price?”. This does not send a message automatically.</span><label class="source-switch"><input type="checkbox" id="igMediaAutoReply" aria-label="Use as chatbot context" ${item.mapping_route?.active || (!item.mapping_route && item.route_mode !== 'DISABLED') ? 'checked' : ''}><span></span></label></div></div>
                     ${item.source_type === 'post' && item.mapping_route ? `<div><button class="btn-secondary" type="button" onclick="pairInstagramPost(${Number(item.mapping_route.routing_id)})">Pair exact shared Post</button><div id="igPairingStatus-${Number(item.mapping_route.routing_id)}"></div></div>` : ''}
@@ -10930,6 +10948,7 @@ THIS WEEK'S BENGAL SPECIALS
             document.getElementById('igActive').checked = true;
             document.getElementById('igSourceDescription').value = '';
             document.getElementById('igCustomInfoQuestions').checked = false;
+            document.getElementById('igCustomResponseVariations').value = '';
             initSourceResponse('ig', {});
             document.getElementById('igTopicDescription').value = '';
             document.getElementById('igEscalationPolicy').value='human_if_unsupported';
@@ -10993,6 +11012,7 @@ THIS WEEK'S BENGAL SPECIALS
             document.getElementById('igActive').checked=route.active !== false;
             document.getElementById('igSourceDescription').value=route.source_description||'';
             document.getElementById('igCustomInfoQuestions').checked=Boolean(route.custom_info_questions_enabled);
+            document.getElementById('igCustomResponseVariations').value=(route.custom_response_variations||[]).join('\n');
             initSourceResponse('ig', route);
             Array.from(document.getElementById('igKnowledgeScope').options).forEach(option=>option.selected=(route.knowledge_scope||[]).includes(option.value));
             renderIgPriorityProducts(); onIgTopicChange(true);
@@ -11763,6 +11783,7 @@ THIS WEEK'S BENGAL SPECIALS
             document.getElementById('igStoryMappingIdentity').innerHTML = instagramStoryIdentification(source, true);
             document.getElementById('igStoryTopicPicker').value = source.topic_id || '';
             document.getElementById('igStorySourceDescription').value = source.source_description || '';
+            document.getElementById('igStoryCustomResponseVariations').value = (source.custom_response_variations || []).join('\n');
             initSourceResponse('igStory', source);
             refreshMenuChoicePicker('igStoryMenuPicker', source.topic_id || '', routeId ? menuChoiceForRoute(source) : '__none__');
             if (routeId) setMenuChoiceFromRoute('igStoryMenuPicker', 'igStoryMenuWarning', source);
@@ -11786,6 +11807,7 @@ THIS WEEK'S BENGAL SPECIALS
             igStoryEditingRoutingId = null;
             igStoryPriority = [];
             document.getElementById('igStorySourceDescription').value = '';
+            document.getElementById('igStoryCustomResponseVariations').value = '';
             document.getElementById('igStoryDeleteSection').style.display = 'none';
             refreshMenuChoicePicker('igStoryMenuPicker', '', '__none__');
             renderSourceAssetCard('igStoryMenuPicker', 'igStoryMenuSelected');
