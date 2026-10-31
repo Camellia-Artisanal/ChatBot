@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import uuid
 from unittest.mock import patch
@@ -736,9 +737,13 @@ def test_unknown_ads_are_observed_and_can_be_bound_by_admin(ad_customer):
     (False, "post_first"), (False, "ad_first"),
     (True, "post_first"), (True, "ad_first"),
 ])
-def test_both_ad_post_race_orders_use_durable_dispatch_and_are_idempotent(ad_customer, same_payload, order):
+def test_both_ad_post_race_orders_use_durable_dispatch_and_are_idempotent(ad_customer, same_payload, order, monkeypatch):
     sender = ad_customer[0]
     db = ad_customer[2]
+    # In production the window opens at webhook arrival; here the ad's whole
+    # reply runs first, which can outlast 5 seconds on a busy machine.
+    monkeypatch.setattr(db, "record_instagram_ads_referral_seen",
+                        functools.partial(db.record_instagram_ads_referral_seen, grace_seconds=120))
     route = _mapped_source(ad_customer, "post", "race-bound-ad")
     suffix = uuid.uuid4().hex
     post = {

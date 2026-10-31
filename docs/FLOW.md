@@ -71,6 +71,10 @@ Rules that hold the flow together:
 - With `VARIATION_SHADOW_ENABLED`, a message heading for a handoff on a Custom mapping with saved
   phrases is checked in the background for the same meaning as a phrase. The result goes only to
   `variation_shadow`, read at `GET /admin/variation-shadow`; it changes no reply.
+- Answer slots hold one answer per question type on a master category, with a per-post override.
+  They run in shadow under `VARIATION_SHADOW_ENABLED`: a handoff on a mapped source is classified
+  in the background, stored in `answer_slot_shadow`, and shown on Needs answers and at
+  `GET /admin/answer-slot-shadow`. No reply reads a slot yet.
 - No ad context: generic price questions get `general_price`; nothing mapping-specific leaks.
 - An explicit ADS referral without an ad ID or exact active route clears prior ad/topic
   context and hands off; it cannot fall through to a generic or previous-city answer.

@@ -133,6 +133,10 @@ async function initSharedMapping(item){
  panel.innerHTML='<b>Use this mapping on more posts</b><p class="source-map-help">Shared with '+Number(shared.shared_count)+' other posts. Editing this mapping changes all of them, and deleting it removes it from them too. Works for customers who share a Reel or come from an ad. Posts with their own mapping are skipped.</p><button class="btn-secondary" type="button" id="sharedMappingOpen">Choose posts</button><div id="sharedMappingPicker"></div>';
  box.querySelector('.source-map-form')?.append(panel);
  document.getElementById('sharedMappingOpen').onclick=()=>openSharedPicker(Number(route.routing_id));
+ const answers=document.createElement('details');answers.className='source-map-field';
+ answers.innerHTML='<summary style="cursor:pointer;font-weight:600">Answers for this post only</summary><p class="source-map-help">Override the master category for this post. Answers run in shadow for now, so customers do not get them yet.</p><div id="sharedMappingAnswers"></div>';
+ box.querySelector('.source-map-form')?.append(answers);
+ answers.ontoggle=()=>{if(answers.open)catSlotEditor(document.getElementById('sharedMappingAnswers'),'route',route.routing_id);};
 }
 async function openSharedSource(itemId){
  const note=document.getElementById('sharedMappingNote');

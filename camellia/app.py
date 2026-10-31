@@ -39,6 +39,7 @@ from camellia.ice_breakers import (
 import camellia.responder as responder_module
 from camellia.responder import compose_topic_response, responder
 from camellia.ai_responder import ai_responder
+from camellia.answer_slots import slot_shadow
 from camellia.variation_shadow import variation_shadow
 from camellia.escalator import escalator
 from camellia.handoff import (
@@ -1334,11 +1335,13 @@ def _process_instagram_event(
         if needs_escalation and link_message:
             logged_response = f"{response_text}\n\n{link_message}"
         if (needs_escalation and not order_in_progress and not unbound_ad_referral and not contextless_ad_button
-                and mapped.get("active", True) and mapped.get("response_mode", "CUSTOM") == "CUSTOM"
+                and mapped.get("active", True)
                 and not facts.get("source_context_superseded") and str(message_text or "").strip()
                 and not is_human_help_request(customer_message)
                 and not responder.check_explicit_escalation_triggers(customer_message)):
-            variation_shadow.record_shadow(customer_message, mapped)
+            slot_shadow.record_shadow(customer_message, mapped)
+            if mapped.get("response_mode", "CUSTOM") == "CUSTOM":
+                variation_shadow.record_shadow(customer_message, mapped)
         conversation_id = db.log_conversation(
             sender_id, "instagram", customer_message, logged_response, was_matched,
             template_id, ad_referral_present=entry.referral_present,

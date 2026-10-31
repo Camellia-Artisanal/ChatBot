@@ -3,13 +3,14 @@ can link one Menu category, one Q&A category and, by choice, one Customer messag
 topic. Each list keeps its own table and rules (see MEMORY.md), and nothing here
 changes a customer reply: links only record which lists belong together."""
 import re
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from camellia import approved_qa, menu_catalogue
+from camellia import answer_slots, approved_qa, menu_catalogue
 from camellia.admin_menu_review import reviewer
-from camellia.instagram_routing import InstagramTopicError, create_topic, decode_topic, update_topic
+from camellia.instagram_routing import (
+    InstagramTopicError, create_topic, decode_route, decode_topic, matches_custom_response_variation, update_topic,
+)
 
 router = APIRouter(prefix="/admin/categories")
 
@@ -205,10 +206,78 @@ async def rename_master(topic_id: str, request: Request, actor=Depends(reviewer)
     return {"status": "success", "name": name, "kept_names": kept}
 
 
+def _slot_owner(owner_type):
+    if owner_type not in answer_slots.OWNERS:
+        raise HTTPException(400, "Unknown answer owner.")
+
+
+@router.get("/slots/{owner_type}/{owner_id}")
+def slots(owner_type: str, owner_id: str, _actor=Depends(reviewer)):
+    _slot_owner(owner_type)
+    return {"slots": answer_slots.list_slots(owner_type, owner_id)}
+
+
+@router.put("/slots/{owner_type}/{owner_id}/{slot}")
+async def save_slot(owner_type: str, owner_id: str, slot: str, request: Request, _actor=Depends(reviewer)):
+    _slot_owner(owner_type)
+    try:
+        answer_slots.save(owner_type, owner_id, slot, await _body(request))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"status": "success"}
+
+
+@router.delete("/slots/{owner_type}/{owner_id}/{slot}")
+def clear_slot(owner_type: str, owner_id: str, slot: str, _actor=Depends(reviewer)):
+    _slot_owner(owner_type)
+    answer_slots.clear(owner_type, owner_id, slot)
+    return {"status": "success"}
+
+
+@router.post("/slots/{owner_type}/{owner_id}/{slot}/save-to-approved")
+def save_slot_to_approved(owner_type: str, owner_id: str, slot: str, actor=Depends(reviewer)):
+    _slot_owner(owner_type)
+    try:
+        return {"qa_id": answer_slots.save_to_approved(owner_type, owner_id, slot, actor)}
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@router.get("/needs-answers")
+def needs_answers(_actor=Depends(reviewer)):
+    return {"groups": answer_slots.needs_answers()}
+
+
+@router.post("/needs-answers/phrase")
+async def add_phrase(request: Request, _actor=Depends(reviewer)):
+    """Adds a real customer question to its mapping's exact phrases."""
+    body = await _body(request)
+    phrase = " ".join(str(body.get("phrase") or "").split())
+    database = _database()
+    routing_id = body.get("routing_id")
+    row = database.get_instagram_source_route(routing_id) if isinstance(routing_id, int) else None
+    if not row:
+        raise HTTPException(404, "That mapping no longer exists.")
+    route = decode_route(row)
+    phrases = list(route.get("custom_response_variations") or [])
+    if route.get("response_mode", "CUSTOM") != "CUSTOM" or not str(route.get("source_description") or "").strip():
+        raise HTTPException(409, "Only a mapping with a Custom response can use phrases.")
+    if not 1 <= len(phrase) <= 180 or len(phrases) >= 30:
+        raise HTTPException(409, "A phrase is 1 to 180 characters, and a mapping holds up to 30.")
+    if not matches_custom_response_variation(route, phrase):
+        database.save_instagram_source_route({**route, "custom_response_variations": [*phrases, phrase]}, route["routing_id"])
+    return {"status": "success"}
+
+
 HTML = r'''
 <div id="tab-categories" class="panel-card" data-group="categories" style="display:none;">
  <div class="admin-page-heading"><div><h2>Categories</h2><p>Master categories are the one list to work from: one for each product and city. Linking only records which lists belong together, so customer replies do not change.</p></div></div>
  <div id="catMessage" role="status" class="result-box" style="display:none;"></div>
+ <section class="ig-media-card" style="display:block;margin-bottom:16px;" aria-labelledby="catNeedsTitle">
+  <h3 id="catNeedsTitle">Needs answers</h3>
+  <p class="source-map-help">Questions from the last 14 days that went to staff because no answer is set. Set the answer once and the gap clears. Customers already waiting still go through the normal handoff.</p>
+  <div id="catNeeds"></div>
+ </section>
  <section class="ig-media-card" style="display:block;margin-bottom:16px;" aria-labelledby="catTopicsTitle">
   <h3 id="catTopicsTitle">Master categories</h3>
   <p class="source-map-help">Add one name and it creates or links its Menu and Q&amp;A categories. Put the city in the name, such as Sondesh Delivery Mumbai. Check the suggested links on each category, then press Save links.</p>
@@ -252,6 +321,7 @@ HTML = r'''
 SCRIPT = r'''
 <script>
 let catData = null, catMoving = null;
+const catOpenSlots = new Set();
 const CAT_URLS = {
  topics: '/admin/instagram-topics', menus: '/admin/menu-categories',
  menuTopics: '/admin/weekly-savoury/customer-topics', qa: '/admin/approved-qa/contexts',
@@ -309,6 +379,7 @@ function catMasterRow(topic) {
  const linked = topic.menu_category_id || topic.qa_context;
  const actions = [
   ...(topic.suggested_name !== topic.name ? [['Fix capitals: ' + topic.suggested_name, () => catRenameMaster(topic, topic.suggested_name)]] : []),
+  ['Answers', () => catOpenAnswers(topic.topic_id)],
   ['Rename', () => catRenameMaster(topic)],
   [topic.active ? 'Turn off' : 'Turn on', () => catToggleMaster(topic)],
   ['Delete', () => catDeleteTopic(topic)],
@@ -329,7 +400,10 @@ function catMasterRow(topic) {
  save.setAttribute('aria-label', 'Save links for ' + topic.name);
  save.onclick = () => catSaveLinks(topic, menu.value, qa.value, customer.value);
  links.append(menuField, qaField, customerField, save);
- wrap.append(row, links);
+ const answers = document.createElement('div'); answers.id = 'catAnswers-' + topic.topic_id;
+ wrap.append(row, links, answers);
+ // The list redraws after every change, so an open editor is reopened here.
+ if (catOpenSlots.has(topic.topic_id)) catSlotEditor(answers, 'topic', topic.topic_id);
  if (!linked) {
   const note = document.createElement('small'); note.className = 'ig-media-muted'; note.style.display = 'block';
   note.textContent = 'Not saved yet. These are suggestions, so check them before saving.';
@@ -337,9 +411,93 @@ function catMasterRow(topic) {
  }
  return wrap;
 }
+// Slots answer nobody yet: they run in shadow until the results are reviewed.
+function catOpenAnswers(topicId, focus) {
+ const box = document.getElementById('catAnswers-' + topicId);
+ if (!box) return;
+ if (catOpenSlots.has(topicId) && !focus) { catOpenSlots.delete(topicId); box.replaceChildren(); return; }
+ catOpenSlots.add(topicId);
+ catSlotEditor(box, 'topic', topicId);
+ if (focus) box.scrollIntoView({block:'center'});
+}
+async function catSlotEditor(box, owner, ownerId) {
+ const base = '/admin/categories/slots/' + owner + '/' + encodeURIComponent(ownerId);
+ box.textContent = 'Loading answers...';
+ box.style.marginTop = '8px';
+ try {
+  const [{slots}, options] = await Promise.all([catApi(base), catApi('/admin/instagram-routes/approved-qa-options')]);
+  const menus = typeof igMenus === 'undefined' ? [] : igMenus;
+  box.replaceChildren(...slots.map(slot => catSlotRow(box, owner, ownerId, base, slot, options.records || [], menus)));
+ } catch (error) { box.textContent = error.message; }
+}
+function catSlotRow(box, owner, ownerId, base, slot, records, menus) {
+ const answer = slot.answer || {};
+ const row = document.createElement('div'); row.style.cssText = 'padding:8px 0;border-top:1px solid var(--border);';
+ const title = document.createElement('b');
+ title.textContent = slot.label + (answer.kind === 'CUSTOM' ? ' · Custom' : '') + (answer.expired ? ' · Expired' : '');
+ const kind = document.createElement('select'); kind.className = 'field-control'; kind.setAttribute('aria-label', slot.label + ' answer type');
+ kind.replaceChildren(new Option('Not set', ''), new Option('Approved Q&A', 'APPROVED_QA'), new Option('Custom response', 'CUSTOM'));
+ kind.value = answer.kind || '';
+ const approved = document.createElement('select'); approved.className = 'field-control'; approved.setAttribute('aria-label', slot.label + ' approved answer');
+ approved.replaceChildren(new Option('Choose an answer', ''), ...records.map(record => new Option(record.question, record.qa_id)));
+ approved.value = answer.qa_id || '';
+ const text = document.createElement('textarea'); text.className = 'field-control'; text.rows = 3; text.maxLength = 2000; text.value = answer.kind === 'CUSTOM' ? answer.text : '';
+ text.setAttribute('aria-label', slot.label + ' custom answer');
+ const end = document.createElement('input'); end.type = 'date'; end.className = 'field-control'; end.value = (answer.valid_until || '').slice(0, 10);
+ end.setAttribute('aria-label', slot.label + ' end date');
+ const menu = document.createElement('select'); menu.className = 'field-control'; menu.setAttribute('aria-label', slot.label + ' menu');
+ menu.replaceChildren(new Option('No menu', ''), ...menus.map(item => new Option(item.name, item.menu_id)));
+ menu.value = answer.menu_id || '';
+ const custom = document.createElement('div'); custom.append(text, end, menu);
+ const show = () => { approved.hidden = kind.value !== 'APPROVED_QA'; custom.hidden = kind.value !== 'CUSTOM'; };
+ kind.onchange = show; show();
+ const note = document.createElement('small'); note.setAttribute('role', 'status'); note.style.display = 'block';
+ const act = (label, handler) => {
+  const button = document.createElement('button'); button.type = 'button'; button.className = 'btn-secondary'; button.textContent = label;
+  button.setAttribute('aria-label', label + ' ' + slot.label);
+  button.onclick = async () => {
+   try {
+    await handler(); await catSlotEditor(box, owner, ownerId);
+    catRenderNeeds((await catApi('/admin/categories/needs-answers')).groups);
+   } catch (error) { note.textContent = error.message; }
+  };
+  return button;
+ };
+ const actions = document.createElement('div'); actions.className = 'source-secondary-actions';
+ actions.append(act('Save answer', () => {
+  if (!kind.value) return catApi(base + '/' + slot.slot, 'DELETE');
+  return catApi(base + '/' + slot.slot, 'PUT', kind.value === 'APPROVED_QA' ? {kind: kind.value, qa_id: approved.value}
+   : {kind: kind.value, custom_text: text.value, menu_id: menu.value || null, valid_until: end.value ? end.value + 'T23:59:59+05:30' : null});
+ }));
+ if (answer.kind === 'CUSTOM') actions.append(act('Save to Approved Q&A', () => catApi(base + '/' + slot.slot + '/save-to-approved', 'POST')));
+ row.append(title, kind, approved, custom, actions, note);
+ return row;
+}
+function catRenderNeeds(groups) {
+ const box = document.getElementById('catNeeds');
+ if (!groups.length) { box.textContent = 'Nothing waiting. Gaps appear here as customers ask.'; return; }
+ box.replaceChildren(...groups.map(group => {
+  const row = catRow(group.topic_name + ': ' + catPlural(group.count, group.label + ' question'),
+   group.state === 'expired' ? 'The answer has expired' : 'No answer set',
+   [['Set answer', () => catOpenAnswers(group.topic_id, true)]]);
+  const wrap = document.createElement('div'); wrap.style.marginBottom = '10px'; wrap.append(row);
+  group.examples.forEach(example => {
+   const line = document.createElement('div'); line.className = 'source-secondary-actions'; line.style.alignItems = 'center';
+   const words = document.createElement('small'); words.textContent = example.message;
+   const add = document.createElement('button'); add.type = 'button'; add.className = 'btn-secondary'; add.textContent = 'Add as phrase';
+   add.setAttribute('aria-label', 'Add as phrase: ' + example.message);
+   add.onclick = async () => {
+    try { await catApi('/admin/categories/needs-answers/phrase', 'POST', {routing_id: example.routing_id, phrase: example.message}); catNote('Added the phrase.'); }
+    catch (error) { catNote(error.message, true); }
+   };
+   line.append(words, add); wrap.append(line);
+  });
+  return wrap;
+ }));
+}
 function catRenderCopy() {
  const box = document.getElementById('catCopyReview');
- const source = catData.topics.find(topic => topic.topic_id === document.getElementById('catCopyFrom').value);
+ const source = catData?.topics.find(topic => topic.topic_id === document.getElementById('catCopyFrom').value);
  box.replaceChildren();
  if (!source) return;
  const items = [...(source.default_menu ? [['menu', source.default_menu.menu_id, 'Menu: ' + source.default_menu.name]] : []),
@@ -379,8 +537,10 @@ function catRender() {
 }
 async function loadCategories() {
  if (!adminAuthenticated) return;
- try { catData = await catApi('/admin/categories'); catRender(); }
- catch (error) { catNote(error.message || 'Could not load categories.', true); }
+ try {
+  const [categories, needs] = await Promise.all([catApi('/admin/categories'), catApi('/admin/categories/needs-answers').catch(() => ({groups: []}))]);
+  catData = categories; catRender(); catRenderNeeds(needs.groups);
+ } catch (error) { catNote(error.message || 'Could not load categories.', true); }
 }
 // Pickers in the mapping and menu forms read these lists, so refresh them too.
 async function catChanged(note) {

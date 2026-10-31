@@ -102,6 +102,13 @@ def create_router(require_admin):
         return {"source_item_id": source["id"] if source else None,
                 "shared_count": database.count_attached_media(routing_id)}
 
+    @shadow_router.get("/admin/answer-slot-shadow")
+    def answer_slot_shadow_report(days: int = 7, limit: int = 100, x_admin_key: Optional[str] = Header(None)):
+        """What answer slots would have sent. Nothing here reached a customer."""
+        require_admin(x_admin_key)
+        from camellia import answer_slots
+        return answer_slots.shadow_report(days=min(max(days, 1), 90), limit=min(max(limit, 1), 500))
+
     @shadow_router.get("/admin/variation-shadow")
     def variation_shadow_report(days: int = 7, limit: int = 100, x_admin_key: Optional[str] = Header(None)):
         """What meaning match would have sent. Nothing here reached a customer."""

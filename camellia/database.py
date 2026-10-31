@@ -317,6 +317,36 @@ class Database:
             # differently. Kept out of `conversations` because these rows are a
             # measurement, not a thing any customer was ever sent.
             cursor.execute("""
+            CREATE TABLE IF NOT EXISTS answer_slots (
+                owner_type TEXT NOT NULL,
+                owner_id TEXT NOT NULL,
+                slot TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                qa_id TEXT,
+                custom_text TEXT,
+                menu_id TEXT,
+                valid_until TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (owner_type, owner_id, slot)
+            );
+            """)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS answer_slot_shadow (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                routing_id INTEGER,
+                topic_id TEXT,
+                user_message TEXT NOT NULL,
+                slot TEXT,
+                confidence REAL,
+                specific INTEGER DEFAULT 0,
+                outcome TEXT NOT NULL,
+                answer_source TEXT,
+                detail TEXT,
+                latency_ms REAL,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+            cursor.execute("""
             CREATE TABLE IF NOT EXISTS variation_shadow (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 routing_id INTEGER,
@@ -3973,6 +4003,7 @@ class Database:
                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
                 (routing_id, user_message, matched_phrase, confidence, int(would_send), detail, round(latency_ms, 1)),
             )
+            conn.execute("DELETE FROM variation_shadow WHERE timestamp < datetime('now', '-90 days')")
             conn.commit()
 
     def variation_shadow_report(self, days: int = 7, limit: int = 100) -> Dict[str, Any]:
