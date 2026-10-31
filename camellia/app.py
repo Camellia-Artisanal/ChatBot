@@ -7531,6 +7531,11 @@ for review_route in menu_review_router.routes:
 for weekly_route in weekly_router.routes:
     app.add_api_route(weekly_route.path, weekly_route.endpoint, methods=list(weekly_route.methods))
 
+from camellia.admin_categories import router as categories_router
+
+for categories_route in categories_router.routes:
+    app.add_api_route(categories_route.path, categories_route.endpoint, methods=list(categories_route.methods))
+
 
 @app.get("/admin/menu-manager/menus")
 def list_manageable_menus(x_admin_key: Optional[str] = Header(None), x_admin_pin: Optional[str] = Header(None)):
@@ -14362,9 +14367,17 @@ Non-Veg:
     from camellia.admin_ads import HTML as ADS_HTML, SCRIPT as ADS_SCRIPT
     html_content = html_content.replace('<div id="tab-handoffs"', ADS_HTML + '<div id="tab-handoffs"', 1)
     from camellia.admin_handoff_message import HTML as HANDOFF_MESSAGE_HTML, SCRIPT as HANDOFF_MESSAGE_SCRIPT
+    from camellia.admin_categories import HTML as CATEGORIES_HTML, SCRIPT as CATEGORIES_SCRIPT
+    html_content = html_content.replace('<div id="tab-custom-qa"', CATEGORIES_HTML + '<div id="tab-custom-qa"', 1)
+    handoff_nav_end = 'id="handoffSidebarBadge" class="admin-nav-badge" style="display:none;">0</span></button>'
+    html_content = html_content.replace(handoff_nav_end, handoff_nav_end + '<button class="tab-btn" onclick="switchTab(\'tab-categories\', this)">☷ <span class="nav-label">Categories</span></button>', 1)
+    html_content = html_content.replace("'tab-handoffs': 'handoffs',", "'tab-handoffs': 'handoffs', 'tab-categories': 'categories',", 1)
+    html_content = html_content.replace("handoffs: 'tab-handoffs', settings:", "handoffs: 'tab-handoffs', categories: 'tab-categories', settings:", 1)
+    html_content = html_content.replace("legacy: 'tab-ai-resolution',", "categories: 'tab-categories', legacy: 'tab-ai-resolution',", 1)
+    html_content = html_content.replace("if (group === 'dashboard') { loadDashboardOverview(); }", "if (group === 'categories') { loadCategories(); }\n            if (group === 'dashboard') { loadDashboardOverview(); }", 1)
     html_content = html_content.replace('<input class="field-control" id="handoffSearch"', HANDOFF_MESSAGE_HTML + '<input class="field-control" id="handoffSearch"', 1)
     html_content = html_content.replace("if (group === 'handoffs') { loadHandoffs(); }", "if (group === 'handoffs') { loadHandoffs(); if (typeof loadHandoffMessage === 'function') loadHandoffMessage(); }", 1)
-    html_content = html_content.replace('</body>', REVIEW_SCRIPT + WEEKLY_SCRIPT + APPROVED_SCRIPT + SOURCE_RESPONSE_SCRIPT + ADS_SCRIPT + HANDOFF_MESSAGE_SCRIPT + '</body>', 1)
+    html_content = html_content.replace('</body>', REVIEW_SCRIPT + WEEKLY_SCRIPT + APPROVED_SCRIPT + SOURCE_RESPONSE_SCRIPT + ADS_SCRIPT + HANDOFF_MESSAGE_SCRIPT + CATEGORIES_SCRIPT + '</body>', 1)
     return HTMLResponse(
         content=html_content,
         headers={
