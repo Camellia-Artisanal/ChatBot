@@ -324,7 +324,7 @@ def match(message, facts=None, *, rows=None, allowed_qa_ids=None, product_fallba
         if key not in active:
             continue
         words = json.loads(row["aliases_json"])
-        if row.get("question") is not None:
+        if row.get("question") is not None and (allowed_qa_ids is not None or heading_matches_everywhere(active[key])):
             words = [row["question"], *words]
         if (any(client_qa._normalise_match_text(word) == text for word in words)
                 and (allowed_qa_ids is None or client_qa.can_candidate_own_turn(message, key))):
@@ -381,6 +381,14 @@ SHARED_ANSWER_IDS = frozenset({"general_price", "general_details"})
 
 def usable_everywhere(entry) -> bool:
     return entry.context == "general" or entry.qa_id in SHARED_ANSWER_IDS
+
+
+def heading_matches_everywhere(entry) -> bool:
+    """31 Oct: a client-added answer outside General is filed under a heading
+    such as "tell me more"; a customer typing that heading with no post/ad must
+    not get one category's answer. Its variations still match everywhere, and
+    on posts/ads where it is ticked the heading still counts."""
+    return entry.qa_id in client_qa.REGISTRY_BY_ID or usable_everywhere(entry)
 
 
 def _record(entry, row):
@@ -514,9 +522,12 @@ def _conflicts(candidate, rows):
     words = [entry.question, *json.loads(candidate["aliases_json"])]
     others = {e.qa_id: e for e in registry(rows) if e.qa_id != entry.qa_id}
     for word_index, word in enumerate(words):
+        if word_index == 0 and not heading_matches_everywhere(entry):
+            continue  # A category answer's heading is a label, not customer wording.
         normalized = client_qa._normalise_match_text(word)
         for key, other in others.items():
-            other_words = [other.question, *json.loads(rows.get(key, {}).get("aliases_json", "[]"))]
+            other_words = ([other.question] if heading_matches_everywhere(other) else []) + json.loads(
+                rows.get(key, {}).get("aliases_json", "[]"))
             if any(client_qa._normalise_match_text(v) == normalized for v in other_words):
                 # Immutable source has a few intentionally context-dependent duplicate primary questions.
                 if word_index == 0 and entry.qa_id in client_qa.REGISTRY_BY_ID and candidate.get("question") is None:

@@ -80,3 +80,37 @@ def test_short_ad_questions_use_the_checklists_answers_only_inside_a_mapping(sto
     assert found.entry.qa_id == (price if role == "price" else details)["qa_id"]
     outside = approved_qa.match(message, {})
     assert outside is None or outside.entry.qa_id not in allowed
+
+
+def test_category_heading_is_a_label_not_a_global_match(store):
+    # 31 Oct: a Kolkata story-telling answer headed "tell me more" answered
+    # every bare "tell me more", whatever the customer was asking about.
+    approved_qa.save_context("Kolkata story telling sessions", "test")
+    story = _publish("tell me more", "STORY SESSION DETAILS", "kolkata_story_telling_sessions")
+    outside = approved_qa.match("tell me more", {})
+    assert outside is None or outside.entry.qa_id != story["qa_id"]
+    assert approved_qa.test("tell me more")["matched_id"] != story["qa_id"]
+    # On a post/ad where it is ticked, the heading and the usual details questions still answer.
+    allowed = {story["qa_id"]}
+    for message in ("tell me more", "Tell me more", "Hello, can I get more info on this?"):
+        found = approved_qa.match(message, {}, allowed_qa_ids=allowed, product_fallback=True)
+        assert found and found.entry.qa_id == story["qa_id"], message
+    # Variations the client adds still match everywhere.
+    _publish_edit = approved_qa.preview({"qa_id": story["qa_id"], "aliases": ["Kali pujo story telling details"]})
+    approved_qa.publish({"qa_id": story["qa_id"], "aliases": ["Kali pujo story telling details"],
+                         "preview_token": _publish_edit["preview_token"]}, "test")
+    assert approved_qa.match("Kali pujo story telling details", {}).entry.qa_id == story["qa_id"]
+    # Another category can reuse the same heading.
+    approved_qa.save_context("Gurgaon story telling sessions", "test")
+    other = _publish("tell me more", "GURGAON STORY DETAILS", "gurgaon_story_telling_sessions")
+    assert other["question"] == "tell me more"
+
+
+def test_general_heading_still_matches_everywhere(store):
+    general = _publish("Do you run story sessions?", "GENERAL STORY ANSWER", "general")
+    assert approved_qa.match("Do you run story sessions?", {}).entry.qa_id == general["qa_id"]
+    # And a category heading cannot be published as wording that already belongs to it.
+    approved_qa.save_context("Kolkata story telling sessions", "test")
+    with pytest.raises(ValueError, match="already matches"):
+        approved_qa.preview(dict(question="Story heading", answer="X", context="kolkata_story_telling_sessions",
+                                 aliases=["Do you run story sessions?"]))

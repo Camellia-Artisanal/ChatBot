@@ -583,11 +583,13 @@ def decode_topic(row: Dict[str, Any]) -> Dict[str, Any]:
 def route_for_inbound(
     *, ad_id: Optional[str], media_id: Optional[str], shortcode: Optional[str] = None,
     post_media_id: Optional[str] = None, source_type: Optional[str] = None,
+    live_lookup: bool = True,
 ) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
     """
     For explicitly typed source events, the deterministic source identifier is
     checked first (Story media ID, Reel shortcode, or paired Post media ID).
-    Legacy callers retain the historical ad-first precedence.
+    Legacy callers retain the historical ad-first precedence. The webhook
+    handler passes live_lookup=False: it must not wait on Meta.
     """
     from camellia.database import db
     from camellia.instagram_source_qa import route_contract as source_contract
@@ -630,7 +632,7 @@ def route_for_inbound(
             }, "legacy_ad_id"
         # No live binding: the ad answers like the exact Post/Reel it promotes.
         from camellia.instagram_ads import inherited_route_for_ad
-        inherited = inherited_route_for_ad(db, str(ad_id))
+        inherited = inherited_route_for_ad(db, str(ad_id), live_lookup=live_lookup)
         if inherited:
             return decode_route(source_contract(db, inherited)), "ad_creative"
     if media_id:

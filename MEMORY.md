@@ -81,6 +81,18 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
 - **Generic source-info copy is an explicit per-route choice.** A Custom Post/Reel may use its own
   description for the strict allowlist of general “tell me more” phrases. Keep specific approved
   answers and explicit handoff triggers higher priority; do not use fuzzy semantic matching here.
+- **A not-yet-synced ad still answers like its mapped Post/Reel.** With no inventory row (or
+  no creative), `instagram_ads.fetch_ad_creative` reads that one ad live from Meta (4 s
+  timeout, same ad account only, cached 10 min) before the unmapped-ad handoff (31 Oct).
+  It blocks, so only the background worker may use it: the async webhook handler passes
+  `live_lookup=False`. A Meta failure is remembered for 30 s, not 10 min.
+- **Native Reel sharing is verified on `INSTAGRAM_ACCOUNT_ID` (webhook ID).** The Instagram
+  Login `/me` ID (`INSTAGRAM_GRAPH_ACCOUNT_ID`) is a different number for the same account;
+  comparing it to `VERIFIED_ACCOUNT_ID` blocked the Reel picker in production (31 Oct).
+- **A client-added answer outside General is matched by its variations, not its Question.**
+  The Question is then a heading (31 Oct: a Kolkata story-telling answer headed "tell me
+  more" answered every bare "tell me more"). Where the answer is ticked on a post/ad its
+  heading still counts. General and built-in answers still match on their Question.
 - **New Approved Q&A wording must not match an existing answer** (`_conflicts`); customers
   rarely type the question text, so pick a distinct label ("Kolkata lunch price").
 - **Weekly savoury menu is published as an image, no parsing.** Dish-level price questions
