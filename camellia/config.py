@@ -208,6 +208,10 @@ class Config:
     # reply path reads. Off by default: it costs a Groq call per unmatched
     # message.
     LLM_TRIAGE_ENABLED: bool = os.getenv("LLM_TRIAGE_ENABLED", "false").lower() in ("true", "1", "t", "yes")
+    # Meaning match for Custom-response variations, in shadow: it changes no
+    # reply and only writes to variation_shadow. Off by default: it costs a
+    # Groq call per handoff on a mapping with saved phrases.
+    VARIATION_SHADOW_ENABLED: bool = os.getenv("VARIATION_SHADOW_ENABLED", "false").lower() in ("true", "1", "t", "yes")
     # Human-gated assisted-resolution drafts. This queue never sends an AI
     # answer by itself; automatic resolution remains explicitly disabled.
     LLM_ASSISTED_RESOLUTION_ENABLED: bool = os.getenv("LLM_ASSISTED_RESOLUTION_ENABLED", "false").lower() in ("true", "1", "t", "yes")

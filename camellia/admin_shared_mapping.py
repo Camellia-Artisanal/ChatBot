@@ -58,6 +58,7 @@ def _id_list(value, label):
 
 def create_router(require_admin):
     router = APIRouter(prefix="/admin/instagram-media")
+    shadow_router = APIRouter()
 
     @router.post("/attach-mapping")
     async def attach_mapping(request: Request, x_admin_key: Optional[str] = Header(None)):
@@ -101,4 +102,15 @@ def create_router(require_admin):
         return {"source_item_id": source["id"] if source else None,
                 "shared_count": database.count_attached_media(routing_id)}
 
+    @shadow_router.get("/admin/variation-shadow")
+    def variation_shadow_report(days: int = 7, limit: int = 100, x_admin_key: Optional[str] = Header(None)):
+        """What meaning match would have sent. Nothing here reached a customer."""
+        require_admin(x_admin_key)
+        report = _db().variation_shadow_report(days=min(max(days, 1), 90), limit=min(max(limit, 1), 500))
+        report["shadow_enabled"] = config.VARIATION_SHADOW_ENABLED
+        if not config.VARIATION_SHADOW_ENABLED and not report["checked"]:
+            report["note"] = "VARIATION_SHADOW_ENABLED is off, so nothing is being checked."
+        return report
+
+    router.routes.extend(shadow_router.routes)
     return router

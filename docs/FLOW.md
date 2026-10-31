@@ -68,6 +68,9 @@ Rules that hold the flow together:
   Deleting the mapping releases its posts for good. Select all writes once, off the event loop,
   and never takes a post another save just attached. A Post/Reel editor sends the
   `expected_updated_at` it opened with: a newer mapping refuses the save (409), so staff reopen it.
+- With `VARIATION_SHADOW_ENABLED`, a message heading for a handoff on a Custom mapping with saved
+  phrases is checked in the background for the same meaning as a phrase. The result goes only to
+  `variation_shadow`, read at `GET /admin/variation-shadow`; it changes no reply.
 - No ad context: generic price questions get `general_price`; nothing mapping-specific leaks.
 - An explicit ADS referral without an ad ID or exact active route clears prior ad/topic
   context and hands off; it cannot fall through to a generic or previous-city answer.
