@@ -201,12 +201,19 @@ def meal_table() -> Dict[str, Dict[str, Any]]:
     return {**standing, **weekly_meal_entries()}
 
 
+# "4 pcs" and "150 g" describe one portion, and "12 nov" or "7 pm" a delivery time;
+# none of them is how many to order.
+MEAL_QUANTITY_RE = (r'\b(\d+)\b(?!\s*(?:kg|g|gm|gms|grams?|pcs?|pieces?|am|pm|'
+                    r'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|'
+                    r'aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b)')
+
+
 class OrderCalculator:
     """Parses order intent from chat text and generates itemized price breakdowns."""
 
     def _build_meal_item(self, meal_info: Dict[str, Any], text_lower: str) -> Dict[str, Any]:
         qty = 1
-        qty_match = re.search(r'\b(\d+)\s*(?:box|boxes|pack|packs|portion|portions|plate|plates)?\b', text_lower)
+        qty_match = re.search(MEAL_QUANTITY_RE, text_lower)
         if qty_match and qty_match.group(1):
             try:
                 parsed_q = int(qty_match.group(1))
@@ -274,7 +281,7 @@ class OrderCalculator:
         for meal_key, meal_info in sorted(meal_table().items(), key=lambda x: len(x[0]), reverse=True):
             if re.search(r'\b' + re.escape(meal_key) + r'\b', text_lower):
                 qty = 1
-                qty_match = re.search(r'\b(\d+)\s*(?:box|boxes|pack|packs|portion|portions|plate|plates)?\b', text_lower)
+                qty_match = re.search(MEAL_QUANTITY_RE, text_lower)
                 if qty_match and qty_match.group(1):
                     try:
                         parsed_q = int(qty_match.group(1))

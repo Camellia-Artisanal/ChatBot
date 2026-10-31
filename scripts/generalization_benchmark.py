@@ -197,7 +197,7 @@ def cases():
         ("Does Jolbhora contain almonds and cashews?", ["contains almonds"]),
         ("Can you deliver in 30 minutes to Mumbai?", ["30 minutes to mumbai", "we deliver to mumbai"]),
         ("What time do you close on Sundays?", ["sunday"]),
-        ("Do you have a mango sondesh for ₹100?", [r"₹100"]),
+        ("Do you have a mango sondesh for ₹100?", [r"₹100\b"]),
         ("Is your kitchen halal certified?", ["halal certified"]),
         ("Can you make it vegan?", ["is vegan", "vegan option", "we can make it vegan"]),
     ]
@@ -314,7 +314,7 @@ def evaluate(mode):
                     for phrase in turn["forbidden"]:
                         pattern = phrase.lower()
                         found = (
-                            re.search(pattern, lowered) if pattern.endswith(r"")
+                            re.search(pattern, lowered) if pattern.endswith(r"\b")
                             else pattern in lowered
                         )
                         if found:

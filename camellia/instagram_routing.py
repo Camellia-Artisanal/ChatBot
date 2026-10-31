@@ -656,7 +656,8 @@ def route_for_inbound(
         if route:
             return decode_route(source_contract(db, route)), "shared_media_url"
     if source_type == "post" and post_media_id:
-        route = db.find_shared_post_route(str(post_media_id))
+        route = (db.find_shared_post_route(str(post_media_id))
+                 or db.find_attached_media_route(media_id=str(post_media_id)))
         if route:
             return decode_route(source_contract(db, route)), "shared_post_media_id"
     if ad_id:

@@ -43,6 +43,13 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
   copy, recreate triggers) — see `instagram_source_qa.initialize`.
 - `facts["order_draft"]` always exists with `quantity: 1`, so it is always truthy (31 Oct: this
   silently blocked every Instagram assisted suggestion). Count filled slots, never its presence.
+- `.env` loads with `override=True`, so an env var set before import does not win: `DB_PATH` stays
+  `/app/var/camellia.db`, which on Windows is the local `C:\app\var`. A throwaway script must run
+  from a copy with no `.env`, or it writes to that store (31 Oct).
+- Never record `x_admin_key` as an audit name; use `_admin_actor()` (31 Oct: the raw key reached
+  `reviewed_by`, `started_by`, `removed_by`).
+- A new table holding customer words or identity must join `_CUSTOMER_HISTORY_TABLES` and
+  `delete_user_data`, or /privacy's retention and erasure promises stop being true (31 Oct).
 - `<dialog>` elements draw above any page overlay. Opening a `display:flex` popup from inside
   a dialog hides it behind the dialog — close/park the dialog first.
 
@@ -111,7 +118,8 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
   go to the manager.
 - **No current weekly menu means silence only for a weekly-menu browse request.** Do not
   send stale menu content or create a handoff for that request; keep non-menu questions
-  on their existing answer/handoff paths.
+  on their existing answer/handoff paths. Owner decision (31 Oct): this silence also applies
+  to a customer from an unmapped ad.
 - **The four category lists stay separate; the Categories tab only shows them together.**
   Topics, Menu categories, Customer message topics and Q&A categories each drive different
   behaviour, so a shared list could send one city's answer to another. Built-in customer

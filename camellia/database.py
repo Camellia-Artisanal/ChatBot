@@ -1,6 +1,7 @@
 import os
 import re
 import sqlite3
+import hashlib
 import json
 import time
 from contextlib import nullcontext
@@ -3350,12 +3351,13 @@ class Database:
                 """
                 SELECT * FROM instagram_source_routes
                 WHERE active=1 AND archived_at IS NULL
-                AND ((source_type='post' AND (media_id=? OR routing_id IN (
-                        SELECT routing_id FROM instagram_post_pairings
-                        WHERE status='bound' AND bound_media_id=?)
-                    OR media_id IN (
+                AND ((source_type='post' AND (media_id=? OR media_id IN (
                         SELECT parent_media_id FROM instagram_media_children
                         WHERE child_media_id=?)))
+                  -- A photo Post sharing a Reel's mapping pairs against that Reel's route.
+                  OR routing_id IN (
+                    SELECT routing_id FROM instagram_post_pairings
+                    WHERE status='bound' AND bound_media_id=?)
                   -- An ad tap can arrive as a share of the ad's own creative
                   -- with no referral; it inherits that ad's exact binding.
                   OR routing_id IN (
@@ -5810,6 +5812,15 @@ class Database:
             row = conn.execute("SELECT url FROM whatsapp_short_links WHERE code=?", (code,)).fetchone()
         return row["url"] if row else None
 
+    _CUSTOMER_HISTORY_TABLES = (
+        ("message_route_audit", "timestamp"), ("triage_shadow", "timestamp"),
+        ("router_shadow", "timestamp"), ("rag_audit_logs", "timestamp"),
+        ("assisted_resolution_suggestions", "created_at"), ("auto_resolve_decisions", "created_at"),
+        ("instagram_pending_media_events", "created_at"), ("instagram_customer_identities", "updated_at"),
+    )
+    _HANDOFF_CLOSED = ("(status IN ('RESOLVED', 'EXPIRED', 'RESUMED') "
+                       "OR (expires_at IS NOT NULL AND expires_at <= CURRENT_TIMESTAMP))")
+
     def purge_expired_data(self, retention_days: int = None) -> Dict[str, int]:
         """
         Deletes conversations, escalations and sessions older than the retention
@@ -5848,6 +5859,20 @@ class Database:
             cursor.execute("DELETE FROM whatsapp_short_links WHERE " + older_than("created_at"), (cutoff,))
             cursor.execute(f"DELETE FROM sessions WHERE {older_than('updated_at')}", (cutoff,))
             removed_sessions = cursor.rowcount
+            # Every other table holding customer words or identity, so the
+            # window promised on /privacy is true of all of them.
+            for table, column in self._CUSTOMER_HISTORY_TABLES:
+                cursor.execute(f"DELETE FROM {table} WHERE {older_than(column)}", (cutoff,))
+            # An open handoff still mutes this customer, so only closed ones go.
+            cursor.execute(
+                "DELETE FROM admin_handoff_views WHERE handoff_ref IN (SELECT handoff_ref FROM "
+                f"cross_channel_handoffs WHERE {older_than('created_at')} AND {self._HANDOFF_CLOSED})",
+                (cutoff,),
+            )
+            cursor.execute(
+                f"DELETE FROM cross_channel_handoffs WHERE {older_than('created_at')} AND {self._HANDOFF_CLOSED}",
+                (cutoff,),
+            )
             conn.commit()
 
         return {
@@ -5855,6 +5880,25 @@ class Database:
             "escalations": max(removed_escalations, 0),
             "sessions": max(removed_sessions, 0),
         }
+
+    def scrub_admin_key_from_audit(self, key: str) -> int:
+        """Rows written before _admin_actor stored the raw API key as the actor's name."""
+        if not key:
+            return 0
+        columns = {"updated_by", "changed_by", "deleted_by", "uploaded_by",
+                   "removed_by", "started_by", "reviewed_by"}
+        scrubbed = 0
+        with self.get_connection() as conn:
+            tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+            for table in (row["name"] for row in tables):
+                names = {row["name"] for row in conn.execute(f'PRAGMA table_info("{table}")')}
+                for column in names & columns:
+                    scrubbed += conn.execute(
+                        f'UPDATE "{table}" SET {column} = \'admin-api\' WHERE {column} IN (?, ?)',
+                        (key, key[:120]),
+                    ).rowcount
+            conn.commit()
+        return scrubbed
 
     def delete_user_data(self, user_id: str) -> Dict[str, int]:
         """
@@ -5866,6 +5910,27 @@ class Database:
             cursor.execute("DELETE FROM home_table_reel_receipts WHERE recipient_id = ?", (user_id,))
             cursor.execute("DELETE FROM instagram_outbound_jobs WHERE recipient_id = ?", (user_id,))
             cursor.execute("DELETE FROM instagram_inbound_jobs WHERE sender_id = ?", (user_id,))
+            cursor.execute("DELETE FROM instagram_pending_media_events WHERE sender_id = ?", (user_id,))
+            cursor.execute("DELETE FROM instagram_customer_identities WHERE customer_external_id = ?", (user_id,))
+            cursor.execute("UPDATE instagram_story_sources SET last_sender_id = NULL WHERE last_sender_id = ?", (user_id,))
+            for table in ("message_route_audit", "triage_shadow", "assisted_resolution_suggestions",
+                          "auto_resolve_decisions", "active_conversation_sessions"):
+                cursor.execute(f"DELETE FROM {table} WHERE user_id = ?", (user_id,))
+            # Same hash as app._audit_recipient_id.
+            cursor.execute(
+                "DELETE FROM instagram_outbound_audit WHERE recipient_id = ?",
+                ("sha256:" + hashlib.sha256(str(user_id).encode("utf-8")).hexdigest()[:20],),
+            )
+            # These logs carry no customer ID, so match the customer's own messages;
+            # this must run while the conversations still exist. Approved candidates
+            # are client knowledge by now, so only pending drafts go.
+            own_messages = "user_message IN (SELECT user_message FROM conversations WHERE user_id = ?)"
+            cursor.execute(f"DELETE FROM router_shadow WHERE {own_messages}", (user_id,))
+            cursor.execute(f"DELETE FROM rag_audit_logs WHERE {own_messages}", (user_id,))
+            cursor.execute(
+                f"DELETE FROM candidate_templates WHERE status = 'PENDING_APPROVAL' AND {own_messages}",
+                (user_id,),
+            )
             cursor.execute("DELETE FROM conversations WHERE user_id = ?", (user_id,))
             removed_conversations = cursor.rowcount
             cursor.execute(
@@ -5885,6 +5950,11 @@ class Database:
                 placeholders = ",".join("?" for _ in handoff_refs)
                 cursor.execute(
                     f"DELETE FROM admin_handoff_views WHERE handoff_ref IN ({placeholders})",
+                    tuple(handoff_refs),
+                )
+                # A short link's URL carries the customer's order.
+                cursor.execute(
+                    f"DELETE FROM whatsapp_short_links WHERE handoff_ref IN ({placeholders})",
                     tuple(handoff_refs),
                 )
             cursor.execute("DELETE FROM cross_channel_handoffs WHERE source_user_id = ?", (user_id,))

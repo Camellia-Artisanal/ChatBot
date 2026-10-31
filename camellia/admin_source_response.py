@@ -69,7 +69,8 @@ async function initSourceResponse(prefix, route) {
  try {
   const response=await fetch('/admin/instagram-routes/approved-qa-options',{headers:getAuthHeaders()});
   if(!response.ok)throw new Error('Effective Approved Q&A is unavailable.');
-  const data=await response.json(); if(sourceResponseState[prefix]!==state)return;
+  // The shared-mapping panel may have replaced this form while the list loaded.
+  const data=await response.json(); if(sourceResponseState[prefix]!==state||!document.getElementById(prefix+'ApprovedQaId'))return;
   state.records=data.records || []; select.disabled=false;
   {
    state.contexts=data.contexts||Array.from(new Set(['general',...state.records.map(r=>r.context)])).map(value=>({value,label:value}));
@@ -78,7 +79,7 @@ async function initSourceResponse(prefix, route) {
   }
   filterSourceQa(prefix);
  } catch(error) {
-  if(sourceResponseState[prefix]!==state)return;
+  if(sourceResponseState[prefix]!==state||!document.getElementById(prefix+'ApprovedQaId'))return;
   select.replaceChildren(new Option('Approved Q&A unavailable',''));
   document.getElementById(prefix+'QaPreview').textContent=error.message;
  }
@@ -117,11 +118,13 @@ async function suggestVariations(prefix,box,button,list){
 const sharedPick={};
 function mediaOwnsRoute(item,route){return route.media_id===item.instagram_media_id||route.canonical_url===item.permalink||Boolean(item.shortcode&&route.shortcode===item.shortcode);}
 async function initSharedMapping(item){
- const route=item.mapping_route,box=document.getElementById('contentDetailsActions');if(!route||!box)return;
+ const route=item.mapping_route,box=document.getElementById('contentDetailsActions');sharedPick.openId=item.id;if(!route||!box)return;
  const response=await fetch('/admin/instagram-media/shared-mapping/'+Number(route.routing_id),{headers:getAuthHeaders()});
- const shared=await response.json().catch(()=>({}));if(!response.ok)return;
+ const shared=await response.json().catch(()=>({}));if(!response.ok||sharedPick.openId!==item.id)return;
  if(!mediaOwnsRoute(item,route)){
-  box.innerHTML='<div class="source-map-form"><div class="source-map-field"><b>This '+escapeHtml(item.source_type)+' uses a shared mapping</b><p class="source-map-help">It shares its reply, menu and phrases with '+Number(shared.shared_count)+' posts. Edit the shared mapping once and all of them change.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn-primary" type="button" id="sharedMappingEdit">Edit shared mapping</button><button class="btn-secondary" type="button" id="sharedMappingStop">Stop sharing</button></div><p id="sharedMappingNote" role="status"></p></div></div>';
+  // A photo Post's DM share has its own ID, so each shared Post still pairs once.
+  const pair=item.source_type==='post'?'<button class="btn-secondary" type="button" onclick="pairInstagramPost('+Number(route.routing_id)+')">Pair exact shared Post</button>':'';
+  box.innerHTML='<div class="source-map-form"><div class="source-map-field"><b>This '+escapeHtml(item.source_type)+' uses a shared mapping</b><p class="source-map-help">It shares its reply, menu and phrases with '+Number(shared.shared_count)+' posts. Edit the shared mapping once and all of them change.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn-primary" type="button" id="sharedMappingEdit">Edit shared mapping</button><button class="btn-secondary" type="button" id="sharedMappingStop">Stop sharing</button>'+pair+'</div><div id="igPairingStatus-'+Number(route.routing_id)+'"></div><p id="sharedMappingNote" role="status"></p></div></div>';
   document.getElementById('sharedMappingEdit').onclick=()=>openSharedSource(shared.source_item_id);
   document.getElementById('sharedMappingStop').onclick=()=>stopSharingMapping(item);
   return;

@@ -15,13 +15,13 @@ def _db():
     return db
 
 
-def _matching_media(database, search, source_type):
+def _matching_media(database, search, source_type, mapping_status=None):
     """Every card the gallery would list, so unverified media can never be attached."""
     page, items = 1, []
     while True:
         rows, total = database.list_instagram_media(
             page=page, page_size=100, search=search, source_type=source_type,
-            owner_account_id=config.instagram_media_owner_id(),
+            mapping_status=mapping_status, owner_account_id=config.instagram_media_owner_id(),
         )
         items.extend(rows)
         if not rows or len(items) >= total:
@@ -35,7 +35,8 @@ def attach(database, routing_id, *, item_ids=None, excluded_ids=(), search=None,
         raise HTTPException(404, "Choose a Post or Reel that has its own mapping.")
     wanted = None if item_ids is None else set(item_ids)
     attached, already, skipped = 0, 0, 0
-    for item in _matching_media(database, search, source_type):
+    # Select all covers what the picker counted, so mapped posts are not reported as skipped.
+    for item in _matching_media(database, search, source_type, "unmapped" if wanted is None else None):
         if item["id"] in excluded_ids or (wanted is not None and item["id"] not in wanted):
             continue
         if item.get("mapping_route_id") == routing_id:

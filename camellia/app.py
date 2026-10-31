@@ -293,6 +293,12 @@ async def lifespan(app: FastAPI):
     if config.ADMIN_API_KEY:
         log.info("Machine admin API authentication is configured separately from browser sessions.")
     try:
+        scrubbed = db.scrub_admin_key_from_audit((config.ADMIN_API_KEY or "").strip())
+        if scrubbed:
+            log.warning("Removed the admin API key from %s stored audit names; rotate the key.", scrubbed)
+    except Exception as exc:
+        log.warning("Could not check audit names for the admin API key: %s", type(exc).__name__)
+    try:
         removed = db.purge_expired_data()
         if any(removed.values()):
             log.info(
@@ -395,6 +401,9 @@ app = FastAPI(
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+# Most Admin routes call request.json() bare; an empty or broken body is the caller's error.
+app.add_exception_handler(json.JSONDecodeError, lambda _request, _exc: JSONResponse(
+    status_code=400, content={"detail": "Send a valid JSON body."}))
 
 
 def _admin_maintenance_response() -> HTMLResponse:
@@ -553,6 +562,12 @@ def require_admin(provided_key: Optional[str] = None, provided_pin: Optional[str
     if _admin_context.get() and _admin_context.get().get("kind") == "session":
         return
     raise HTTPException(status_code=403, detail="Authentication required.")
+
+
+def _admin_actor() -> str:
+    """Who to record for an admin action. Never store the API credential as an identity."""
+    return str((_admin_context.get() or {}).get("username") or "admin-api")[:120]
+
 
 from camellia.admin_approved_qa import create_router as create_approved_qa_router
 app.router.routes.extend(create_approved_qa_router(
@@ -1670,8 +1685,9 @@ def _handle_shared_attachment(
                 post_media_id=post_media_id,
                 source_type="reel" if reel_identity else "post",
             )
-            if not route and post_media_id:
-                _establish_shared_post_context(sender_id, post_media_id)
+            if not route and post_media_id and _establish_shared_post_context(sender_id, post_media_id):
+                # Only a route this share just established: an older session
+                # route says nothing about this post.
                 route = session_memory.get_facts(sender_id, "instagram").get("source_route")
             if not route:
                 _mark_unmapped_shared_attachment(sender_id)
@@ -2230,12 +2246,18 @@ def _process_instagram_inbound_jobs(*, job_id: Optional[int] = None) -> None:
             finally:
                 _instagram_job_context.reset(token)
             db.complete_instagram_inbound_job(int(job["id"]), success=True)
-            _process_instagram_outbound_jobs(inbound_job_id=int(job["id"]))
         except Exception as exc:
             db.complete_instagram_inbound_job(
                 int(job["id"]), success=False, error=type(exc).__name__,
             )
             log.error("Instagram inbound job %s will retry after %s.", job["id"], type(exc).__name__)
+            continue
+        # The answer is finished, so a send problem must not reopen this job and
+        # answer the customer twice; the job loop picks these sends up again.
+        try:
+            _process_instagram_outbound_jobs(inbound_job_id=int(job["id"]))
+        except Exception as exc:
+            log.warning("Instagram outbound drain for job %s failed: %s", job["id"], type(exc).__name__)
 
 
 async def _instagram_job_loop(stop_event: asyncio.Event) -> None:
@@ -3796,6 +3818,8 @@ async def admin_login(request: Request):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid login request.")
 
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Invalid login request.")
     username = str(body.get("username") or "").strip()
     password = str(body.get("password") or "")
     retry_after = _admin_login_rate_limit(request, username)
@@ -4582,7 +4606,7 @@ async def set_instagram_route_preview(
         handle.write(data)
     public_path = f"/uploads/instagram-previews/{filename}"
     old = db.save_instagram_route_preview(
-        routing_id, public_path, content_type, x_admin_key or x_admin_pin or "admin",
+        routing_id, public_path, content_type, _admin_actor(),
     )
     if old:
         _remove_instagram_preview_file(old.get("image_path"))
@@ -4710,7 +4734,7 @@ def delete_instagram_route(
     """
     require_admin(x_admin_key, x_admin_pin)
     old_preview = db.get_instagram_route_preview(routing_id)
-    if not db.delete_instagram_source_route(routing_id, removed_by=x_admin_key or "admin"):
+    if not db.delete_instagram_source_route(routing_id, removed_by=_admin_actor()):
         raise HTTPException(status_code=404, detail="Routing record not found.")
     if old_preview:
         db.delete_instagram_route_preview(routing_id)
@@ -4739,7 +4763,7 @@ def start_instagram_post_pairing(
     if not db.get_instagram_source_route(routing_id):
         raise HTTPException(status_code=404, detail="Routing record not found.")
     pairing = db.start_post_pairing(
-        routing_id, config.INSTAGRAM_POST_PAIRING_TTL_SECONDS, started_by=x_admin_key or "admin",
+        routing_id, config.INSTAGRAM_POST_PAIRING_TTL_SECONDS, started_by=_admin_actor(),
     )
     return {"status": "success", "pairing": pairing, "ttl_seconds": config.INSTAGRAM_POST_PAIRING_TTL_SECONDS}
 
@@ -5346,7 +5370,7 @@ async def set_auto_resolve_category_controls(request: Request, x_admin_key: Opti
 
 
 def _assisted_reviewer(x_admin_key: Optional[str], x_admin_pin: Optional[str]) -> str:
-    return (x_admin_key or x_admin_pin or "admin")[:120]
+    return _admin_actor()
 
 
 def _send_assisted_answer(suggestion: Dict[str, Any], answer: str) -> None:
@@ -7375,7 +7399,7 @@ def permanently_delete_menu_catalogue_entry(
     """Irreversibly delete a menu and every local asset/version it owns."""
     require_admin(x_admin_key, x_admin_pin)
     try:
-        deleted = menu_catalogue.permanently_delete_menu(menu_id, deleted_by=x_admin_key or "admin")
+        deleted = menu_catalogue.permanently_delete_menu(menu_id, deleted_by=_admin_actor())
     except KeyError:
         raise HTTPException(status_code=404, detail=f"No menu '{menu_id}'")
     except menu_catalogue.MenuCatalogueInUseError as exc:
@@ -7588,7 +7612,7 @@ async def save_menu_draft(menu_key: str, request: Request, x_admin_key: Optional
         raise HTTPException(status_code=400, detail="Invalid JSON body")
     if not isinstance(body.get("items"), list):
         raise HTTPException(status_code=400, detail="'items' must be a list")
-    admin_identity = x_admin_key or "admin"
+    admin_identity = _admin_actor()
     try:
         result = menu_manager.save_draft(menu_key, body["items"], updated_by=admin_identity)
     except KeyError:
@@ -7621,7 +7645,7 @@ def preview_menu(menu_key: str, x_admin_key: Optional[str] = Header(None), x_adm
 async def publish_menu(menu_key: str, request: Request, x_admin_key: Optional[str] = Header(None), x_admin_pin: Optional[str] = Header(None)):
     require_admin(x_admin_key, x_admin_pin)
     raise HTTPException(status_code=409, detail="Use Review Menu → Approve & Publish.")
-    admin_identity = x_admin_key or "admin"
+    admin_identity = _admin_actor()
     raw_items = None
     try:
         body = await request.json()
