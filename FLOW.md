@@ -85,6 +85,8 @@ routing warnings.
 ```
 Approved Q&A → Edit / + Add → Preview / Test (dry run, token) → Publish Approved Q&A
   _candidate() validates → _conflicts() refuses wording that already matches another answer
+  (a client-added answer outside General: its Question is a heading only, so it is neither
+  matched with no post/ad context nor checked for clashes; its variations are)
   _save() writes approved_qa_overrides + a version row
 Category / context → Manage → add / rename / delete client categories (built-ins locked)
 ```

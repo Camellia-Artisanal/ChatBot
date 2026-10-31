@@ -87,6 +87,10 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
 - **Native Reel sharing is verified on `INSTAGRAM_ACCOUNT_ID` (webhook ID).** The Instagram
   Login `/me` ID (`INSTAGRAM_GRAPH_ACCOUNT_ID`) is a different number for the same account;
   comparing it to `VERIFIED_ACCOUNT_ID` blocked the Reel picker in production (31 Oct).
+- **A client-added answer outside General is matched by its variations, not its Question.**
+  The Question is then a heading (31 Oct: a Kolkata story-telling answer headed "tell me
+  more" answered every bare "tell me more"). Where the answer is ticked on a post/ad its
+  heading still counts. General and built-in answers still match on their Question.
 - **New Approved Q&A wording must not match an existing answer** (`_conflicts`); customers
   rarely type the question text, so pick a distinct label ("Kolkata lunch price").
 - **Weekly savoury menu is published as an image, no parsing.** Dish-level price questions
