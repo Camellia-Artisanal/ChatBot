@@ -1,274 +1,148 @@
-# Camellia Artisanal — Instagram AI with manual WhatsApp handoff
+# Camellia Artisanal Instagram Assistant
 
-![Python Version](https://img.shields.io/badge/Python-3.11%2B-blue.svg)
-![Framework](https://img.shields.io/badge/FastAPI-0.110.0-green.svg)
-![Meta API](https://img.shields.io/badge/Meta%20Graph%20API-v25.0-0084FF.svg)
-![Database](https://img.shields.io/badge/SQLite-3.0-lightgrey.svg)
+An Instagram DM assistant for **Camellia Artisanal**, a Bengali food and sondesh brand.
+It answers customers with wording the business has approved, sends the right menu card,
+understands which ad, post, reel or story a customer came from, and hands anything it
+cannot answer safely to a person.
+
+Staff run it from a web Admin portal, without touching code.
+
+![Python](https://img.shields.io/badge/Python-3.11-blue.svg)
+![FastAPI](https://img.shields.io/badge/FastAPI-backend-green.svg)
+![SQLite](https://img.shields.io/badge/SQLite-storage-lightgrey.svg)
+![Meta Graph API](https://img.shields.io/badge/Meta%20Graph%20API-v25.0-0084FF.svg)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-Production-ready customer auto-response engine for **Camellia Artisanal** (a gourmet sweets & cloud kitchen brand in Delhi NCR).
+## How it works
 
-Built to handle Instagram conversations using approved answers and eligible
-menu assets, with durable human handoffs for unsupported or sensitive requests.
-Current release operations: [production runbook](docs/PRODUCTION_RUNBOOK.md).
-
----
-
-## 🚀 Key Business Features & Architecture
-
-### 1. 🛡️ Instagram Ad-Gate Filter (PRD Requirement #4)
-- **Ad-Originated DMs Only**: Checks Meta Webhook referral data (`messaging[0].referral.source == 'ADS'`).
-- **Targeted Auto-Replies**: Responds *only* to incoming messages from paid Instagram Ads.
-- **Organic DM Protection**: Organic (non-ad) DMs pass directly to the inbox for manual staff replies.
-
-> The production channel policy keeps Instagram AI enabled. Whether organic
-> Instagram DMs are answered is controlled by the explicitly configured
-> `BYPASS_AD_GATE` environment setting; verify the live setting before relying
-> on this behavior. See the [production runbook](docs/PRODUCTION_RUNBOOK.md).
-
-### 2. 🖼️ Visual Menu Photo Card Engine
-- Delivers high-resolution menu photo cards directly in Instagram DMs instead of long text lists.
-- **Reviewed Weekly Menu Lifecycle**: Only eligible current reviewed/dated
-  menu assets may be sent. Undated static From Friday/Till Thursday images are
-  not a current-menu fallback. Expired/upcoming menus are not current authority.
-- **Sondesh Collections**:
-  - Sends `Signature Sondesh.jpeg` or `AAMAR MISHTI.jpeg` for Sondesh price inquiries.
-
-### 3. 🎯 Canonical-first response pipeline
-- Resolves deterministic and canonical approved knowledge before controlled structured NLU and semantic/RAG assistance.
-- Executes only approved templates and quarantines unconfirmed business facts, including dispatch-time claims.
-- Covers pricing, weekly menu items, dietary preferences, delivery boundaries, order rules, and payment policies from approved sources.
-
-### 4. 🚨 Human Escalation Pipeline (PRD Requirement #4b)
-- **Out-of-Syllabus Protection**: Unmatched customer queries are never answered with guesses.
-- **Sensitive Trigger Guard**: Queries containing sensitive keywords (`refund`, `complaint`, `cancel order`, `custom order`, `bulk order`, `payment link`) immediately trigger human escalation.
-- **Manual Handoff**: Stores durable conversation/handoff state in SQLite.
-  Generic unsupported handoffs do not automatically include WhatsApp links;
-  approved purchase/order flows may include a manual `wa.me` continuation.
-
-### 5. 🔐 Kitchen & Menu Admin Portal (`/admin` / `/admin/dashboard`)
-- **Secure Admin Authentication**: Browser access uses `ADMIN_USERNAME` + an Argon2id `ADMIN_PASSWORD_HASH`, durable rate limiting, CSRF-protected server sessions, and logout revocation. `ADMIN_API_KEY` remains a separate machine credential; legacy `ADMIN_PIN` is not accepted.
-- **📋 Paste Menu Card Parser**: Extracts dish names, descriptions, weights, and prices from flyer notes or dish lists, automatically categorizing items as Veg or Non-Veg.
-- **📸 Flyer Photo & Graphic OCR**: Scans printed menu photos or Instagram flyers with a Groq vision model, using the same key the bot already needs for replies.
-- **Human Review Required**: Extraction creates a draft, not customer authority.
-  Review and explicit approval/publication use the existing Menu workspace;
-  legacy sync/reset publication paths are disabled.
-- **📈 Analytics & Escalations**: Tracks real-time match rates, query totals, and unresolved human escalations.
-
-### 6. 💬 Browser-Based Live Chat Tester (`/chat`)
-- Built-in Instagram-style web chat interface for local testing in your browser (`http://localhost:8000/chat`); it is disabled in production. WhatsApp is not a tester channel.
-- Interactive memory badges, channel switcher, and direct link to the Kitchen Admin Portal.
-
----
-
-## 🛠️ Technology Stack
-
-- **Backend Framework**: Python 3.11+, FastAPI, Uvicorn
-- **Deterministic Matcher & Parser**: Python Regex & Rule-Based Matchers ($0 Operating Cost)
-- **AI assistance**: Groq-compatible provider using `openai/gpt-oss-120b` for structured understanding and `openai/gpt-oss-20b` for responder/refinement by default; provider assistance never replaces canonical facts.
-- **HTTP Client**: `httpx` (Meta Instagram Graph API calls)
-- **Database**: SQLite3 (`camellia.db`)
-- **API Standards**: Instagram Graph API v25.0 by default. Verify the configured version before deployment.
-
----
-
-## 📁 Repository Structure
-
+```mermaid
+flowchart LR
+    C["Customer on Instagram"] -->|"DM"| M["Meta webhook"]
+    M --> B["Camellia backend"]
+    B -->|"Approved answer and menu card"| C
+    B -->|"Cannot answer safely"| H["Staff handoff"]
+    H -->|"Staff reply, then Resume AI"| C
+    A["Staff in Admin portal"] -->|"Answers, menus, mappings"| B
 ```
-Camellia.artisal/
-├── main.py                      # Process entrypoint (Docker and Railway)
-├── camellia/                    # Application package
-│   ├── app.py                   # FastAPI app, webhooks & /admin portal
-│   ├── responder.py             # Deterministic Q&A matcher & photo card engine
-│   ├── ad_gate.py               # Instagram Ad-Gate filter
-│   ├── menu_parser.py           # Text & image menu extraction engine
-│   ├── order_calculator.py      # Order draft parsing & receipt totals
-│   ├── rag_fallback.py          # Controlled retrieval over approved sources
-│   ├── ai_responder.py          # Groq refinement / RAG provider
-│   ├── session_memory.py        # Customer facts & conversation state
-│   ├── database.py              # SQLite storage (logs, sessions, escalations)
-│   ├── escalator.py             # Human escalation & alert pipeline
-│   ├── sheet_sync.py            # Retained compatibility parser; no live publication
-│   ├── slang_normalizer.py      # Hinglish / shorthand normalisation
-│   ├── monitoring.py            # Logging, delivery health & reply latency
-│   └── config.py                # Environment variable loader
-├── data/                        # Seed configuration loaded at runtime
-│   ├── menu.json                # Compatibility/read baseline, not current version authority
-│   └── qa_templates.json        # Q&A triggers & template responses
-├── images/                      # Menu photo cards served at /images
-├── tests/                       # Pytest suite (conftest puts the root on sys.path)
-├── pytest.ini                   # Restricts discovery to the committed test suite
-├── scripts/                     # Operational tools, not shipped in the image
-│   ├── validate_schemas.py      # menu.json / qa_templates.json validator
-│   ├── simulate_bot.py          # Interactive CLI simulator
-│   └── generate_pdf.py          # Menu PDF generator
-├── docs/                        # Deployment, evaluation and architecture docs
+
+1. A customer sends a DM. Meta delivers it to a signed webhook.
+2. The message is saved first, so it survives a restart, then processed in the background.
+3. The bot works out the context: which ad, post, reel or story the customer came from.
+4. It picks a reply from approved answers and current menus. AI helps it understand the
+   question, but does not write business facts.
+5. If no safe answer exists, it opens a human handoff and stays quiet until staff resume it.
+
+The full picture, with diagrams, is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Technology
+
+| Layer | Technology | Used for |
+|---|---|---|
+| Backend | Python 3.11, FastAPI, Uvicorn | Webhooks, Admin API, background workers |
+| Frontend | HTML, CSS and plain JavaScript served by FastAPI | Admin portal at `/admin`, local chat tester at `/chat` |
+| Database | SQLite on a persistent volume | Conversations, mappings, answers, menus, handoffs, job queues |
+| AI | Groq API (`openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `qwen/qwen3.8-27b`) | Reading customer intent, grounded fallback, reading menu images |
+| Integrations | Meta Instagram Graph API, Meta Marketing API | Messages, posts, reels, stories, ads |
+| Security | Argon2id, CSRF-protected sessions, signed webhooks, SlowAPI rate limiting | Admin login and webhook trust |
+| Images and PDFs | Pillow, pypdfium2 | Menu uploads |
+| Hosting | Railway, Docker | Production service |
+| Delivery | GitHub Actions, pytest | CI, full test suite, mirror to the client repository |
+
+There is no separate frontend build. No React, no Node, no bundler: the Admin portal ships
+inside the Python app, so one deploy updates everything.
+
+## Main features
+
+- **Approved answers.** Customer wording is sent word for word, in ordered text, image,
+  menu and Reel blocks.
+- **Source-aware replies.** Each ad, post, reel or story can have its own answers.
+  Ads inherit the mapping of the post they promote.
+- **Custom responses with question variations.** Staff list exact customer phrases on a
+  mapping, and those phrases send that mapping's reply.
+- **Menu management.** A catalogue, plus a weekly menu published as an image for seven days.
+- **Human handoff.** Each handoff gets a CAM reference and mutes the bot for that customer
+  until staff press Resume AI or it expires after 72 hours.
+- **Admin portal.** Dashboard, Ads, Posts and Reels, Stories, Approved Q&A, Menus,
+  Categories and chatbot control.
+- **Health reporting.** `GET /health` reports token state, undelivered templates and warnings.
+
+## Repository layout
+
+```text
+.
+├── main.py              Process entry point
+├── camellia/            Application package (backend and Admin portal)
+├── data/                Seed menu and approved Q&A templates
+├── images/              Menu cards served at /images
+├── tests/               Automated test suite
+├── scripts/             Operator and benchmark tools (not shipped in the image)
+├── docs/                All project documentation (start at docs/README.md)
+├── .github/workflows/   CI and client mirror
 ├── Dockerfile, docker-compose.yml, railway.json, Procfile
-├── requirements.txt             # Dependencies list
-└── LICENSE                      # MIT License
+├── requirements.txt, requirements-test.txt
+└── AGENTS.md            Workflow rules for coding agents
 ```
 
-See [docs/architecture.md](docs/architecture.md) for package ownership,
-[docs/PRODUCTION_RUNBOOK.md](docs/PRODUCTION_RUNBOOK.md) for current hosting,
-[docs/CLIENT_HANDOVER.md](docs/CLIENT_HANDOVER.md) for operator handover,
-[docs/PRODUCTION_BACKUP_RECOVERY.md](docs/PRODUCTION_BACKUP_RECOVERY.md) for
-recovery, [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) for monitoring, and
-[docs/DEPENDENCY_MAINTENANCE.md](docs/DEPENDENCY_MAINTENANCE.md) for the
-dependency warning record, and
-[docs/conversation-benchmark.md](docs/conversation-benchmark.md) for quality
-evaluation.
+## Run it locally
 
-> The runtime SQLite database is **not** kept in `data/`. `docker-compose.yml`
-> mounts its persistent volume at `/app/var`, which would otherwise hide the
-> seed JSON baked into the image.
-
----
-
-## ⚡ Quick Start & Installation
-
-### 1. Clone & Set Up Environment
 ```bash
-git clone https://github.com/s7oaib/ChatBOT.git
-cd ChatBOT/Camellia.artisal
 python -m venv venv
-# On Windows:
-venv\Scripts\activate
-# On macOS/Linux:
-source venv/bin/activate
+```
 
+Activate it with `venv\Scripts\activate` on Windows or `source venv/bin/activate` on macOS and Linux.
+
+```bash
 pip install -r requirements.txt
 ```
 
-### 2. Configure Environment Variables
-Set the required environment variables in a local, uncommitted `.env` or in
-the hosting provider's secret manager:
-Fill in your Meta App Credentials:
-```env
-META_VERIFY_TOKEN=your_meta_verify_token
-INSTAGRAM_ACCESS_TOKEN=your_instagram_access_token
-INSTAGRAM_AUTH_MODE=instagram_login
-WHATSAPP_BUSINESS_NUMBER=919800000000
-```
-
-Set `INSTAGRAM_AUTH_MODE=instagram_login` for Instagram Login credentials. The
-legacy Facebook Page-token path is retained only when explicitly configured as
-`INSTAGRAM_AUTH_MODE=legacy_page`; the app never infers the Graph host from a
-token prefix. `INSTAGRAM_PAGE_ID` is used only in legacy page mode.
-
-### 3. Run Server
+Copy `.env.example` to `.env` and fill in your credentials. Then start the server:
 
 ```bash
 uvicorn camellia.app:app --reload --port 8000
 ```
-*(Server runs locally at `http://localhost:8000`)*
 
----
+| Page | Address | Notes |
+|---|---|---|
+| Admin portal | `http://localhost:8000/admin` | Needs `ADMIN_USERNAME` and `ADMIN_PASSWORD_HASH` |
+| Health | `http://localhost:8000/health` | Public, no secrets |
+| Chat tester | `http://localhost:8000/chat` | Local only, needs `ENABLE_WEB_TESTER=true` |
 
-## 💻 Test Web Interface (`/chat`)
-
-The bot comes with a built-in **Interactive Web Chat Tester** available at `/chat`, `/demo`, or `/test`. It is a local-only diagnostic surface for testing approved responses, menu image cards, channel policy, and safe fallback behavior without requiring live Meta delivery.
-
-> **Off by default.** The tester writes real conversation and durable handoff
-> state, so it returns `404` unless `ENABLE_WEB_TESTER=true` is set. Enable it
-> in isolated local development only — never on a public domain.
-
-### Accessing the Web Interface
-
-Start your server in terminal:
-```bash
-ENABLE_WEB_TESTER=true uvicorn camellia.app:app --port 8000
-```
-
-Then open the Web Chat Interface in your browser:
-- [http://localhost:8000/chat](http://localhost:8000/chat) *(or `http://localhost:8000/demo`)*
-
----
-
-### Features of the Web Chat Interface
-
-> HISTORICAL ILLUSTRATION — the wireframe/preset copy below is not approved
-> business knowledge or proof of current UI/weekly-menu authority. Use current
-> automated tests and human-approved menu versions; never copy example prices.
-
-```text
- ┌────────────────────────────────────────────────────────────────────────┐
- │ Camellia Artisanal — Web Bot Tester                                 │
- ├────────────────────────────────────────────────────────────────────────┤
- │ Channel Mode: [ 📢 Instagram Ad DM ]  [ 🛑 Instagram Organic ] [ 🟢 WA ]│
- ├────────────────────────────────────────────────────────────────────────┤
- │ Quick Test Chips:                                                      │
- │ [ 🍬 Sondesh Prices ] [ 🥬 Weekly Menu ] [ 🚚 Delivery Area ]          │
- │ [ 🧠 Safe AI Fallback ] [ 🚫 Out-of-Syllabus ] [ 🚨 Refund Escalation ]│
- ├────────────────────────────────────────────────────────────────────────┤
- │ [Bot]: 👋 Hi! Welcome to Camellia Artisanal.                           │
- │ [User]: How much is Sondesh?                                           │
- │ [Bot]: Our artisanal Sondesh starts at ₹450 per box.                  │
- │        📷 [Image Card: Signature Sondesh.jpeg]                        │
- └────────────────────────────────────────────────────────────────────────┘
-```
-
-1. **Channel Mode Selectors**:
-   - **📢 Instagram Ad DM (`instagram_ad`)**: Simulates user entering via a paid Instagram Ad referral (`referral.source == 'ADS'`). Generates auto-replies + high-resolution Menu Photo Cards.
-   - **🛑 Instagram Organic DM (`instagram_organic`)**: Simulates non-ad organic DMs. Tests the **Ad-Gate Filter**, displaying:
-     `🛑 [AD-GATE BLOCKED]: This is an organic (non-ad) DM. The bot does not auto-reply to organic DMs. Message sits in Inbox for human reply.`
-   - **🟢 WhatsApp Business**: Not simulated here; customers reach a human through the generated `wa.me` handoff link.
-
-2. **Preset Quick Test Chips**:
-   - **🍬 Sondesh Prices**: Triggers Sondesh pricing matrix & dispatches `Signature Sondesh.jpeg` or `AAMAR MISHTI.jpeg`.
-   - **🥬 Weekly Veg Menu**: Triggers dynamic day-of-week menu logic (`Till Thursday.jpeg` vs `From Friday.jpeg`).
-   - **🚚 Delivery Areas**: Tests Delhi NCR coverage rules vs outside city notifications.
-   - **🧠 Safe AI Fallback**: Exercises the controlled provider-assistance path; deterministic approved answers remain authoritative.
-   - **🚫 Out-of-Syllabus Refusal**: Tests out-of-context queries (`"What is the capital of France?"`), verifying `OUT_OF_CONTEXT` refusal + human escalation.
-   - **🚨 Sensitive Refund Escalation**: Tests complaint/refund guard (`"I want a refund"`), verifying human alert logging.
-
-3. **Live Image Preview Card Render**:
-   - Automatically renders outbound menu JPEG cards (`Till Thursday.jpeg`, `From Friday.jpeg`, `Signature Sondesh.jpeg`, `AAMAR MISHTI.jpeg`) inline in the chat bubble.
-
----
-
-## 📊 Google Spreadsheet Live Menu Sync (`sheet_sync.py`)
-
-> HISTORICAL — the legacy sync/publication instructions below are superseded
-> and must not be executed. Import/extraction does not bypass human review.
-> Use the existing Menu workspace review → approve → publish lifecycle.
-
-Menu items and pricing can be updated directly via a published Google Sheet CSV without modifying any code or JSON files.
-
-### How it works
-
-1. **Maintain Menu in Google Sheets**: Store weekly menu items, categories, descriptions, quantities, and prices in a standard Google Sheet.
-2. **Publish as CSV**: In Google Sheets, select `File -> Share -> Publish to Web -> CSV`.
-3. **Configure URL**: Add your CSV link to `GOOGLE_SHEET_CSV_URL` in `.env`.
-4. **Trigger Live Sync**: Call the `/admin/sync-menu` endpoint via `POST /admin/sync-menu` to hot-reload `menu.json` and memory instantly.
+## Test it
 
 ```bash
-# Example manual sync request
-curl -X POST "http://localhost:8000/admin/sync-menu?csv_url=https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" -H "X-Admin-Key: camellia_admin_secret_key_2026"
+pip install -r requirements-test.txt
 ```
 
----
-
-## 🧪 All Testing Methods Summary
-
-### Method 1: Interactive Browser Web Interface (`/chat`)
-Set `ENABLE_WEB_TESTER=true`, then open **[http://localhost:8000/chat](http://localhost:8000/chat)** in your web browser.
-
-### Method 2: Automated Unit Test Suite (`tests/test_bot.py`)
-Run the current repository suite (the suite is not limited to test_bot.py):
 ```bash
-python -m pytest tests/
+python -m pytest -q tests/test_custom_response_variations.py
 ```
-*Tests:* Ad-Gate inspection, independent Instagram webhook challenges/signatures, manual CAM handoff and deduplication, menu photo card logic, controlled provider fallbacks, refusals, SQLite persistence, retention purge, per-user data deletion, legal pages, tester lockdown, delivery-failure logging, and Topic/source mapping.
 
-### Method 3: Interactive CLI Terminal Simulator (`scripts/simulate_bot.py`)
-Run an interactive terminal chat session:
 ```bash
-python scripts/simulate_bot.py
+python -m pytest -q -n auto -p no:randomly tests
 ```
-Type queries directly in your terminal, toggle Ad vs Non-Ad DMs, and inspect live database analytics and human escalations.
 
----
+Some tests rewrite `data/menu.json`, so restore it after a full run:
 
-## 📄 License
+```bash
+git checkout -- data/menu.json
+```
 
-This project is licensed under the **MIT License** — see the [LICENSE](file:///LICENSE) file for details.
+## Deployment
+
+A push to `main` in `s7oaib/ChatBOT` runs CI and mirrors to `Camellia-Artisanal/ChatBot`.
+The client's Railway project then deploys it. SQLite and uploads live on the Railway volume.
+See the [production runbook](docs/PRODUCTION_RUNBOOK.md).
+
+## Documentation
+
+| Read this | For |
+|---|---|
+| [docs/README.md](docs/README.md) | Index of every document |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design and diagrams |
+| [docs/FLOW.md](docs/FLOW.md) | Detailed message and admin flows |
+| [docs/MEMORY.md](docs/MEMORY.md) | Rules learned from past failures |
+| [docs/CLIENT_HANDOVER.md](docs/CLIENT_HANDOVER.md) | Operator handover |
+
+## License
+
+MIT. See [LICENSE](LICENSE).

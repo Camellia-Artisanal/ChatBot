@@ -1,6 +1,6 @@
 # Camellia repository workflow
 
-- Read `ARCHITECTURE.md` (layers, modules, tables), `FLOW.md` (message and admin flows) and `MEMORY.md` (rules from past failures) before changing code. Keep them current when a change moves a layer, flow or rule.
+- Read `docs/ARCHITECTURE.md` (layers, modules, tables), `docs/FLOW.md` (message and admin flows) and `docs/MEMORY.md` (rules from past failures) before changing code. Keep them current when a change moves a layer, flow or rule.
 - Locate code with the graph: `graphify query "<question>"`, `graphify explain "<symbol>"`; run `graphify update .` after code changes.
 - Full suite (~11 min): `python -m pytest -q -n auto -p no:randomly tests; git checkout -- data/menu.json; python -m pytest -q --lf -p no:randomly tests`. Parallel runs are clean (the slow-reply notice is off in tests); the serial `--lf` rerun is only a safety net.
 

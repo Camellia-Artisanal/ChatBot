@@ -136,4 +136,4 @@ Normal PR/push CI is the fast current-contract gate, not proof of a complete reg
 
 The accepted runtime evidence is **3904 passed / 0 failed / 0 skipped in 308.33 seconds** on tested HEAD `aeec381ee900049a08ca2aba591d366b48c3eb24`, whose tree is identical to accepted runtime merge `3d412c1e4f94be7552c8882cd127eed1e8eb9e14`. Documentation/baseline metadata changes after this point are non-runtime and do not require another full regression unless they also alter executable/runtime inputs.
 
-See [testing policy](TESTING_STRATEGY.md), [runbook](PRODUCTION_RUNBOOK.md), [architecture](architecture.md), [chatbot control](INSTAGRAM_CHATBOT_CONTROL.md) and [validated dependency snapshot](HANDOVER_DEPENDENCY_SNAPSHOT.md).
+See [testing policy](TESTING_STRATEGY.md), [runbook](PRODUCTION_RUNBOOK.md), [architecture](ARCHITECTURE.md), [chatbot control](INSTAGRAM_CHATBOT_CONTROL.md) and [validated dependency snapshot](HANDOVER_DEPENDENCY_SNAPSHOT.md).

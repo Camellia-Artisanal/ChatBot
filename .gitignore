@@ -62,3 +62,7 @@ $TEMP/
 .codex/
 # Local/CI validation evidence, never application data.
 .test-results/
+
+# Agent tooling state, not part of the bot.
+.swarm/
+skills-lock.json
