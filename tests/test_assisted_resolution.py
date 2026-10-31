@@ -1,12 +1,16 @@
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 import camellia.app as app_module
 import camellia.assisted_resolution as assisted
+from camellia.ad_gate import describe_entry_point
 from camellia.config import config
 from camellia.database import Database
+
+from test_ad_mapped_source_context import ad_customer, _process  # noqa: F401
 
 
 class _ApprovedRag:
@@ -86,3 +90,46 @@ def test_authenticated_approval_is_the_only_send_path(monkeypatch, tmp_path):
     assert response.status_code == 200
     assert sent == [("u3", "Jolbhora is a sweet.")]
     assert database.get_assisted_suggestion(suggestion_id)["status"] == "APPROVED"
+
+
+UNANSWERED = "Do you ship to Antarctica?"
+
+
+def _instagram_message(ad_customer, monkeypatch, message=UNANSWERED):  # noqa: F811
+    monkeypatch.setattr(config, "LLM_ASSISTED_RESOLUTION_ENABLED", True)
+    monkeypatch.setattr(config, "LLM_AUTO_RESOLVE_SIMULATION_ENABLED", True)
+    entry = describe_entry_point({"sender": {"id": ad_customer[0]}, "message": {"text": message}})
+    return _process(ad_customer, message, entry)
+
+
+def test_an_untouched_order_draft_does_not_block_a_suggestion(ad_customer, monkeypatch):  # noqa: F811
+    with patch.object(app_module, "create_suggestion", return_value={"id": 1}) as suggest,             patch.object(app_module, "simulate_auto_resolve") as simulate:
+        _instagram_message(ad_customer, monkeypatch)
+    assert suggest.call_args.kwargs["active_protected_flow"] is False
+    simulate.assert_called_once_with({"id": 1}, protected_order_flow=False, source_routed=False)
+
+
+@pytest.mark.parametrize("order", [
+    {"cart": [{"name": "Bento", "quantity": 2}]},
+    {"order_intake_draft": {"status": "COLLECTING"}},
+    {"order_draft": {"flavour": "mango", "collection": "signature", "size": None, "quantity": 1}},
+    {"order_draft": {"flavour": None, "collection": None, "size": "500g", "quantity": 2}},
+])
+def test_a_real_order_gets_no_suggestion(ad_customer, monkeypatch, order):  # noqa: F811
+    ad_customer[1].update(order)
+    with patch.object(app_module, "create_suggestion") as suggest:
+        _instagram_message(ad_customer, monkeypatch)
+    suggest.assert_not_called()
+
+
+def test_one_product_mention_is_not_an_order(ad_customer, monkeypatch):  # noqa: F811
+    ad_customer[1]["order_draft"]["flavour"] = "mango"
+    with patch.object(app_module, "create_suggestion", return_value=None) as suggest:
+        _instagram_message(ad_customer, monkeypatch)
+    suggest.assert_called_once()
+
+
+def test_a_failed_suggestion_never_costs_the_customer_a_reply(ad_customer, monkeypatch):  # noqa: F811
+    with patch.object(app_module, "create_suggestion", side_effect=RuntimeError("db down")):
+        send = _instagram_message(ad_customer, monkeypatch)
+    assert send.called

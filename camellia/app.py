@@ -1125,20 +1125,29 @@ def _process_instagram_event(
 
         # Human-gated assisted resolution: unresolved Instagram messages only.
         # The draft is durable and reviewable; it is never sent from this path.
+        # order_draft always exists with quantity 1, so only filled slots count.
+        # One lone slot is not an order: a single product mention fills one.
+        order_draft = facts.get("order_draft") or {}
+        filled_order_slots = sum(1 for slot in ("flavour", "collection", "size") if order_draft.get(slot))
+        filled_order_slots += int((order_draft.get("quantity") or 1) > 1)
         protected_flow = bool(
-            facts.get("cart") or facts.get("order_draft") or facts.get("order_intake_draft")
+            facts.get("cart") or facts.get("order_intake_draft") or filled_order_slots >= 2
         ) or template_id in ("order_draft_receipt", "order_next_steps", "order_intake_draft")
         if (config.LLM_ASSISTED_RESOLUTION_ENABLED or config.LLM_AUTO_RESOLVE_SIMULATION_ENABLED) and not was_matched and not protected_flow and not source_route and template_id not in {"pending_menu_handoff", "unknown_price_handoff", "unmapped_ad_referral_handoff", "contextless_ad_button_handoff"}:
-            assisted_suggestion = create_suggestion(
-                user_id=sender_id, channel="instagram", customer_message=customer_message,
-                deterministic_resolved=False, active_protected_flow=protected_flow,
-                source_routed=bool(source_route), source_routing_id=trace.get("source_routing_id"),
-            )
-            # Full deterministic eligibility runs in simulation, but this call
-            # only records an audit row.  It never sends an automatic reply;
-            # the normal human-gated assisted workflow below remains intact.
-            if assisted_suggestion and config.LLM_AUTO_RESOLVE_SIMULATION_ENABLED:
-                simulate_auto_resolve(assisted_suggestion, protected_order_flow=protected_flow, source_routed=bool(source_route))
+            try:
+                assisted_suggestion = create_suggestion(
+                    user_id=sender_id, channel="instagram", customer_message=customer_message,
+                    deterministic_resolved=False, active_protected_flow=protected_flow,
+                    source_routed=bool(source_route), source_routing_id=trace.get("source_routing_id"),
+                )
+                # Full deterministic eligibility runs in simulation, but this call
+                # only records an audit row.  It never sends an automatic reply;
+                # the normal human-gated assisted workflow below remains intact.
+                if assisted_suggestion and config.LLM_AUTO_RESOLVE_SIMULATION_ENABLED:
+                    simulate_auto_resolve(assisted_suggestion, protected_order_flow=protected_flow, source_routed=bool(source_route))
+            except Exception:
+                # A staff-review draft must never cost the customer their reply.
+                log.exception("Assisted suggestion could not be recorded")
 
         # Channel policy: Instagram is the only AI chatbot channel. When it
         # cannot answer — an unsupported question, or an order/event ask that

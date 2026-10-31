@@ -41,6 +41,8 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
   outside-window errors retried forever). `sent_steps` stops a retry repeating accepted chunks.
 - SQLite cannot widen a CHECK constraint: rebuild the table (drop triggers, rename, create,
   copy, recreate triggers) — see `instagram_source_qa.initialize`.
+- `facts["order_draft"]` always exists with `quantity: 1`, so it is always truthy (31 Oct: this
+  silently blocked every Instagram assisted suggestion). Count filled slots, never its presence.
 - `<dialog>` elements draw above any page overlay. Opening a `display:flex` popup from inside
   a dialog hides it behind the dialog — close/park the dialog first.
 
