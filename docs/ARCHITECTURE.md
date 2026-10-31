@@ -209,7 +209,7 @@ graphify update .
 | `instagram_source_ad_bindings` | Meta Ad ID to mapping |
 | `instagram_ads_manual_sync_jobs` | Status of the background Ads, Posts, Reels and Stories refresh |
 | `instagram_source_qa_bundles` (+`_items`) | Checklist of approved answers for a mapping |
-| `instagram_topics` | Mapping topics and their default answers |
+| `instagram_topics` | Master categories: mapping topics, default answers, and links to one Menu category, Q&A category and Customer message topic |
 | `approved_qa_overrides` (+`_versions`) | Admin edits and new answers |
 | `approved_qa_contexts` | Client-added categories |
 | `menu_catalogue`, `menu_versions`, `menu_image_versions`, `menu_customer_topics` | Menus and what customers can see |

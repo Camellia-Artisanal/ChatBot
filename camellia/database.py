@@ -1303,6 +1303,11 @@ class Database:
             """)
             self._ensure_column(cursor, "instagram_topics", "response_order", "TEXT NOT NULL DEFAULT 'description_first'")
             self._ensure_column(cursor, "instagram_topics", "default_approved_qa_ids", "TEXT NOT NULL DEFAULT '[]'")
+            # Master category links. They record which lists belong together and
+            # nothing in the reply path reads them.
+            self._ensure_column(cursor, "instagram_topics", "menu_category_id", "INTEGER")
+            self._ensure_column(cursor, "instagram_topics", "qa_context", "TEXT")
+            self._ensure_column(cursor, "instagram_topics", "customer_topic_id", "TEXT")
             cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_topics_normalized_name ON instagram_topics(name COLLATE NOCASE)")
 
             self._ensure_column(cursor, "instagram_source_routes", "topic_id", "TEXT")
@@ -3805,6 +3810,17 @@ class Database:
             conn.commit()
             row = conn.execute("SELECT * FROM instagram_topics WHERE topic_id = ?", (topic_id,)).fetchone()
         return dict(row)
+
+    def set_instagram_topic_links(
+        self, topic_id: str, *, menu_category_id: Optional[int] = None,
+        qa_context: Optional[str] = None, customer_topic_id: Optional[str] = None,
+    ) -> None:
+        with self.get_connection() as conn:
+            conn.execute(
+                "UPDATE instagram_topics SET menu_category_id=?, qa_context=?, customer_topic_id=?, updated_at=? WHERE topic_id=?",
+                (menu_category_id, qa_context, customer_topic_id, datetime.utcnow().isoformat(), topic_id),
+            )
+            conn.commit()
 
     def update_instagram_topic(
         self, topic_id: str, *, name: Optional[str] = None, description: Optional[str] = None,

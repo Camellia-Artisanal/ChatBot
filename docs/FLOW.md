@@ -109,6 +109,9 @@ Approved Q&A → Edit / + Add → Preview / Test (dry run, token) → Publish Ap
   matched with no post/ad context nor checked for clashes; its variations are)
   _save() writes approved_qa_overrides + a version row
 Category / context → Manage → add / rename / delete client categories (built-ins locked)
+Categories tab → Master categories (Topics): Add creates or links the Menu and Q&A categories,
+  Save links records them, and no reply reads a link. Rename reaches a linked list only if it
+  had the same name. Turn off hides a category from new mappings. Advanced keeps the other lists.
 Categories tab → same add / rename / delete for Topics, Menu categories, Customer message
   topics and Q&A categories, with usage counts; a Topic in use must move to another first
 ```
