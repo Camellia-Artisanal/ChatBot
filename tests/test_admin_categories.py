@@ -101,6 +101,8 @@ def test_admin_page_has_the_tab_and_keeps_the_main_nav_order(admin):
     page = client.get("/admin").text
     sidebar = page.split('<aside class="admin-sidebar"', 1)[1].split('</aside>', 1)[0]
     assert '<span class="nav-label">Categories</span>' in sidebar
+    # Hidden from the menu for now; remove this line when the tab comes back.
+    assert 'style="display:none;" onclick="switchTab(\'tab-categories\', this)"' in sidebar
     assert sidebar.index("'tab-handoffs'") < sidebar.index("'tab-categories'")
     assert "'tab-categories': 'categories'" in page
     assert "handoffs: 'tab-handoffs', categories: 'tab-categories'" in page
