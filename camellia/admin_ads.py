@@ -221,7 +221,7 @@ function renderAdsWorkspace() {
             const target = members.find(ad => ['NONE', 'NOTE'].includes(ad.answer_status)) || first;
             const groupButton = running ? `<button class="btn-primary" data-ads-group-map="${escapeHtml(target.ad_id)}">Map Ad</button>` : '';
             const gaps = members.filter(ad => ['NONE', 'NOTE'].includes(ad.answer_status)).length;
-            const groupBadge = gaps ? adsAnswerBadge({answer_status: members.find(ad => ad.answer_status === 'NONE') ? 'NONE' : 'NOTE'}) : adsAnswerBadge(first);
+            const groupBadge = gaps ? adsAnswerBadge({answer_status: members.find(ad => ad.answer_status === 'NONE') ? 'NONE' : 'NOTE', answer_reason: target.answer_reason}) : adsAnswerBadge(first);
             const technical = `<details><summary>Technical details</summary><p style="overflow-wrap:anywhere;">Permalink: ${first.instagram_permalink_url ? `<a href="${escapeHtml(first.instagram_permalink_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(first.instagram_permalink_url)}</a>` : 'Unavailable'}<br>Instagram media ID: ${escapeHtml(first.effective_instagram_media_id || 'Unavailable')}</p>${running ? `<p style="overflow-wrap:anywhere;">WITHIN META SCHEDULE + DELIVERED TODAY + currently Meta ACTIVE · Evidence IDs: ${group.delivering_ad_ids.map(id => escapeHtml(id)).join(', ')}. ${members.length} exact member IDs. Mapping: ${mappedCount}/${members.length} bound.${group.verified_identity ? '' : ' Incomplete/conflicting identity: individual mapping only.'}</p>` : ''}</details>`;
             return `<section class="ig-media-card" data-active-group="true"><div class="ig-media-preview">${preview}</div><div class="ig-media-main"><b>AD · ${escapeHtml(displayName)}</b><p style="font-size:1rem;">${status}</p>${groupBadge}${groupButton}${technical}<details${exactId ? ' open' : ''}><summary>${members.length} Meta Ad IDs ▾</summary>${members.map(renderAd).join('')}</details></div></section>`;
         }).join('');
@@ -255,7 +255,8 @@ function adsAnswerBadge(ad) {
         NONE: '⚠ Price questions go to the manager — tap Map Ad and set its answers',
         DISABLED: 'Answers turned off for this ad',
     }[ad.answer_status];
-    return text ? `<p class="ads-answer-status" data-answer-status="${escapeHtml(ad.answer_status)}" style="font-size:0.95rem;margin:4px 0;">${escapeHtml(text)}</p>` : '';
+    const reason = ad.answer_reason ? ` Why: ${ad.answer_reason}` : '';
+    return text ? `<p class="ads-answer-status" data-answer-status="${escapeHtml(ad.answer_status)}" style="font-size:0.95rem;margin:4px 0;">${escapeHtml(text + reason)}</p>` : '';
 }
 async function openAdAnswers(ad) {
     // An ad answers like the Post/Reel it promotes, so its answers are set in

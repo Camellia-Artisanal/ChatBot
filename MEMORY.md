@@ -75,9 +75,15 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
   prompts such as "What is the price per box?" to that price role on the exact ad/post. It
   answers only when the source route selects one price answer; ambiguity or missing source
   context still hands off.
+- **On a mapped post/ad, the type of question picks the answer.** Customers word a question
+  endlessly (31 Oct: "How much is the cost per head" handed off), so `_asked_roles` reads the
+  type and the one ticked answer of that type answers, word for word. Zero or two ticked: a
+  person. Add new customer words to `_ASKED_WORDING`, and anything that must reach a person to
+  `_NOT_ASKED_RE`. A Custom mapping skips details (`CUSTOM_FALLBACK_ROLES`): its note answers those.
 - **Generic ad questions are per post, not variations.** Never add "How much does it cost?" as an
   Approved Q&A variation (collides with General price or leaks to no-ad customers). Set the answer's
   "On mapped posts/ads, use for" instead and tick it on the post.
+- **The Ads card says why a price question reaches the manager** (`price_gap_reason`).
 - **Generic source-info copy is an explicit per-route choice.** A Custom Post/Reel may use its own
   description for the strict allowlist of general “tell me more” phrases. Keep specific approved
   answers and explicit handoff triggers higher priority; do not use fuzzy semantic matching here.

@@ -229,6 +229,35 @@ _ROLE_WORDING = {"price": re.compile(r"\b(?:price|prices|pricing|cost|costs|rate
                  "details": re.compile(r"\b(?:tell\s+me|more\s+(?:about|info|information|details)|details?|info|information"
                                        r"|what\s+is\s+this(?:\s+about)?|(?:i\s+am\s+|i'?m\s+)?interested)\b", re.I)}
 
+# What a customer is asking on a mapped post/ad (31 Oct: "How much is the cost per
+# head" handed off because only the saved wording matched). Customers word these in
+# endless ways, so the type of question picks the one answer ticked for that type.
+# _ROLE_WORDING stays narrower: it also guesses a client answer's own type.
+_ASKED_WORDING = {
+    "price": re.compile(r"\b(?:price|prices|pricing|cost|costs|rate|rates|how\s+much|charges?|fees?"
+                        r"|kitna|kitne|kitni|da+m|taka|contribution|koto\s+(?:porbe|lagbe|pore|lage))\b", re.I),
+    "details": _ROLE_WORDING["details"],
+    "booking": re.compile(r"\b(?:book|booking|bookings|reserve|reservation|reservations|register|registration"
+                          r"|sign\s+up|slots?)\b", re.I),
+    "location": re.compile(r"\b(?:where|location|venue|address|located|directions?|how\s+to\s+reach|kothay|kahan)\b", re.I),
+    "date": re.compile(r"\b(?:when|date|dates|what\s+time|timings?|which\s+day|kobe|kab)\b", re.I),
+}
+# These mention a price or place but need a person or another answer, so they
+# never pick a ticked answer by type.
+_NOT_ASKED_RE = re.compile(
+    r"\b(?:discounts?|offers?|coupons?|refunds?|cancel\w*|complain\w*|complaint|deliver\w*|ship\w*|courier|dispatch"
+    r"|allerg\w*|shelf\s+life|how\s+long|how\s+much\s+(?:time|longer|sugar|spice|weight|quantity)"
+    r"|(?:kitna|kitne|kitni)\s+(?:time|samay|der|din))\b", re.I)
+# A Custom mapping's note answers details questions, so its Topic answers skip them.
+CUSTOM_FALLBACK_ROLES = frozenset({"price", "booking", "location", "date"})
+
+
+def _asked_roles(message):
+    if _NOT_ASKED_RE.search(message or "") or client_qa.custom_quote_request(message):
+        return []  # A catering/hosting quote is priced by the manager.
+    asked = [name for name, wording in _ASKED_WORDING.items() if wording.search(message or "")]
+    return ["price"] if set(asked) == {"price", "details"} else asked  # "Price details" asks for the price.
+
 
 def _role(entry):
     """Price or details answer: built-ins by ID, client-added ones by their question."""
@@ -305,7 +334,7 @@ def preview_mapping(qa_ids, context):
     return {"rows": out, "collisions": [{"question": q, "answers": keys} for q, keys in mapped_collisions(qa_ids, rows)]}
 
 
-def match(message, facts=None, *, rows=None, allowed_qa_ids=None, product_fallback=False):
+def match(message, facts=None, *, rows=None, allowed_qa_ids=None, product_fallback=False, fallback_roles=None):
     rows = overlays() if rows is None else rows
     active = {entry.qa_id: entry for entry in registry(rows)}
     if allowed_qa_ids is not None:
@@ -341,23 +370,21 @@ def match(message, facts=None, *, rows=None, allowed_qa_ids=None, product_fallba
         # "Can I get more info on this?" / "How much does it cost?" name no
         # product, so they resolve to the general answer. A checklist holding
         # one product's answer means "this" is that product (18 Oct: a
-        # sondesh-only mapping handed Meta's ad button to the manager). Only
-        # Approved Q&A checklists ask for this; a Custom mapping sends its note.
+        # sondesh-only mapping handed Meta's ad button to the manager).
+        # fallback_roles limits this to those question types.
         settings = mapped_settings(rows)
-        claimed = [key for key in active if text in settings.get(key, (None, [], set()))[2]]
+        usable = lambda role: fallback_roles is None or role in fallback_roles
+        claimed = [key for key in active if text in settings.get(key, (None, [], set()))[2]
+                   and usable(settings[key][0])]
         if len(claimed) > 1:
             return None  # Two ticked answers claim this question; the mapping save refuses this.
         exact.update(claimed)
-        asked = [name for name, wording in _ROLE_WORDING.items() if wording.search(message or "")]
-        if set(asked) == {"price", "details"}:
-            asked = ["price"]  # "Price details" / "price list info" ask for the price.
-        if client_qa.custom_quote_request(message):
-            asked = []  # A catering/hosting quote is priced by the manager.
+        asked = _asked_roles(message)
         for base in (() if exact else (original, client_qa._match_base(message, {}), None)):
             role = next((name for name, ids in _ROLES.items() if base and base.entry.qa_id in ids), None)
             if base is None and len(asked) == 1:
                 role = asked[0]  # "Tell me more" matches no built-in answer on its own.
-            same = [key for key in active if role and settings.get(key, (None,))[0] == role]
+            same = [key for key in active if role and usable(role) and settings.get(key, (None,))[0] == role]
             if len(same) == 1:
                 exact.add(same[0])
                 break

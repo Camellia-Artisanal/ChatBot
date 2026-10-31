@@ -21,6 +21,8 @@ Meta webhook (signed)  POST /webhook/instagram
       ├─ responder.match_and_respond(...)                  responder.py
       │      first layer that owns the turn answers:
       │      order flows → mapping checklist (bundle) → Custom topic answers
+      │      (both pick the one ticked answer by question type: price, booking, location, date,
+      │      and details on a checklist only)
       │      → approved Q&A (approved_qa.match) → menus → grounded/RAG fallbacks
       ├─ post-rules in app.py:
       │      enabled Custom mapping + exact generic “tell me more” phrases → source note
