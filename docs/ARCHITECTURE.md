@@ -182,7 +182,7 @@ flowchart LR
 | Webhook and orchestration | `app.py` |
 | Source routing | `instagram_routing.py`, `instagram_ads.py`, `instagram_media.py`, `instagram_story_*.py`, `instagram_source_qa.py` |
 | Answering | `responder.py`, `approved_qa.py`, `client_qa.py`, `understanding.py`, `knowledge.py`, `semantic_fallback.py`, `grounded_answers.py`, `rag_fallback.py`, `ai_responder.py` |
-| Shadow only | `router.py`, `triage.py` |
+| Shadow only | `router.py`, `triage.py`, `variation_shadow.py` |
 | Orders | `order_calculator.py`, `order_intake.py` |
 | Menus | `menu_catalogue.py`, `menu_review.py`, `menu_images.py`, `weekly_savoury.py` |
 | Handoff | `handoff.py`, `escalator.py` |

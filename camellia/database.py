@@ -317,6 +317,19 @@ class Database:
             # differently. Kept out of `conversations` because these rows are a
             # measurement, not a thing any customer was ever sent.
             cursor.execute("""
+            CREATE TABLE IF NOT EXISTS variation_shadow (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                routing_id INTEGER,
+                user_message TEXT NOT NULL,
+                matched_phrase TEXT,
+                confidence REAL,
+                would_send INTEGER DEFAULT 0,
+                detail TEXT,
+                latency_ms REAL,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+            cursor.execute("""
             CREATE TABLE IF NOT EXISTS router_shadow (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 channel TEXT,
@@ -3919,6 +3932,39 @@ class Database:
                 1 if keyword_pick == router_pick else 0, detail, round(latency_ms, 1), model,
             ))
             conn.commit()
+
+    def record_variation_shadow(
+        self, *, routing_id: Optional[int], user_message: str, matched_phrase: Optional[str],
+        confidence: Optional[float], would_send: bool, detail: str, latency_ms: float,
+    ) -> None:
+        """Stores one silent meaning-match result. Nothing in the reply path reads it."""
+        with self.get_connection() as conn:
+            conn.execute(
+                """INSERT INTO variation_shadow
+                   (routing_id, user_message, matched_phrase, confidence, would_send, detail, latency_ms)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (routing_id, user_message, matched_phrase, confidence, int(would_send), detail, round(latency_ms, 1)),
+            )
+            conn.commit()
+
+    def variation_shadow_report(self, days: int = 7, limit: int = 100) -> Dict[str, Any]:
+        """What meaning match would have done, would-send rows first."""
+        since = f"-{int(days)} days"
+        with self.get_connection() as conn:
+            totals = conn.execute(
+                """SELECT COUNT(*) AS checked, COALESCE(SUM(would_send), 0) AS would_send,
+                          COALESCE(SUM(matched_phrase IS NOT NULL AND would_send = 0), 0) AS low_confidence,
+                          COALESCE(SUM(detail <> 'ok'), 0) AS failed
+                   FROM variation_shadow WHERE timestamp >= datetime('now', ?)""",
+                (since,),
+            ).fetchone()
+            rows = conn.execute(
+                """SELECT routing_id, user_message, matched_phrase, confidence, would_send, detail, latency_ms, timestamp
+                   FROM variation_shadow WHERE timestamp >= datetime('now', ?)
+                   ORDER BY would_send DESC, id DESC LIMIT ?""",
+                (since, int(limit)),
+            ).fetchall()
+        return {**dict(totals), "days": int(days), "rows": [dict(row) for row in rows]}
 
     def router_shadow_pulse(self, hours: int = 24) -> Dict[str, Any]:
         """
