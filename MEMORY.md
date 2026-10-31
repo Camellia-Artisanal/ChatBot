@@ -100,6 +100,10 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
 - **No current weekly menu means silence only for a weekly-menu browse request.** Do not
   send stale menu content or create a handoff for that request; keep non-menu questions
   on their existing answer/handoff paths.
+- **The four category lists stay separate; the Categories tab only shows them together.**
+  Topics, Menu categories, Customer message topics and Q&A categories each drive different
+  behaviour, so a shared list could send one city's answer to another. Built-in customer
+  topics have no Delete there: deleting one would stop its "send <topic> menu" replies.
 - **Menu customer topics** decide "send <topic> menu" replies. Use "Mapped posts/ads only"
   for region-specific menus (no city concept exists). A menu with no topic is not
   customer-eligible.

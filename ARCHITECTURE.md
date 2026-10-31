@@ -70,7 +70,9 @@ graphify update .                                     # refresh after code chang
 `admin_ads.py` (Ads tab), `admin_source_response.py` (Response Source selector shared by
 Posts & Reels / Stories / mapping form), `admin_approved_qa.py` (Approved Q&A + categories),
 `admin_menu_review.py` (Menu Manager), `admin_weekly_savoury.py` (weekly upload → Publish),
-`admin_chatbot_control.py`, `admin_handoff_message.py`.
+`admin_chatbot_control.py`, `admin_handoff_message.py`, `admin_categories.py` (Categories:
+one page for the four category lists; it only reads them together, and changes go through
+each list's own route).
 
 The Dashboard's Setup Check is assembled by `setup_check.py`; route-specific findings carry
 their routing ID and source identity so the admin can open the matching editor directly.
