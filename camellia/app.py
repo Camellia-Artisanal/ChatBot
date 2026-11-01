@@ -1365,22 +1365,27 @@ def _process_instagram_event(
         )
 
         ordered_blocks = facts.get("ordered_response_blocks") if facts.get("last_route_source") in {"EXACT_APPROVED", "SOURCE_DESCRIPTION", "CUSTOM_SEQUENCE"} else None
+        use_blocks = bool(ordered_blocks and not needs_escalation)
+        ends_in_text = ordered_blocks[-1].get("kind") == "TEXT" if use_blocks else not image_url
+        question_buttons = (
+            category_buttons.after_mapped_reply(sender_id, facts, source_route)
+            if ends_in_text and was_matched and source_route and not needs_escalation and not silent_no_current_menu else None
+        )
         if silent_no_current_menu:
             log.info("Suppressed reply for weekly menu request without a current menu.")
-        elif ordered_blocks and not needs_escalation:
-            send_instagram_response_blocks(sender_id, ordered_blocks, inbound_message_id=conversation_id)
+        elif use_blocks:
+            send_instagram_response_blocks(sender_id, ordered_blocks, inbound_message_id=conversation_id, quick_replies=question_buttons)
         else:
             _send_or_queue_instagram_reply(
                 sender_id, response_text, image_url=image_url,
                 inbound_message_id=conversation_id, response_type="reply",
+                **({"quick_replies": question_buttons} if question_buttons else {}),
             )
         if needs_escalation and link_message:
             _send_or_queue_instagram_reply(
                 sender_id, link_message,
                 inbound_message_id=conversation_id, response_type="handoff",
             )
-        if was_matched and source_route and not needs_escalation and not silent_no_current_menu:
-            _send_question_buttons(sender_id, category_buttons.after_mapped_reply(sender_id, facts, source_route), conversation_id)
     except Exception:
         # A background task that raises disappears silently, and the customer
         # is left with no reply and nothing in the logs explaining why.
@@ -1797,12 +1802,6 @@ def _finalize_expired_unmapped_posts() -> None:
                           _safe_identifier_hash(event["sender_id"]))
 
 
-def _send_question_buttons(sender_id: str, replies: Optional[list], conversation_id: Optional[int]) -> None:
-    if replies:
-        _send_or_queue_instagram_reply(sender_id, category_buttons.NEXT_QUESTION, quick_replies=replies,
-                                       inbound_message_id=conversation_id, response_type="reply")
-
-
 def _send_category_turn(sender_id: str, customer_message: str, step: Dict[str, Any], facts: Dict[str, Any]) -> bool:
     """Sends the button question or a category answer. False lets the handoff carry on."""
     if "ask" in step:
@@ -1816,9 +1815,9 @@ def _send_category_turn(sender_id: str, customer_message: str, step: Dict[str, A
     conversation_id = db.log_conversation(sender_id, "instagram", customer_message,
                                           "\n\n".join(b["text"] for b in step["blocks"] if b.get("text")),
                                           True, "category_button_answer")
-    send_instagram_response_blocks(sender_id, step["blocks"], inbound_message_id=conversation_id)
-    if facts.get("category_choice"):
-        _send_question_buttons(sender_id, category_buttons.after_category_answer(sender_id, facts, facts["category_choice"]), conversation_id)
+    question_buttons = (category_buttons.after_category_answer(sender_id, facts, facts["category_choice"])
+                        if facts.get("category_choice") and step["blocks"][-1].get("kind") == "TEXT" else None)
+    send_instagram_response_blocks(sender_id, step["blocks"], inbound_message_id=conversation_id, quick_replies=question_buttons)
     return True
 
 
@@ -2789,7 +2788,8 @@ def _refresh_home_table_reel_completion(recipient_id: str, delivery_id: str) -> 
     _persist_home_table_delivery(recipient_id)
 
 
-def send_instagram_response_blocks(recipient_id: str, blocks: list, *, inbound_message_id: Optional[int] = None) -> None:
+def send_instagram_response_blocks(recipient_id: str, blocks: list, *, inbound_message_id: Optional[int] = None,
+                                   quick_replies: Optional[list] = None) -> None:
     """Deliver approved blocks in order; queue acceptance is not delivery."""
     facts = session_memory.get_facts(recipient_id, "instagram")
     context = _instagram_job_context.get()
@@ -2832,6 +2832,7 @@ def send_instagram_response_blocks(recipient_id: str, blocks: list, *, inbound_m
             result = _send_or_queue_instagram_reply(
                 recipient_id, block.get("text", ""),
                 inbound_message_id=inbound_message_id, response_type="reply",
+                **({"quick_replies": quick_replies} if quick_replies and index == len(blocks) - 1 else {}),
             )
         elif block.get("kind") == "REEL":
             reel_url = str(block.get("url") or "")

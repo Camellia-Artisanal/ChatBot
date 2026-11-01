@@ -90,7 +90,7 @@ def _process_typed(sender, text):
     app_module._process_instagram_event(sender, text, None, EntryPoint(source="typed"))
 
 
-def test_the_buttons_follow_the_mapped_reply_in_order(store, ad_customer):  # noqa: F811
+def _mapped_reply(ad_customer, image=None):  # noqa: F811
     from test_custom_mapping_topic_answers import _custom_route
     from camellia.instagram_routing import decode_route
     sender, facts, _db = ad_customer
@@ -99,11 +99,29 @@ def test_the_buttons_follow_the_mapped_reply_in_order(store, ad_customer):  # no
     buttons.save_buttons("topic", route["topic_id"], [PRICE])
     facts["source_route"] = route
     sent = []
-    with patch("camellia.app.responder.match_and_respond", return_value=("Hello", True, "x", None)), \
+    with patch("camellia.app.responder.match_and_respond", return_value=("Hello", True, "x", image)), \
             patch("camellia.app._send_or_queue_instagram_reply", side_effect=lambda r, text, **k: sent.append((text, k.get("quick_replies")))):
         _process_typed(sender, "Hi")
-    assert sent[0] == ("Hello", None)
-    assert sent[-1][0] == buttons.NEXT_QUESTION and sent[-1][1][0]["title"] == "Price"
+    return sent
+
+
+def test_the_buttons_come_on_the_mapped_reply_with_no_extra_message(store, ad_customer):  # noqa: F811
+    sent = _mapped_reply(ad_customer)
+    assert len(sent) == 1 and sent[0][0] == "Hello" and sent[0][1][0]["title"] == "Price"
+
+
+def test_a_reply_ending_in_an_image_keeps_its_buttons_for_later(store, ad_customer):  # noqa: F811
+    assert _mapped_reply(ad_customer, image="https://x/y.jpg")[0][1] is None
+    assert "question_buttons_shown" not in ad_customer[1]
+
+
+def test_blocks_put_the_buttons_only_on_a_final_text():
+    from camellia import app as app_module
+    blocks = [{"kind": "TEXT", "text": "One"}, {"kind": "TEXT", "text": "Two"}]
+    with patch("camellia.app._send_or_queue_instagram_reply") as send, patch("camellia.app.session_memory.get_facts", return_value={}):
+        app_module.send_instagram_response_blocks("s", blocks, quick_replies=[{"title": "Price"}])
+    assert "quick_replies" not in send.call_args_list[0].kwargs
+    assert send.call_args_list[1].kwargs["quick_replies"] == [{"title": "Price"}]
 
 
 def test_button_routes(admin, store):  # noqa: F811

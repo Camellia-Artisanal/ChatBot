@@ -6,9 +6,9 @@ Off until CATEGORY_BUTTONS_MODE is "test" (test accounts only) or "all". A tap i
 just its button text arriving as a message, so it is matched against the options
 this customer was offered. Any answer that cannot be sent in full goes to staff.
 
-Question buttons follow the same switch. Under a mapped reply or a category answer,
-buttons such as Price offer the next question. A tap is swapped for the full question
-before the bot reads it, so it is answered exactly like the same question typed.
+Question buttons follow the same switch. Attached to a mapped reply or a category answer
+that ends in text, buttons such as Price offer the next question. A tap is swapped for the
+full question before the bot reads it, so it is answered exactly like the same question typed.
 """
 
 import json
@@ -24,8 +24,6 @@ log = get_logger("camellia.category_buttons")
 
 # Draft: needs the client's approval before CATEGORY_BUTTONS_MODE is set to "all".
 QUESTION = "Thanks for messaging Camellia! Which are you interested in?"
-# Draft: Instagram needs text above buttons, and this also needs the client's approval.
-NEXT_QUESTION = "What would you like to know next?"
 QUESTIONS = {"price": ("Price", "How much does it cost?"), "details": ("Tell me more", "Tell me more"),
              "booking": ("How to book", "How to book?"), "date": ("Date and venue", "When is it?"),
              "location": ("Location", "Where is it?")}
