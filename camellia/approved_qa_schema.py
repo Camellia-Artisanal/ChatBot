@@ -44,6 +44,9 @@ def initialize(cursor):
             (qa_id,question,answer,context,asset_keys_json,blocks_json) VALUES (?,?,?,?,?,?)""",
             (entry.qa_id, entry.question, entry.answer, entry.context, json.dumps(list(entry.asset_keys)),
              json.dumps([[block.kind, block.value] for block in entry.blocks], ensure_ascii=False)))
+    # Images on a built-in answer the client removed (2 Nov).
+    if "hidden_assets_json" not in columns:
+        cursor.execute("ALTER TABLE approved_qa_overrides ADD COLUMN hidden_assets_json TEXT NOT NULL DEFAULT '[]'")
     # Categories the client adds in Admin (e.g. "Kolkata Bengali Home Table").
     cursor.execute("""CREATE TABLE IF NOT EXISTS approved_qa_contexts (
         value TEXT PRIMARY KEY, label TEXT NOT NULL,

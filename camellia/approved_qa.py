@@ -21,7 +21,7 @@ _lock = threading.RLock()
 _preview_secret = secrets.token_bytes(32)
 _bases = {}
 EDIT_FIELDS = {"question", "answer", "context", "aliases", "valid_from", "valid_until", "blocks", "hidden_aliases",
-               "mapped_role", "mapped_questions"}
+               "hidden_assets", "mapped_role", "mapped_questions"}
 CANONICAL_CONTEXTS = {
     "general": "General", "savoury_deliveries": "Savoury Deliveries",
     "sondesh": "Sondesh", "bengali_home_table": "Bengali Home Table",
@@ -217,6 +217,11 @@ def _base_entry(qa_id, row):
     changes = {key: row[key] for key in ("question", "answer", "context") if row.get(key) is not None}
     if changes.get("answer", base.answer) != base.answer:
         changes["blocks"] = _edited_blocks(base, changes["answer"])
+    removed = set(json.loads(row.get("hidden_assets_json") or "[]"))
+    if removed:
+        changes["asset_keys"] = tuple(key for key in base.asset_keys if key not in removed)
+        changes["blocks"] = tuple(block for block in changes.get("blocks", base.blocks)
+                                  if block.kind == "TEXT" or block.value not in removed)
     return replace(base, **changes) if changes else base
 
 
@@ -427,6 +432,7 @@ def match(message, facts=None, *, rows=None, allowed_qa_ids=None, product_fallba
     entry = active[key]
     kind = "story_bundle" if allowed_qa_ids is not None else original.match_kind if original and original.entry.qa_id == key else "admin_exact"
     assets = original.asset_keys if original and original.entry.qa_id == key else entry.asset_keys
+    assets = tuple(asset for asset in assets if asset in entry.asset_keys)
     return client_qa.ApprovedMatch(entry, kind, assets)
 
 
@@ -456,6 +462,8 @@ def _record(entry, row):
             "context": entry.context, "aliases": json.loads(row.get("aliases_json", "[]")),
             "source_aliases": _builtin_aliases(entry.qa_id, {entry.qa_id: row}),
             "hidden_aliases": json.loads(row.get("hidden_aliases_json") or "[]"),
+            "hidden_assets": json.loads(row.get("hidden_assets_json") or "[]"),
+            "builtin_assets": list(getattr(base_entry(entry.qa_id), "asset_keys", ())),
             "sequence": json.loads(row.get("blocks_json") or "null") or [],
             **dict(zip(("mapped_role", "mapped_questions"), mapped_settings({entry.qa_id: row}).get(entry.qa_id, (None, []))[:2])),
             "variation_count": len({client_qa._normalise_match_text(v) for v in [*_builtin_aliases(entry.qa_id, {entry.qa_id: row}), *json.loads(row.get("aliases_json", "[]"))]}),
@@ -509,6 +517,7 @@ def _candidate(body, rows):
               "question": existing.get("question"), "answer": existing.get("answer"), "context": existing.get("context"),
               "valid_from": existing.get("valid_from"), "valid_until": existing.get("valid_until"),
               "blocks_json": existing.get("blocks_json"), "hidden_aliases_json": existing.get("hidden_aliases_json") or "[]",
+              "hidden_assets_json": existing.get("hidden_assets_json") or "[]",
               "mapped_role": existing.get("mapped_role"), "mapped_questions_json": existing.get("mapped_questions_json")}
     for key in ("question", "answer", "context"):
         if key in body:
@@ -554,6 +563,12 @@ def _candidate(body, rows):
         if not isinstance(hidden, list) or any(not isinstance(v, str) or client_qa._normalise_match_text(v) not in builtin for v in hidden):
             raise ValueError("Only built-in question variations can be removed")
         result["hidden_aliases_json"] = json.dumps(sorted({builtin[client_qa._normalise_match_text(v)] for v in hidden}), ensure_ascii=False)
+    if "hidden_assets" in body:
+        hidden = body["hidden_assets"]
+        allowed = set(base.asset_keys) if base else set()
+        if not isinstance(hidden, list) or any(key not in allowed for key in hidden):
+            raise ValueError("Only images on a built-in answer can be removed")
+        result["hidden_assets_json"] = json.dumps(sorted(set(hidden)))
     for key in ("valid_from", "valid_until"):
         if key in body:
             date = parse_date(body[key])
@@ -643,7 +658,7 @@ def _save(conn, candidate, rows, actor, reason):
                          (key, json.dumps(snapshot, ensure_ascii=False), now, actor, label))
     candidate = {**candidate, "created_at": (old or {}).get("created_at") or now,
                  "created_by": (old or {}).get("created_by") or actor, "updated_at": now, "updated_by": actor}
-    columns = ("qa_id", "record_type", "question", "answer", "context", "aliases_json", "status", "valid_from", "valid_until", "created_at", "updated_at", "created_by", "updated_by", "blocks_json", "hidden_aliases_json", "mapped_role", "mapped_questions_json")
+    columns = ("qa_id", "record_type", "question", "answer", "context", "aliases_json", "status", "valid_from", "valid_until", "created_at", "updated_at", "created_by", "updated_by", "blocks_json", "hidden_assets_json", "hidden_aliases_json", "mapped_role", "mapped_questions_json")
     conn.execute("INSERT INTO approved_qa_overrides (" + ",".join(columns) + ") VALUES (" + ",".join("?" for _ in columns) + ") ON CONFLICT(qa_id) DO UPDATE SET " + ",".join(key + "=excluded." + key for key in columns if key != "qa_id"),
                  tuple(candidate[key] for key in columns))
     conn.execute("INSERT INTO approved_qa_versions (qa_id,snapshot_json,changed_at,changed_by,change_reason) VALUES (?,?,?,?,?)",
@@ -681,7 +696,7 @@ def archive_or_restore(qa_id, actor, *, restore=False, version_id=None):
             if not version:
                 raise KeyError(version_id)
             snapshot = json.loads(version[0])
-            defaults = {"hidden_aliases_json": "[]"}  # Versions saved before 18 Oct lack it.
+            defaults = {"hidden_aliases_json": "[]", "hidden_assets_json": "[]"}  # Versions saved before 18 Oct lack it.
             candidate.update({key: snapshot.get(key, defaults.get(key)) for key in candidate if key not in {"qa_id", "record_type"}})
         candidate["status"] = "ACTIVE" if restore else "ARCHIVED"
         if restore:

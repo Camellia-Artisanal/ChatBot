@@ -189,3 +189,4 @@ uses a human handoff; it cannot fall through to the city-specific generic food i
   the reply, More options, Advanced and a fixed Save. Ids and saves do not change.
 - Add answer: Category, Customer question and Answer stay on show. Save runs preview then publish,
   so a clash blocks it. Delete warns what it affects and keeps the answer under Deleted / Expired.
+  A built-in answer's images can be unticked under More options; unticked ones leave its blocks.
