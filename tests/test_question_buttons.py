@@ -1,0 +1,116 @@
+"""Question buttons: a tap reads as the full question, and only answered ones show."""
+from unittest.mock import patch
+
+import pytest
+
+from camellia import answer_slots, category_buttons as buttons, instagram_routing
+from camellia.config import config
+
+from test_ad_mapped_source_context import ad_customer, _process  # noqa: F401
+from test_admin_categories import admin  # noqa: F401
+
+PRICE = {"slot": "price", "label": "Price"}
+MORE = {"slot": "details", "label": "Tell me more"}
+
+
+@pytest.fixture
+def store(ad_customer, monkeypatch):  # noqa: F811
+    db = ad_customer[2]
+    for module in (answer_slots, buttons):
+        monkeypatch.setattr(module, "db", db)
+    monkeypatch.setattr(config, "CATEGORY_BUTTONS_MODE", "all")
+    return db
+
+
+def _topic(*answers):
+    topic = instagram_routing.create_topic("Button Topic")["topic_id"]
+    instagram_routing.update_topic(topic, default_approved_qa_ids=list(answers))
+    return topic
+
+
+@pytest.mark.parametrize("body", [[{"slot": "nope", "label": "x"}], [{"slot": "price", "label": ""}],
+                                  [{"slot": "price", "label": "x" * 21}], [PRICE, {"slot": "details", "label": "price"}], "x"])
+def test_bad_buttons_are_refused(store, body):
+    with pytest.raises(ValueError):
+        buttons.save_buttons("topic", "t", body)
+
+
+def test_only_questions_with_an_answer_are_offered(store):
+    topic = _topic("sondesh_price_client")
+    buttons.save_buttons("topic", topic, [PRICE, MORE])
+    facts = {}
+    replies = buttons.after_mapped_reply("s", facts, {"routing_id": 1, "topic_id": topic})
+    assert [item["title"] for item in replies] == ["Price"]
+    assert facts["question_buttons"] == {"price": "How much does it cost?"}
+
+
+def test_a_mapping_overrides_its_category(store):
+    topic = _topic("sondesh_price_client")
+    buttons.save_buttons("topic", topic, [PRICE])
+    buttons.save_buttons("route", 2, [{"slot": "price", "label": "Rate"}])
+    assert buttons.after_mapped_reply("s", {}, {"routing_id": 2, "topic_id": topic})[0]["title"] == "Rate"
+
+
+def test_they_show_once_per_customer_and_source(store):
+    topic = _topic("sondesh_price_client")
+    buttons.save_buttons("topic", topic, [PRICE])
+    facts, route = {}, {"routing_id": 3, "topic_id": topic}
+    assert buttons.after_mapped_reply("s", facts, route)
+    assert buttons.after_mapped_reply("s", facts, route) is None
+    assert buttons.after_mapped_reply("s", facts, {**route, "routing_id": 4})
+
+
+def test_off_and_empty_show_nothing(store, monkeypatch):
+    topic = _topic("sondesh_price_client")
+    assert buttons.after_mapped_reply("s", {}, {"routing_id": 5, "topic_id": topic}) is None
+    buttons.save_buttons("topic", topic, [PRICE])
+    monkeypatch.setattr(config, "CATEGORY_BUTTONS_MODE", "off")
+    assert buttons.after_mapped_reply("s", {}, {"routing_id": 5, "topic_id": topic}) is None
+
+
+def test_a_tap_becomes_the_full_question_and_typing_is_untouched():
+    facts = {"question_buttons": {"rate": "How much does it cost?"}}
+    assert buttons.question_for_tap(facts, " Rate ") == "How much does it cost?"
+    assert "question_buttons" not in facts
+    assert buttons.question_for_tap({"question_buttons": {"rate": "x"}}, "something else") == "something else"
+
+
+def test_a_custom_label_answers_like_the_typed_question(store, ad_customer):  # noqa: F811
+    sender, facts, _db = ad_customer
+    facts["question_buttons"] = {"rate": "How do I place an order?"}
+    with patch("camellia.app.responder.match_and_respond", return_value=("Sure", True, "x", None)) as respond, \
+            patch("camellia.app._send_or_queue_instagram_reply"):
+        _process_typed(sender, "Rate")
+    assert respond.call_args.args[0] == "How do I place an order?"
+
+
+def _process_typed(sender, text):
+    from camellia import app as app_module
+    from camellia.ad_gate import EntryPoint
+    app_module._process_instagram_event(sender, text, None, EntryPoint(source="typed"))
+
+
+def test_the_buttons_follow_the_mapped_reply_in_order(store, ad_customer):  # noqa: F811
+    from test_custom_mapping_topic_answers import _custom_route
+    from camellia.instagram_routing import decode_route
+    sender, facts, _db = ad_customer
+    route = decode_route(_custom_route(ad_customer))
+    instagram_routing.update_topic(route["topic_id"], default_approved_qa_ids=["sondesh_price_client"])
+    buttons.save_buttons("topic", route["topic_id"], [PRICE])
+    facts["source_route"] = route
+    sent = []
+    with patch("camellia.app.responder.match_and_respond", return_value=("Hello", True, "x", None)), \
+            patch("camellia.app._send_or_queue_instagram_reply", side_effect=lambda r, text, **k: sent.append((text, k.get("quick_replies")))):
+        _process_typed(sender, "Hi")
+    assert sent[0] == ("Hello", None)
+    assert sent[-1][0] == buttons.NEXT_QUESTION and sent[-1][1][0]["title"] == "Price"
+
+
+def test_button_routes(admin, store):  # noqa: F811
+    client, headers = admin
+    path = "/admin/categories/question-buttons/topic/t1"
+    assert client.get(path, headers=headers).json()["buttons"] is None
+    assert client.put(path, headers=headers, json={"buttons": [PRICE]}).status_code == 200
+    assert client.get(path, headers=headers).json()["buttons"] == [PRICE]
+    assert client.put(path, headers=headers, json={"buttons": [{"slot": "x", "label": "y"}]}).status_code == 400
+    assert client.get("/admin/categories/question-buttons/nope/1", headers=headers).status_code == 400

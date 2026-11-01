@@ -39,6 +39,7 @@ from camellia.ice_breakers import (
 import camellia.responder as responder_module
 from camellia.responder import compose_topic_response, responder
 from camellia.ai_responder import ai_responder
+from camellia import category_buttons
 from camellia.answer_slots import slot_shadow
 from camellia.variation_shadow import variation_shadow
 from camellia.escalator import escalator
@@ -904,6 +905,10 @@ def _process_instagram_event(
                 "can i get more info on this",
             }
         )
+        tapped_blocks = category_buttons.tap(sender_id, facts, message_text)
+        if tapped_blocks:
+            _send_category_turn(sender_id, str(message_text), {"blocks": tapped_blocks}, facts)
+            return
         if trace.get("ad_id") and source_route:
             log.info(
                 "INSTAGRAM_AD_ROUTE ad_present=true ad_id_hash=%s binding_status=%s routing_id=%s source_type=%s",
@@ -1025,6 +1030,7 @@ def _process_instagram_event(
             bool(source_media_present), bool(str(message_text or "").strip()),
         )
 
+        response_input = category_buttons.question_for_tap(facts, response_input)
         response_text, was_matched, template_id, image_url = responder.match_and_respond(
             response_input, user_id=sender_id, channel="instagram",
             referral_source="ADS", referral_ad_id=trace["ad_id"], referral_ad_title=trace["ad_title"],
@@ -1235,6 +1241,12 @@ def _process_instagram_event(
                         "source": entry.referral_source, "ad_id_present": entry.referral_ad_id_present,
                         "keys": entry.referral_keys or [],
                     }}
+        if (needs_escalation and not source_route and not explicit_human_help and not order_in_progress
+                and not unbound_ad_referral and not source_media_present and template_id != "explicit_escalation"
+                and not responder.check_explicit_escalation_triggers(customer_message)):
+            step = category_buttons.next_step(sender_id, facts, response_input, contextless_ad_button)
+            if step and _send_category_turn(sender_id, customer_message, step, facts):
+                return
         if needs_escalation:
             # A registry miss stays on Instagram even when the wording looks
             # purchase-shaped (for example, a 200-box wedding enquiry). Only
@@ -1367,6 +1379,8 @@ def _process_instagram_event(
                 sender_id, link_message,
                 inbound_message_id=conversation_id, response_type="handoff",
             )
+        if was_matched and source_route and not needs_escalation and not silent_no_current_menu:
+            _send_question_buttons(sender_id, category_buttons.after_mapped_reply(sender_id, facts, source_route), conversation_id)
     except Exception:
         # A background task that raises disappears silently, and the customer
         # is left with no reply and nothing in the logs explaining why.
@@ -1781,6 +1795,31 @@ def _finalize_expired_unmapped_posts() -> None:
         except Exception:
             log.exception("Could not finalize expired shared Post for sender_hash=%s.",
                           _safe_identifier_hash(event["sender_id"]))
+
+
+def _send_question_buttons(sender_id: str, replies: Optional[list], conversation_id: Optional[int]) -> None:
+    if replies:
+        _send_or_queue_instagram_reply(sender_id, category_buttons.NEXT_QUESTION, quick_replies=replies,
+                                       inbound_message_id=conversation_id, response_type="reply")
+
+
+def _send_category_turn(sender_id: str, customer_message: str, step: Dict[str, Any], facts: Dict[str, Any]) -> bool:
+    """Sends the button question or a category answer. False lets the handoff carry on."""
+    if "ask" in step:
+        sent = send_instagram_reply(sender_id, category_buttons.QUESTION,
+                                    quick_replies=category_buttons.quick_replies(step["ask"]))
+        if (sent or {}).get("status") == "failed":
+            return False
+        category_buttons.remember_question(facts, step)
+        db.log_conversation(sender_id, "instagram", customer_message, category_buttons.QUESTION, True, "category_question")
+        return True
+    conversation_id = db.log_conversation(sender_id, "instagram", customer_message,
+                                          "\n\n".join(b["text"] for b in step["blocks"] if b.get("text")),
+                                          True, "category_button_answer")
+    send_instagram_response_blocks(sender_id, step["blocks"], inbound_message_id=conversation_id)
+    if facts.get("category_choice"):
+        _send_question_buttons(sender_id, category_buttons.after_category_answer(sender_id, facts, facts["category_choice"]), conversation_id)
+    return True
 
 
 def _is_other_account_reel(shortcode: Optional[str]) -> bool:
@@ -2827,6 +2866,7 @@ def send_instagram_reply(
     retry_count: int = 0,
     native_media_id: Optional[str] = None,
     skip_steps: int = 0,
+    quick_replies: Optional[list] = None,
 ) -> Dict[str, Any]:
     """Sends text plus zero or more image cards via Meta Graph API to Instagram user.
 
@@ -3056,7 +3096,10 @@ def send_instagram_reply(
                     next_chunk_number += 1
                     try:
                         send_request(
-                            {"recipient": {"id": recipient_id}, "message": {"text": chunk}},
+                            {"recipient": {"id": recipient_id}, "message": {
+                                "text": chunk,
+                                **({"quick_replies": quick_replies} if quick_replies and next_chunk_number == total_text_chunks else {}),
+                            }},
                             kind="text",
                             chunk_number=next_chunk_number,
                             total_chunks=total_text_chunks,

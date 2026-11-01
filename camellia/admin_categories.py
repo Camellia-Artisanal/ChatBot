@@ -6,7 +6,7 @@ import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from camellia import answer_slots, approved_qa, menu_catalogue
+from camellia import answer_slots, approved_qa, category_buttons, menu_catalogue
 from camellia.admin_menu_review import reviewer
 from camellia.instagram_routing import (
     InstagramTopicError, create_topic, decode_route, decode_topic, matches_custom_response_variation, update_topic,
@@ -30,7 +30,8 @@ def _topics(conn):
     return [{"topic_id": topic["topic_id"], "name": topic["name"], "active": bool(topic["active"]),
              "usage": usage.get(topic["topic_id"], {}), "gallery": gallery.get(topic["topic_id"], 0),
              "menu_category_id": topic.get("menu_category_id"), "qa_context": topic.get("qa_context"),
-             "customer_topic_id": topic.get("customer_topic_id"), "suggested_name": _tidy_name(topic["name"]),
+             "customer_topic_id": topic.get("customer_topic_id"), "button_name": topic.get("button_name"),
+             "suggested_name": _tidy_name(topic["name"]),
              **_copyable_defaults(topic)}
             for topic in map(decode_topic, _database().list_instagram_topics())]
 
@@ -164,9 +165,34 @@ async def save_master_links(topic_id: str, request: Request, _actor=Depends(revi
         raise HTTPException(400, "Choose a Q&A category from the list.")
     if customer_topic_id is not None and customer_topic_id not in {item["topic_id"] for item in menu_catalogue.list_customer_topics()}:
         raise HTTPException(400, "Choose a Customer message topic from the list.")
+    button_name = " ".join(str(body.get("button_name") or "").split()) or None
+    if button_name and len(button_name) > category_buttons.NAME_LIMIT:
+        raise HTTPException(400, f"Keep the button name to {category_buttons.NAME_LIMIT} characters.")
     database.set_instagram_topic_links(topic_id, menu_category_id=menu_category_id, qa_context=qa_context,
-                                       customer_topic_id=customer_topic_id)
+                                       customer_topic_id=customer_topic_id, button_name=button_name)
     return {"status": "success"}
+
+
+@router.get("/question-buttons/{owner_type}/{owner_id}")
+def question_buttons(owner_type: str, owner_id: str, _actor=Depends(reviewer)):
+    _slot_owner(owner_type)
+    return {"buttons": category_buttons.stored_buttons(owner_type, owner_id),
+            "choices": [{"slot": slot, "label": label} for slot, (label, _question) in category_buttons.QUESTIONS.items()]}
+
+
+@router.put("/question-buttons/{owner_type}/{owner_id}")
+async def save_question_buttons(owner_type: str, owner_id: str, request: Request, _actor=Depends(reviewer)):
+    _slot_owner(owner_type)
+    try:
+        category_buttons.save_buttons(owner_type, owner_id, (await _body(request)).get("buttons"))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"status": "success"}
+
+
+def _slot_owner(owner_type):
+    if owner_type not in answer_slots.OWNERS:
+        raise HTTPException(400, "Unknown answer owner.")
 
 
 def _rename_link(rename, label, kept):
@@ -204,11 +230,6 @@ async def rename_master(topic_id: str, request: Request, actor=Depends(reviewer)
         else:
             kept.append(qa["label"])
     return {"status": "success", "name": name, "kept_names": kept}
-
-
-def _slot_owner(owner_type):
-    if owner_type not in answer_slots.OWNERS:
-        raise HTTPException(400, "Unknown answer owner.")
 
 
 @router.get("/slots/{owner_type}/{owner_id}")
@@ -395,11 +416,14 @@ function catMasterRow(topic) {
   (linked ? topic.qa_context : topic.suggested_qa_context) ?? '');
  const [customerField, customer] = catLinkSelect('Customer message topic (optional)', 'Not linked',
   catData.menu_topics.map(item => [item.topic_id, item.name]), topic.customer_topic_id ?? '');
+ const buttonField = document.createElement('label'); buttonField.style.cssText = 'flex:1 1 150px;min-width:0;font-size:.85rem;';
+ const buttonName = document.createElement('input'); buttonName.className = 'field-control'; buttonName.maxLength = 20; buttonName.value = topic.button_name || '';
+ buttonField.append('Button name (optional)', buttonName);
  const save = document.createElement('button');
  save.type = 'button'; save.className = 'btn-secondary'; save.textContent = 'Save links';
  save.setAttribute('aria-label', 'Save links for ' + topic.name);
- save.onclick = () => catSaveLinks(topic, menu.value, qa.value, customer.value);
- links.append(menuField, qaField, customerField, save);
+ save.onclick = () => catSaveLinks(topic, menu.value, qa.value, customer.value, buttonName.value);
+ links.append(menuField, qaField, customerField, buttonField, save);
  const answers = document.createElement('div'); answers.id = 'catAnswers-' + topic.topic_id;
  wrap.append(row, links, answers);
  // The list redraws after every change, so an open editor is reopened here.
@@ -428,6 +452,34 @@ async function catSlotEditor(box, owner, ownerId) {
   const [{slots}, options] = await Promise.all([catApi(base), catApi('/admin/instagram-routes/approved-qa-options')]);
   const menus = typeof igMenus === 'undefined' ? [] : igMenus;
   box.replaceChildren(...slots.map(slot => catSlotRow(box, owner, ownerId, base, slot, options.records || [], menus)));
+  if (owner === 'topic') { const buttons = document.createElement('div'); box.append(buttons); catQuestionButtons(buttons, owner, ownerId); }
+ } catch (error) { box.textContent = error.message; }
+}
+// A post with no choice of its own uses its category's buttons, as do ads promoting it.
+async function catQuestionButtons(box, owner, ownerId) {
+ const url = '/admin/categories/question-buttons/' + owner + '/' + encodeURIComponent(ownerId);
+ const heading = document.createElement('b'); heading.textContent = 'Question buttons';
+ const help = document.createElement('p'); help.className = 'source-map-help';
+ help.textContent = owner === 'topic' ? 'Offered under the reply on this category\'s posts and ads. Only questions with an answer appear.' : 'Leave as it is to use the category\'s buttons. Saving here sets buttons for this post and the ads promoting it.';
+ const note = document.createElement('small'); note.setAttribute('role', 'status'); note.style.display = 'block';
+ try {
+  const data = await catApi(url);
+  const saved = Object.fromEntries((data.buttons || []).map(button => [button.slot, button.label]));
+  const rows = data.choices.map(choice => {
+   const row = document.createElement('label'); row.style.cssText = 'display:flex;gap:8px;align-items:center;padding:3px 0;';
+   const tick = document.createElement('input'); tick.type = 'checkbox'; tick.style.cssText = 'width:auto;flex:none;'; tick.checked = choice.slot in saved;
+   tick.setAttribute('aria-label', 'Show ' + choice.label);
+   const label = document.createElement('input'); label.className = 'field-control'; label.maxLength = 20; label.value = saved[choice.slot] || choice.label;
+   label.setAttribute('aria-label', choice.label + ' button text');
+   row.append(tick, label);
+   return {slot: choice.slot, tick, label, row};
+  });
+  const save = document.createElement('button'); save.type = 'button'; save.className = 'btn-secondary'; save.textContent = 'Save buttons';
+  save.onclick = async () => {
+   try { await catApi(url, 'PUT', {buttons: rows.filter(item => item.tick.checked).map(item => ({slot: item.slot, label: item.label.value}))}); note.textContent = 'Buttons saved.'; }
+   catch (error) { note.textContent = error.message; }
+  };
+  box.replaceChildren(heading, help, ...rows.map(item => item.row), save, note);
  } catch (error) { box.textContent = error.message; }
 }
 function catSlotRow(box, owner, ownerId, base, slot, records, menus) {
@@ -558,10 +610,10 @@ async function catAddMaster() {
   await catChanged('Added ' + name + '.');
  } catch (error) { catNote(error.message, true); }
 }
-async function catSaveLinks(topic, menu, qa, customer) {
+async function catSaveLinks(topic, menu, qa, customer, buttonName) {
  try {
   await catApi('/admin/categories/master/' + encodeURIComponent(topic.topic_id) + '/links', 'PUT',
-               {menu_category_id: menu ? Number(menu) : null, qa_context: qa || null, customer_topic_id: customer || null});
+               {menu_category_id: menu ? Number(menu) : null, qa_context: qa || null, customer_topic_id: customer || null, button_name: buttonName || null});
   await catChanged('Saved links for ' + topic.name + '.');
  } catch (error) { catNote(error.message, true); }
 }

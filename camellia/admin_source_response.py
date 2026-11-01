@@ -137,6 +137,10 @@ async function initSharedMapping(item){
  answers.innerHTML='<summary style="cursor:pointer;font-weight:600">Answers for this post only</summary><p class="source-map-help">Override the master category for this post. Answers run in shadow for now, so customers do not get them yet.</p><div id="sharedMappingAnswers"></div>';
  box.querySelector('.source-map-form')?.append(answers);
  answers.ontoggle=()=>{if(answers.open)catSlotEditor(document.getElementById('sharedMappingAnswers'),'route',route.routing_id);};
+ const questions=document.createElement('details');questions.className='source-map-field';
+ questions.innerHTML='<summary style="cursor:pointer;font-weight:600">Question buttons</summary><div id="sharedMappingQuestions"></div>';
+ box.querySelector('.source-map-form')?.append(questions);
+ questions.ontoggle=()=>{if(questions.open)catQuestionButtons(document.getElementById('sharedMappingQuestions'),'route',route.routing_id);};
 }
 async function openSharedSource(itemId){
  const note=document.getElementById('sharedMappingNote');
