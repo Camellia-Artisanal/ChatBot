@@ -997,7 +997,9 @@ def _process_instagram_event(
             "source_media_present": source_media_present,
             "customer_text_accompanied_media": customer_text_accompanied_media,
         })
-        if source_media_present and not source_route and shared_source_type in {"post", "reel"}:
+        other_account_reel = bool(source_media_present and not source_route and shared_source_type == "reel"
+                                  and _is_other_account_reel((shared_reel or {}).get("shortcode")))
+        if source_media_present and not source_route and shared_source_type in {"post", "reel"} and not other_account_reel:
             if shared_source_type == "post" and db.has_pending_instagram_media(sender_id, shared_post_id or ""):
                 # Webhook ingress persisted the Post event before queuing this
                 # worker. Give an adjacent ADS referral a bounded race window.
@@ -1701,6 +1703,15 @@ def _handle_shared_attachment(
                 route = session_memory.get_facts(sender_id, "instagram").get("source_route")
             if not route:
                 _mark_unmapped_shared_attachment(sender_id)
+                shortcode = (reel_identity or {}).get("shortcode")
+                if reel_identity and _is_other_account_reel(shortcode):
+                    db.log_conversation(
+                        sender_id, "instagram", "[shared Instagram reel]", "", False, "shared_reel_other_account",
+                        message_source="shared_media", source_type="reel", shortcode=shortcode,
+                        source_match_method="shared_media_other_account",
+                        source_context_available=False, source_context_used=False,
+                    )
+                    return
                 if post_media_id and db.has_pending_instagram_media(sender_id, post_media_id):
                     log.info("AD_MEDIA_RACE sender_hash=%s pending_post=true ads_referral_followed=false result=WAIT_FOR_EXPIRY",
                              _safe_identifier_hash(sender_id))
@@ -1770,6 +1781,17 @@ def _finalize_expired_unmapped_posts() -> None:
         except Exception:
             log.exception("Could not finalize expired shared Post for sender_hash=%s.",
                           _safe_identifier_hash(event["sender_id"]))
+
+
+def _is_other_account_reel(shortcode: Optional[str]) -> bool:
+    """A forwarded reel that is not Camellia's: 246 of 246 unmapped shares by 1 Nov.
+
+    Staff cannot map these and they filled the handoff queue. Without a complete
+    sync we cannot tell whose reel it is, so it stays a handoff.
+    """
+    owner = config.instagram_media_owner_id()
+    return bool(shortcode and owner and db.has_successful_instagram_media_inventory_sync(owner)
+                and not db.instagram_media_shortcode_known(str(shortcode)))
 
 
 def _mark_unmapped_shared_attachment(sender_id: str) -> None:

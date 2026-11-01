@@ -2100,6 +2100,10 @@ class Database:
             row = conn.execute("SELECT * FROM instagram_media WHERE id=?", (item_id,)).fetchone()
             return dict(row) if row else None
 
+    def instagram_media_shortcode_known(self, shortcode: str) -> bool:
+        with self.get_connection() as conn:
+            return conn.execute("SELECT 1 FROM instagram_media WHERE shortcode=? LIMIT 1", (shortcode,)).fetchone() is not None
+
     def get_instagram_media_by_permalink(self, permalink: str) -> Optional[Dict[str, Any]]:
         with self.get_connection() as conn:
             row = conn.execute("SELECT * FROM instagram_media WHERE permalink=?", (permalink,)).fetchone()

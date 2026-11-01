@@ -75,6 +75,9 @@ Rules that hold the flow together:
   They run in shadow under `VARIATION_SHADOW_ENABLED`: a handoff on a mapped source is classified
   in the background, stored in `answer_slot_shadow`, and shown on Needs answers and at
   `GET /admin/answer-slot-shadow`. No reply reads a slot yet.
+- A shared reel that is not in Camellia's synced media opens no handoff. Alone it gets no reply;
+  with text, the text goes through normal answering with no source. Until a complete media sync
+  has run, it stays a handoff, because the bot cannot tell whose reel it is.
 - No ad context: generic price questions get `general_price`; nothing mapping-specific leaks.
 - An explicit ADS referral without an ad ID or exact active route clears prior ad/topic
   context and hands off; it cannot fall through to a generic or previous-city answer.
