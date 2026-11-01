@@ -124,6 +124,10 @@ def test_blocks_put_the_buttons_only_on_a_final_text():
     assert send.call_args_list[1].kwargs["quick_replies"] == [{"title": "Price"}]
 
 
+def test_health_shows_the_button_switch(admin, store):  # noqa: F811
+    assert admin[0].get("/health").json()["category_buttons_mode"] == "all"
+
+
 def test_button_routes(admin, store):  # noqa: F811
     client, headers = admin
     path = "/admin/categories/question-buttons/topic/t1"

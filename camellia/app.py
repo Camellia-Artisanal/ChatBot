@@ -3845,6 +3845,7 @@ def _health_details():
             "ai": ai_responder.status(),
             "reply_latency": latency_monitor.snapshot(),
             "slow_reply_notice_active": config.is_slow_reply_notice_active,
+            "category_buttons_mode": config.CATEGORY_BUTTONS_MODE,
             "retention_days": config.DATA_RETENTION_DAYS,
         }),
         media_type="application/json",
