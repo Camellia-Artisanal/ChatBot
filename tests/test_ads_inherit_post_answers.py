@@ -234,3 +234,10 @@ assert(nodes.adsList.innerHTML.includes('data-ads-action="map"') && nodes.adsLis
     target.write_text(script, encoding="utf-8")
     result = subprocess.run([node, str(target)], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
+
+
+def test_map_forms_keep_category_visible_and_fold_the_rest():
+    from camellia.admin_source_response import SCRIPT
+    assert "mapFormLayout(prefix);" in SCRIPT and "'More options','MoreOptions'" in SCRIPT and "'Advanced','Advanced'" in SCRIPT
+    # A clash must stay on show when the customer preview is folded away.
+    assert "</details>`+(clash?" in SCRIPT

@@ -80,7 +80,7 @@ def test_preview_table_endpoint(store, monkeypatch):
 def test_editor_and_mapping_screens_carry_the_controls():
     from camellia.admin_approved_qa import SCRIPT
     from camellia.admin_source_response import SCRIPT as MAPPING
-    assert "On mapped posts/ads, use for" in SCRIPT and "mapped_questions:" in SCRIPT and "function aqRoleChanged" in SCRIPT
+    assert "Question type" in SCRIPT and "mapped_questions:" in SCRIPT and "function aqRoleChanged" in SCRIPT
     assert "What customers on this post will get" in MAPPING and "/admin/instagram-routes/answer-preview" in MAPPING
 
 

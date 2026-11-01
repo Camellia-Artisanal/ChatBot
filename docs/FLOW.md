@@ -185,3 +185,7 @@ uses a human handoff; it cannot fall through to the city-specific generic food i
 ## Admin forms
 
 - Categories: each master category opens in a side panel with four tabs. `_setup_steps` decides what is done; the page only draws it. Staff can add their own questions per category. The waiting box lists one row per customer question, with up to three usernames of who asked (`answer_slot_shadow.sender_id`, erased with the customer): Answer opens the panel on that question and closes it after Save; Remove hides that one question for good (`answer_slots.remove_gap` marks its shadow rows `removed_by_staff`, so the test results keep them and a new ask still shows). Wrong type? refiles a waiting question without teaching the AI. Category answers find images through `responder.approved_asset_urls`, as normal replies do; one that cannot be sent is not counted as done. Ticks, dropdowns and names save themselves with an 8-second Undo; written answers keep Save. The panel's preview comes from `category_buttons.preview` and stays labelled as testing until category answers go live.
+- Map forms (Ads, Posts & Reels, Stories): `mapFormLayout` moves the existing fields into Category,
+  the reply, More options, Advanced and a fixed Save. Ids and saves do not change.
+- Add answer: Category, Customer question and Answer stay on show. Save runs preview then publish,
+  so a clash blocks it. Delete warns what it affects and keeps the answer under Deleted / Expired.

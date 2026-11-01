@@ -1,7 +1,7 @@
 """Shared read-only Approved Q&A selector for all Instagram source editors."""
 import json
 
-SELECTOR_TEMPLATE = r"""<style>[id$="QaFields"][hidden],.source-map-field[hidden]{display:none!important;} fieldset.source-map-field input[type="radio"]{width:auto;} fieldset.source-map-field{min-width:0;max-width:100%;} [id$="QaFields"],[id$="QaBundleFields"],[id$="QaChecklist"]{min-width:0;max-width:100%;} .source-qa-card{box-sizing:border-box;max-width:100%;}</style><fieldset class="source-map-field" style="border:0;padding:0;margin:0 0 16px"><legend class="field-label">Response Source</legend>
+SELECTOR_TEMPLATE = r"""<style>[id$="QaFields"][hidden],.source-map-field[hidden]{display:none!important;} fieldset.source-map-field input[type="radio"]{width:auto;} fieldset.source-map-field{min-width:0;max-width:100%;} [id$="QaFields"],[id$="QaBundleFields"],[id$="QaChecklist"]{min-width:0;max-width:100%;} .source-qa-card{box-sizing:border-box;max-width:100%;} .map-more>summary{cursor:pointer;font-weight:600;padding:6px 0;} .map-save{position:sticky;bottom:0;z-index:5;padding:10px 0;background:var(--surface);border-top:1px solid var(--border);}</style><fieldset class="source-map-field" style="border:0;padding:0;margin:0 0 16px"><legend class="field-label">Response Source</legend>
 <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap"><label><input type="radio" name="__PREFIX__ResponseMode" value="APPROVED_QA" checked onchange="setSourceResponseMode('__PREFIX__')"> Approved Q&amp;A</label>
 <label><input type="radio" name="__PREFIX__ResponseMode" value="CUSTOM" onchange="setSourceResponseMode('__PREFIX__')"> Custom response <span class="ig-media-muted">(optional)</span></label></div>
 <div id="__PREFIX__QaFields" hidden style="margin-top:12px">
@@ -55,11 +55,45 @@ function setSourceResponseMode(prefix) {
  const approved=sourceResponseFields(prefix).response_mode==='APPROVED_QA';
  document.getElementById(prefix+'QaFields').hidden=!approved;
  if(prefix!=='igStory'){const multi=sourceQaMultiple(prefix);document.getElementById(prefix+'QaBundleFields').hidden=!multi;document.getElementById(prefix+'ApprovedQaId').hidden=multi;document.getElementById(prefix+'QaSingleLabel').hidden=multi;}
- const ids={ig:['igTopicPicker','igSourceDescription','igCustomResponseVariations','igTopicDescription','igMenuPicker'],igStory:['igStoryTopicPicker','igStorySourceDescription','igStoryCustomResponseVariations','igStoryMenuPicker'],igMedia:['igMediaTopic','igMediaTopicAnswers','igMediaDescription','igMediaCustomResponseVariations','igMediaMenu']}[prefix];
+ const ids={ig:['igSourceDescription','igCustomResponseVariations','igTopicDescription','igMenuPicker','igCustomInfoQuestions'],igStory:['igStorySourceDescription','igStoryCustomResponseVariations','igStoryMenuPicker'],igMedia:['igMediaTopicAnswers','igMediaDescription','igMediaCustomResponseVariations','igMediaMenu','igMediaCustomInfoQuestions']}[prefix];
  for(const id of ids){const element=document.getElementById(id); if(element)element.closest('.source-map-field')?.toggleAttribute('hidden',approved);}
+ const contextField=document.getElementById(prefix+'QaContextField');if(contextField)contextField.hidden=!approved||!sourceQaMultiple(prefix);
  previewSourceQa(prefix);
 }
+// Map form order: Category, the reply, More options, Advanced, a fixed Save. Fields
+// only move, so their ids, saves and warnings stay as they were.
+const MAP_FORM_PARTS={ig:{category:'igTopicPicker',save:'igSaveButton',phrases:'igCustomResponseVariations',info:'igCustomInfoQuestions',active:'igActive'},igStory:{category:'igStoryTopicPicker',save:'igStorySaveButton',phrases:'igStoryCustomResponseVariations',active:'igStoryActive'},igMedia:{category:'igMediaTopic',phrases:'igMediaCustomResponseVariations',info:'igMediaCustomInfoQuestions',answers:'igMediaTopicAnswers',active:'igMediaAutoReply'}};
+function mapFormLayout(prefix){
+ const part=MAP_FORM_PARTS[prefix],picker=document.getElementById(part.category),form=picker?.closest?.('.source-map-form');
+ if(!form?.prepend||form.querySelector('.map-more'))return;
+ const field=id=>document.getElementById(id)?.closest('.source-map-field');
+ const fold=(title,id)=>{const box=document.createElement('details');box.className='map-more source-map-field';box.id=prefix+id;const summary=document.createElement('summary');summary.textContent=title;box.append(summary);return box;};
+ const more=fold('More options','MoreOptions'),advanced=fold('Advanced','Advanced');
+ const wrap=(id,...nodes)=>{const box=document.createElement('div');box.className='source-map-field';box.id=id;box.append(...nodes);return box;};
+ const category=field(part.category);category.querySelector('label').textContent='Category';
+ const reply=document.getElementById(prefix+'QaFields').closest('fieldset');form.prepend(category);category.after(reply);
+ const context=document.getElementById(prefix+'QaContext');
+ more.append(wrap(prefix+'QaContextField',document.querySelector('label[for="'+prefix+'QaContext"]'),context));
+ const phrases=field(part.phrases);if(phrases)more.append(phrases);
+ const info=document.getElementById(part.info)?.closest('label');if(info)more.append(wrap(prefix+'InfoField',info));
+ const answers=field(part.answers);if(answers)more.append(answers);
+ const active=field(part.active);if(active)advanced.append(active);
+ const pair=form.querySelector('[onclick^="pairInstagramPost"]')?.parentElement;if(pair)advanced.append(pair);
+ const danger=document.getElementById('igStoryDeleteSection')&&prefix==='igStory'?document.getElementById('igStoryDeleteSection'):form.querySelector('.source-danger');if(danger)advanced.append(danger);
+ const save=(document.getElementById(part.save)||form.querySelector('.source-save')).parentElement;save.classList.add('map-save');
+ form.append(more,advanced,save);
+ picker.addEventListener('change',()=>mapCategoryContext(prefix));
+}
+// The category picks which answers are listed, unless that would hide a ticked one.
+function mapCategoryContext(prefix){
+ const state=sourceResponseState[prefix],part=MAP_FORM_PARTS[prefix],select=document.getElementById(prefix+'QaContext');if(!state?.records.length||!select)return;
+ const topic=(typeof igTopics!=='undefined'?igTopics:[]).find(item=>item.topic_id===document.getElementById(part.category)?.value);if(!topic)return;
+ const next=state.records.some(record=>record.context===topic.qa_context)?topic.qa_context:topicAnswerCategory(topic,state.records);
+ if(state.records.some(record=>state.selectedIds.has(record.qa_id)&&record.context!==next&&record.context!=='general'&&!record.shared))return;
+ state.context=next;select.value=next;if(sourceQaMultiple(prefix))renderStoryQa(prefix);
+}
 async function initSourceResponse(prefix, route) {
+ mapFormLayout(prefix);
  const state={selected:route.approved_qa_id || '',records:[],selectedIds:new Set(route.approved_qa_ids || (route.approved_qa_id?[route.approved_qa_id]:[])),context:(prefix==='igStory'?route.story_context:route.source_context)??null}; sourceResponseState[prefix]=state;
  document.querySelector(`input[name="${prefix}ResponseMode"][value="${route.response_mode || 'APPROVED_QA'}"]`).checked=true;
  addVariationSuggest(prefix);
@@ -74,8 +108,10 @@ async function initSourceResponse(prefix, route) {
   state.records=data.records || []; select.disabled=false;
   {
    state.contexts=data.contexts||Array.from(new Set(['general',...state.records.map(r=>r.context)])).map(value=>({value,label:value}));
-   if(state.context===null)state.context=state.records.find(r=>state.selectedIds.has(r.qa_id))?.context||'general';
+   const unset=state.context===null;
+   if(unset)state.context=state.records.find(r=>state.selectedIds.has(r.qa_id))?.context||'general';
    const context=document.getElementById(prefix+'QaContext');context.replaceChildren(...state.contexts.map(o=>new Option(o.value==='general'?'General':o.label,o.value)));context.value=state.context;
+   if(unset)mapCategoryContext(prefix);
   }
   filterSourceQa(prefix);
  } catch(error) {
@@ -129,17 +165,18 @@ async function initSharedMapping(item){
   document.getElementById('sharedMappingStop').onclick=()=>stopSharingMapping(item);
   return;
  }
+ const advanced=document.getElementById('igMediaAdvanced'),more=document.getElementById('igMediaMoreOptions');
  const panel=document.createElement('div');panel.className='source-map-field';
  panel.innerHTML='<b>Use this mapping on more posts</b><p class="source-map-help">Shared with '+Number(shared.shared_count)+' other posts. Editing this mapping changes all of them, and deleting it removes it from them too. Works for customers who share a Reel or come from an ad. Posts with their own mapping are skipped.</p><button class="btn-secondary" type="button" id="sharedMappingOpen">Choose posts</button><div id="sharedMappingPicker"></div>';
- box.querySelector('.source-map-form')?.append(panel);
+ advanced?.append(panel);
  document.getElementById('sharedMappingOpen').onclick=()=>openSharedPicker(Number(route.routing_id));
  const answers=document.createElement('details');answers.className='source-map-field';
  answers.innerHTML='<summary style="cursor:pointer;font-weight:600">Answers for this post only</summary><p class="source-map-help">Override the master category for this post. Answers run in shadow for now, so customers do not get them yet.</p><div id="sharedMappingAnswers"></div>';
- box.querySelector('.source-map-form')?.append(answers);
+ advanced?.append(answers);
  answers.ontoggle=()=>{if(answers.open)catSlotEditor(document.getElementById('sharedMappingAnswers'),'route',route.routing_id);};
  const questions=document.createElement('details');questions.className='source-map-field';
  questions.innerHTML='<summary style="cursor:pointer;font-weight:600">Question buttons</summary><div id="sharedMappingQuestions"></div>';
- box.querySelector('.source-map-form')?.append(questions);
+ more?.append(questions);
  questions.ontoggle=()=>{if(questions.open)catQuestionButtons(document.getElementById('sharedMappingQuestions'),'route',route.routing_id);};
 }
 async function openSharedSource(itemId){
@@ -356,7 +393,7 @@ async function refreshAnswerTable(prefix){
   const rows=data.rows.map(row=>`<tr><td style="padding:4px 8px">${escapeHtml(row.question)}</td><td style="padding:4px 8px">${row.answer?'✅ '+escapeHtml(row.answer):'⚠ Not from these answers (bot rules or manager)'}</td></tr>`).join('');
   const pairs={};for(const c of data.collisions){const key=c.answers.join(' and ');(pairs[key]=pairs[key]||[]).push(c.question);}
   const clash=Object.entries(pairs).map(([answers,questions])=>`<li>${answers.split(' and ').map(a=>'“'+escapeHtml(a)+'”').join(' and ')} both answer “${escapeHtml(questions[0])}”${questions.length>1?' and '+(questions.length-1)+' more':''} — untick one of them.</li>`).join('');
-  box.innerHTML=`<b>What customers on this post will get</b><table style="border-collapse:collapse;margin-top:6px">${rows}</table>`+(clash?`<div role="alert" style="margin-top:8px;color:var(--danger)"><b>Fix before saving:</b><ul>${clash}</ul></div>`:'');
+  box.innerHTML=`<details><summary style="cursor:pointer;font-weight:600">What customers on this post will get</summary><table style="border-collapse:collapse;margin-top:6px">${rows}</table></details>`+(clash?`<div role="alert" style="margin-top:8px;color:var(--danger)"><b>Fix before saving:</b><ul>${clash}</ul></div>`:'');
  }catch(error){if(state.previewStamp===stamp)box.textContent=error.message;}
 }
 </script>""".replace("__SELECTOR__", json.dumps(SELECTOR_TEMPLATE)).replace("__STORY_SELECTOR__", json.dumps(selector_html('igStory'))).replace("__MEDIA_SELECTOR__", json.dumps(selector_html('igMedia'))).replace("__POST_SELECTOR__", json.dumps(selector_html('ig')))

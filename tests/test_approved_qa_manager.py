@@ -294,8 +294,8 @@ def test_dedicated_ui_and_legacy_surface_are_separate(api):
     page = api.get("/admin").text
     assert 'id="tab-approved-qa"' in page and "Approved Q&amp;A" in page
     assert "Advanced / Legacy" in page and 'id="tab-custom-qa"' in page
-    assert "Preview / Test" in page and "Publish Approved Q&amp;A" in page
-    assert "Asia/Kolkata" in page and "Archived / Expired" in page
+    assert "Preview / Test" in page and "function aqSave" in page
+    assert "Asia/Kolkata" in page and "Deleted / Expired" in page
     assert 'id="aqPublishButton"' in page and 'id="aqPublish"' not in page
     assert 'if(!adminAuthenticated)return;' in page
     assert page.count('style.display !== "none") loadApprovedQa();') == 2
@@ -357,3 +357,45 @@ def test_home_table_reel_links_can_be_edited_out(tmp_path, monkeypatch):
     record = approved_qa.publish({**body, "preview_token": approved_qa.preview(body)["preview_token"]}, "test")
     assert record["answer"] == "Ask us for the Home Table video."
     assert client_qa.HOME_TABLE_VIDEO_ANCHOR not in approved_qa.get("home_table_details").answer
+def test_add_answer_form_folds_all_but_three_fields_behind_one_save():
+    from camellia.admin_approved_qa import SCRIPT
+    assert "aqFormLayout();document.getElementById('aqDialog').showModal()" in SCRIPT
+    assert "if(await aqPreview())await aqPublish();" in SCRIPT
+
+
+def test_a_removed_image_leaves_a_built_in_answer_and_comes_back(tmp_path, monkeypatch):
+    from camellia import approved_qa, client_qa
+    from camellia.database import Database
+    database = Database(str(tmp_path / "assets.db"))
+    monkeypatch.setattr(approved_qa, "_database", lambda: database)
+    key = "sondesh_details_client"
+    untouched = client_qa.REGISTRY_BY_ID[key]
+    assert approved_qa.get(key).blocks == untouched.blocks
+
+    def save(hidden):
+        body = {"qa_id": key, "hidden_assets": hidden}
+        return approved_qa.publish({**body, "preview_token": approved_qa.preview(body)["preview_token"]}, "test")
+
+    assert save(["weekly_menu"])["hidden_assets"] == ["weekly_menu"]
+    entry = approved_qa.get(key)
+    assert "weekly_menu" not in entry.asset_keys
+    assert "weekly_menu" not in [block.value for block in entry.blocks]
+    assert [b.value for b in entry.blocks if b.kind == "TEXT"] == [b.value for b in untouched.blocks if b.kind == "TEXT"]
+    assert approved_qa.match("Tell me more about sondesh", {}, allowed_qa_ids={key}).asset_keys == entry.asset_keys
+    save([])
+    assert approved_qa.get(key).blocks == untouched.blocks
+
+
+def test_only_a_built_in_answers_own_images_can_be_removed(tmp_path, monkeypatch):
+    import pytest
+    from camellia import approved_qa
+    from camellia.database import Database
+    database = Database(str(tmp_path / "assets.db"))
+    monkeypatch.setattr(approved_qa, "_database", lambda: database)
+    with pytest.raises(ValueError):
+        approved_qa.preview({"qa_id": "sondesh_details_client", "hidden_assets": ["not_an_image"]})
+
+
+def test_the_delete_warning_names_categories_using_the_answer():
+    from camellia.admin_approved_qa import SCRIPT
+    assert "/admin/categories/slots/topic/" in SCRIPT and "slot.answer?.qa_id===id" in SCRIPT
