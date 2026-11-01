@@ -9647,7 +9647,7 @@ THIS WEEK'S BENGAL SPECIALS
                 if (requestGeneration !== authRequestGeneration) return;
                 adminAuthenticated = true;
                 hideAuthOverlay();
-                loadActiveMenu(); loadAdRoutes(); mrMenus(); loadAnalytics(); refreshCandidateBadge(); loadDashboardOverview(); loadHandoffs(); loadInstagramContentGallery();
+                loadActiveMenu(); loadAdRoutes(); mrMenus(); loadAnalytics(); refreshCandidateBadge(); loadDashboardOverview(); loadHandoffs(); loadInstagramContentGallery(); loadCategories();
             } catch (e) {
                 if (requestGeneration !== authRequestGeneration) return;
                 adminAuthenticated = false;
@@ -9758,7 +9758,7 @@ THIS WEEK'S BENGAL SPECIALS
                     mrMenus();
                     loadAnalytics();
                     refreshCandidateBadge();
-                    loadDashboardOverview(); loadHandoffs(); loadInstagramContentGallery();
+                    loadDashboardOverview(); loadHandoffs(); loadInstagramContentGallery(); loadCategories();
                 } else {
                     const card = document.getElementById('authCard');
                     card.classList.add('shake');
