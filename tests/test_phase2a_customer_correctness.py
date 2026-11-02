@@ -91,6 +91,8 @@ def test_home_table_prefix_mismatch_keeps_entire_selected_answer(customer, monke
         client_qa.REGISTRY_BY_ID, "home_table_price",
         replace(original, answer=changed, blocks=(client_qa.ResponseBlock("TEXT", changed),)),
     )
+    from camellia import approved_qa
+    monkeypatch.setattr(approved_qa, "base_entry", client_qa.REGISTRY_BY_ID.get)
     reply, facts = customer("What's the price?")
     assert reply[0] == changed
     blocks = facts["ordered_response_blocks"]

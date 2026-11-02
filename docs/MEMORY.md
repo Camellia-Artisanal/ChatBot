@@ -60,6 +60,9 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
 - `<dialog>` elements draw above any page overlay. Opening a `display:flex` popup from inside
   a dialog hides it behind the dialog — close/park the dialog first.
 
+- `data/client_approved_qa_source.txt` only seeds `approved_qa_builtin`, so editing it changes nothing for an answer already
+  stored (3 Nov). Change built-in wording in Admin. The file stays as the fallback if the database cannot be read.
+
 ## Business rules (client decisions)
 
 - **Approved wording is sent word for word.** The model may choose an approved answer,

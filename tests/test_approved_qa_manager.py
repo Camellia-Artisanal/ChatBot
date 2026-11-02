@@ -38,7 +38,7 @@ def test_empty_overlay_is_byte_identical_to_all_23_entries(store):
         conn.execute("DELETE FROM approved_qa_overrides")
     assert len(client_qa.REGISTRY) == 23
     assert approved_qa.registry() == client_qa.parse_source() == client_qa.REGISTRY
-    assert all(a is b for a, b in zip(approved_qa.registry(), client_qa.REGISTRY))
+    assert all(a == b for a, b in zip(approved_qa.registry(), client_qa.REGISTRY))
     for entry in client_qa.REGISTRY:
         facts = {"home_table_context": True} if entry.context == "home_table" else {}
         if entry.qa_id == "order_prebook":
@@ -190,7 +190,7 @@ def test_bento_exact_boundary_all_matcher_routes(store, monkeypatch, instant, av
         result = client_qa.match(message, facts)
         assert bool(result) == available
         if result:
-            assert result.entry is client_qa.REGISTRY_BY_ID[result.entry.qa_id]
+            assert result.entry == client_qa.REGISTRY_BY_ID[result.entry.qa_id]
     assert bool(grounded_answers._bento_prices()) == available
     assert bool(grounded_answers.derive("which bento is cheapest?", {})) == available
     assert client_qa.match("sondesh price") is not None
@@ -253,7 +253,7 @@ def test_assets_and_reel_order_survive_base_edit(store):
     assert effective.answer == updated["answer"]
     assert effective.asset_keys == base.asset_keys
     assert [b for b in effective.blocks if b.kind != "TEXT"] == [b for b in base.blocks if b.kind != "TEXT"]
-    assert client_qa.effective_entry("home_table_details") is client_qa.REGISTRY_BY_ID["home_table_details"]
+    assert client_qa.effective_entry("home_table_details") == client_qa.REGISTRY_BY_ID["home_table_details"]
 
 
 @pytest.fixture
@@ -305,3 +305,55 @@ def test_approved_answers_can_suggest_phrases():
     from camellia.admin_approved_qa import SCRIPT
     from camellia.admin_source_response import SCRIPT as SOURCE
     assert "suggestVariations('aq',box,button,list)" in SCRIPT and "aq:['aqAnswer']" in SOURCE
+def _stored(tmp_path, monkeypatch):
+    from camellia import approved_qa
+    from camellia.database import Database
+    database = Database(str(tmp_path / "builtin.db"))
+    monkeypatch.setattr(approved_qa, "_database", lambda: database)
+    approved_qa.overlays()
+    return approved_qa, database
+
+
+def test_built_in_answers_are_stored_exactly_as_the_source_file(tmp_path, monkeypatch):
+    from camellia import client_qa
+    approved_qa, _database = _stored(tmp_path, monkeypatch)
+    for entry in client_qa.REGISTRY:
+        assert approved_qa.base_entry(entry.qa_id) == entry
+
+
+def test_the_bot_reads_the_stored_copy_not_the_file(tmp_path, monkeypatch):
+    approved_qa, database = _stored(tmp_path, monkeypatch)
+    with database.get_connection() as conn:
+        conn.execute("UPDATE approved_qa_builtin SET answer='Stored wording', blocks_json=? WHERE qa_id='general_payment_client'",
+                     ('[["TEXT", "Stored wording"]]',))
+        conn.commit()
+    approved_qa.overlays()
+    entry = approved_qa.get("general_payment_client")
+    assert entry.answer == "Stored wording" and entry.blocks[0].value == "Stored wording"
+
+
+def test_a_saved_built_in_is_not_overwritten_when_the_app_restarts(tmp_path, monkeypatch):
+    from camellia.database import Database
+    approved_qa, database = _stored(tmp_path, monkeypatch)
+    with database.get_connection() as conn:
+        conn.execute("UPDATE approved_qa_builtin SET answer='Stored wording' WHERE qa_id='general_payment_client'")
+        conn.commit()
+    Database(str(tmp_path / "builtin.db"))
+    approved_qa.overlays()
+    assert approved_qa.base_entry("general_payment_client").answer == "Stored wording"
+
+
+def test_the_source_file_stands_in_if_the_stored_copy_cannot_be_read(tmp_path, monkeypatch):
+    from camellia import client_qa
+    approved_qa, _database = _stored(tmp_path, monkeypatch)
+    approved_qa._bases.clear()
+    assert approved_qa.base_entry("general_price") == client_qa.REGISTRY_BY_ID["general_price"]
+
+
+def test_home_table_reel_links_can_be_edited_out(tmp_path, monkeypatch):
+    from camellia import client_qa
+    approved_qa, _database = _stored(tmp_path, monkeypatch)
+    body = {"qa_id": "home_table_details", "answer": "Ask us for the Home Table video."}
+    record = approved_qa.publish({**body, "preview_token": approved_qa.preview(body)["preview_token"]}, "test")
+    assert record["answer"] == "Ask us for the Home Table video."
+    assert client_qa.HOME_TABLE_VIDEO_ANCHOR not in approved_qa.get("home_table_details").answer

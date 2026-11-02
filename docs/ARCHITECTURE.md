@@ -215,6 +215,7 @@ graphify update .
 | `instagram_source_qa_bundles` (+`_items`) | Checklist of approved answers for a mapping |
 | `instagram_topics` | Master categories: mapping topics, default answers, and links to one Menu category, Q&A category and Customer message topic |
 | `answer_slots`, `answer_slot_shadow` | One answer per question type on a category or post, and silent results of reading the type |
+| `approved_qa_builtin` | The 23 built-in answers, seeded once from the source file |
 | `approved_qa_overrides` (+`_versions`) | Admin edits and new answers |
 | `approved_qa_contexts` | Client-added categories |
 | `menu_catalogue`, `menu_versions`, `menu_image_versions`, `menu_customer_topics` | Menus and what customers can see |

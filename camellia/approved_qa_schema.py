@@ -32,6 +32,18 @@ def initialize(cursor):
         cursor.execute("ALTER TABLE approved_qa_overrides ADD COLUMN mapped_questions_json TEXT")
     if "hidden_aliases_json" not in columns:
         cursor.execute("ALTER TABLE approved_qa_overrides ADD COLUMN hidden_aliases_json TEXT NOT NULL DEFAULT '[]'")
+    # The built-in answers live here; data/client_approved_qa_source.txt only seeds
+    # an answer the first time it is seen, so repo edits to it no longer ship (3 Nov).
+    cursor.execute("""CREATE TABLE IF NOT EXISTS approved_qa_builtin (
+        qa_id TEXT PRIMARY KEY, question TEXT NOT NULL, answer TEXT NOT NULL, context TEXT NOT NULL,
+        asset_keys_json TEXT NOT NULL, blocks_json TEXT NOT NULL
+    )""")
+    from camellia import client_qa
+    for entry in client_qa.REGISTRY:
+        cursor.execute("""INSERT OR IGNORE INTO approved_qa_builtin
+            (qa_id,question,answer,context,asset_keys_json,blocks_json) VALUES (?,?,?,?,?,?)""",
+            (entry.qa_id, entry.question, entry.answer, entry.context, json.dumps(list(entry.asset_keys)),
+             json.dumps([[block.kind, block.value] for block in entry.blocks], ensure_ascii=False)))
     # Categories the client adds in Admin (e.g. "Kolkata Bengali Home Table").
     cursor.execute("""CREATE TABLE IF NOT EXISTS approved_qa_contexts (
         value TEXT PRIMARY KEY, label TEXT NOT NULL,

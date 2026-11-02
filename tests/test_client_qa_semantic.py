@@ -10,7 +10,7 @@ PARSED = {entry.qa_id: entry for entry in client_qa.parse_source()}
 def assert_approved(message, expected_id, facts=None):
     matched = client_qa.match(message, facts)
     assert matched is not None, message
-    assert matched.entry is client_qa.REGISTRY_BY_ID[expected_id], message
+    assert matched.entry == client_qa.REGISTRY_BY_ID[expected_id], message
     assert matched.entry == PARSED[expected_id]
     assert matched.entry.answer == PARSED[expected_id].answer
     assert matched.asset_keys == PARSED[expected_id].asset_keys

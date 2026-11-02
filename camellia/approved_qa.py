@@ -19,6 +19,7 @@ log = logging.getLogger(__name__)
 _snapshots = {}
 _lock = threading.RLock()
 _preview_secret = secrets.token_bytes(32)
+_bases = {}
 EDIT_FIELDS = {"question", "answer", "context", "aliases", "valid_from", "valid_until", "blocks", "hidden_aliases",
                "mapped_role", "mapped_questions"}
 CANONICAL_CONTEXTS = {
@@ -96,7 +97,19 @@ def _database():
     return db
 
 
+def _stored_base(row):
+    return client_qa.ApprovedQA(row["qa_id"], row["question"], row["answer"], row["context"],
+                                tuple(json.loads(row["asset_keys_json"])),
+                                tuple(client_qa.ResponseBlock(kind, value) for kind, value in json.loads(row["blocks_json"])))
+
+
+def base_entry(qa_id):
+    """A built-in answer as stored; the source file only stands in if the database is unreadable."""
+    return _bases.get(_database(), {}).get(qa_id) or client_qa.REGISTRY_BY_ID.get(qa_id)
+
+
 def _read(conn):
+    _bases[_database()] = {row["qa_id"]: _stored_base(row) for row in conn.execute("SELECT * FROM approved_qa_builtin")}
     return {row["qa_id"]: dict(row) for row in conn.execute("SELECT * FROM approved_qa_overrides ORDER BY qa_id")}
 
 
@@ -197,7 +210,7 @@ def _builtin_aliases(qa_id, rows):
 
 
 def _base_entry(qa_id, row):
-    base = client_qa.REGISTRY_BY_ID.get(qa_id)
+    base = base_entry(qa_id)
     if base is None:
         return client_qa.ApprovedQA(qa_id, row["question"], row["answer"], row["context"] or "general",
                                   blocks=(client_qa.ResponseBlock("TEXT", row["answer"]),))
@@ -490,7 +503,7 @@ def _candidate(body, rows):
     if body.get("create") and (qa_id in rows or qa_id in client_qa.REGISTRY_BY_ID):
         raise ValueError("Duplicate Q&A ID")
     existing = rows.get(qa_id, {})
-    base = client_qa.REGISTRY_BY_ID.get(qa_id)
+    base = base_entry(qa_id)
     result = {"qa_id": qa_id, "record_type": "BASE_OVERRIDE" if base else "ADMIN_ADDED",
               "status": existing.get("status", "ACTIVE"), "aliases_json": existing.get("aliases_json", "[]"),
               "question": existing.get("question"), "answer": existing.get("answer"), "context": existing.get("context"),
@@ -551,8 +564,6 @@ def _candidate(body, rows):
     if base and result["answer"] is not None:
         if any(marker in result["answer"] for marker in client_qa._PLACEHOLDER_ASSETS):
             raise ValueError("Existing asset references are read-only")
-        if base.context == "home_table" and client_qa.HOME_TABLE_VIDEO_ANCHOR in base.answer and client_qa.HOME_TABLE_VIDEO_ANCHOR not in result["answer"]:
-            raise ValueError("Preserve the Home Table Reel anchor")
     if not base and re_search_asset(result["answer"]):
         raise ValueError("New approved Q&A must be text-only")
     return result
