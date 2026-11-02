@@ -14511,7 +14511,7 @@ Non-Veg:
     html_content = html_content.replace('<div id="tab-custom-qa"', CATEGORIES_HTML + '<div id="tab-custom-qa"', 1)
     handoff_nav_end = 'id="handoffSidebarBadge" class="admin-nav-badge" style="display:none;">0</span></button>'
     # Hidden from the menu while Master categories are finished; ?tab=categories still opens it.
-    html_content = html_content.replace(handoff_nav_end, handoff_nav_end + '<button class="tab-btn" style="display:none;" onclick="switchTab(\'tab-categories\', this)">☷ <span class="nav-label">Categories</span></button>', 1)
+    html_content = html_content.replace(handoff_nav_end, handoff_nav_end + '<button class="tab-btn" onclick="switchTab(\'tab-categories\', this)">☷ <span class="nav-label">Categories</span></button>', 1)
     html_content = html_content.replace("'tab-handoffs': 'handoffs',", "'tab-handoffs': 'handoffs', 'tab-categories': 'categories',", 1)
     html_content = html_content.replace("handoffs: 'tab-handoffs', settings:", "handoffs: 'tab-handoffs', categories: 'tab-categories', settings:", 1)
     html_content = html_content.replace("legacy: 'tab-ai-resolution',", "categories: 'tab-categories', legacy: 'tab-ai-resolution',", 1)
