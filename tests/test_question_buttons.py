@@ -136,3 +136,27 @@ def test_button_routes(admin, store):  # noqa: F811
     assert client.get(path, headers=headers).json()["buttons"] == [PRICE]
     assert client.put(path, headers=headers, json={"buttons": [{"slot": "x", "label": "y"}]}).status_code == 400
     assert client.get("/admin/categories/question-buttons/nope/1", headers=headers).status_code == 400
+
+
+def _preview_topic():
+    topic = _topic()
+    answer_slots.save("topic", topic, "details", {"kind": "CUSTOM", "custom_text": "Made fresh."})
+    buttons.save_buttons("topic", topic, [MORE, PRICE])
+    return topic
+
+
+def test_preview_shows_the_answer_and_only_buttons_that_have_one(store):
+    data = buttons.preview(_preview_topic(), "details")
+    assert data["state"] == "ok" and data["blocks"] == [{"kind": "TEXT", "text": "Made fresh."}]
+    assert data["buttons"] == ["Tell me more"]
+
+
+def test_preview_says_when_a_question_goes_to_staff(store):
+    assert buttons.preview(_preview_topic(), "price") == {"state": "empty", "blocks": [], "buttons": []}
+
+
+def test_preview_route(admin, store):  # noqa: F811
+    client, headers = admin
+    topic = _preview_topic()
+    assert client.get(f"/admin/categories/preview/{topic}/details", headers=headers).json()["state"] == "ok"
+    assert client.get("/admin/categories/preview/missing/details", headers=headers).status_code == 404

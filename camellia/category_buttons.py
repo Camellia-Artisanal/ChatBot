@@ -214,5 +214,17 @@ def question_for_tap(facts: Dict[str, Any], message: str) -> str:
     return offered.get(str(message or "").strip().casefold(), message)
 
 
+def preview(topic_id: str, slot: str) -> Dict[str, Any]:
+    """What a customer asking this would get from this category, for the Admin preview."""
+    blocks = blocks_for(topic_id, slot)
+    answer = answer_slots.effective({"topic_id": topic_id}, slot)
+    if blocks:
+        state = "ok"
+    else:
+        state = "expired" if answer and answer["expired"] else "unsendable" if answer else "empty"
+    shown = [button["label"] for button in stored_buttons("topic", topic_id) or [] if blocks_for(topic_id, button["slot"])]
+    return {"state": state, "blocks": blocks or [], "buttons": shown if blocks else []}
+
+
 def quick_replies(found: List[Dict[str, str]]) -> List[Dict[str, str]]:
     return [{"content_type": "text", "title": item["title"], "payload": "category:" + item["topic_id"]} for item in found]

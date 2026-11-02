@@ -199,6 +199,13 @@ def question_buttons(owner_type: str, owner_id: str, _actor=Depends(reviewer)):
             "choices": [{"slot": slot, "label": label} for slot, (label, _question) in category_buttons.QUESTIONS.items()]}
 
 
+@router.get("/preview/{topic_id}/{slot}")
+def preview(topic_id: str, slot: str, _actor=Depends(reviewer)):
+    if not _database().get_instagram_topic(topic_id):
+        raise HTTPException(404, "Master category not found.")
+    return category_buttons.preview(topic_id, slot)
+
+
 @router.put("/question-buttons/{owner_type}/{owner_id}")
 async def save_question_buttons(owner_type: str, owner_id: str, request: Request, _actor=Depends(reviewer)):
     _slot_owner(owner_type)
@@ -335,6 +342,20 @@ async def add_phrase(request: Request, _actor=Depends(reviewer)):
 
 
 HTML = r'''
+<style>
+#catPanel{width:min(940px,100vw);}
+.cat-panel-layout{display:flex;gap:18px;align-items:flex-start;}
+.cat-panel-main{flex:1;min-width:0;}
+.cat-preview{flex:0 0 290px;box-sizing:border-box;position:sticky;top:0;padding:12px;border:1px solid var(--border);border-radius:16px;background:var(--bg);}
+.cat-preview-chat{display:grid;gap:6px;margin-top:10px;}
+.cat-preview-bubble{justify-self:start;max-width:92%;padding:8px 12px;border-radius:14px;background:var(--surface);font-size:.85rem;white-space:pre-wrap;overflow-wrap:anywhere;}
+.cat-preview-bubble.mine{justify-self:end;background:var(--text-dark);color:#fff;}
+.cat-preview-chat img{max-width:92%;border-radius:12px;}
+.cat-preview-buttons{display:flex;flex-wrap:wrap;gap:6px;}
+.cat-preview-buttons span{padding:4px 10px;border:1px solid var(--border);border-radius:999px;background:var(--surface);font-size:.8rem;}
+.cat-preview-toggle{display:none;flex:none;}
+@media (max-width:820px){.cat-panel-layout{display:block;}.cat-preview{display:none;position:static;margin-bottom:12px;}.cat-preview.open{display:block;}.cat-preview-toggle{display:inline-block;}}
+</style>
 <div id="tab-categories" class="panel-card" data-group="categories" style="display:none;">
  <div class="admin-page-heading"><div><h2>Categories</h2><p>Keep one category for each product and city. Open a category and finish each tab. A dot means that tab still needs something.</p></div></div>
  <div id="catMessage" role="status" class="result-box" style="display:none;"></div>
@@ -373,7 +394,7 @@ HTML = r'''
  </section>
  </details>
  <div id="catPanelBackdrop" hidden style="position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:5000;" onclick="catClosePanel()"></div>
- <aside id="catPanel" hidden role="dialog" aria-labelledby="catPanelTitle" style="position:fixed;top:0;right:0;bottom:0;width:min(600px,100vw);box-sizing:border-box;overflow:auto;padding:18px;background:var(--surface);z-index:5001;box-shadow:-8px 0 24px rgba(0,0,0,.18);"></aside>
+ <aside id="catPanel" hidden role="dialog" aria-labelledby="catPanelTitle" style="position:fixed;top:0;right:0;bottom:0;box-sizing:border-box;overflow:auto;padding:18px;background:var(--surface);z-index:5001;box-shadow:-8px 0 24px rgba(0,0,0,.18);"></aside>
  <dialog id="catMoveDialog" aria-labelledby="catMoveTitle" style="margin:auto;padding:20px;border:1px solid var(--border);border-radius:12px;width:min(460px,calc(100vw - 32px));box-sizing:border-box;">
   <form onsubmit="event.preventDefault();catConfirmMove()">
    <h3 id="catMoveTitle">Delete Topic</h3>
@@ -389,7 +410,7 @@ HTML = r'''
 SCRIPT = r'''
 <script>
 let catData = null, catMoving = null;
-let catPanelTopic = null, catPanelTab = null;
+let catPanelTopic = null, catPanelTab = null, catPreviewSlot = 'details', catPreviewStamp = 0;
 // Tab order: most-used first. Each key matches a step from _setup_steps.
 const CAT_TABS = [
  ['answers', 'Answers', 'One answer for each kind of question customers ask. Add your own question at the end of the list.'],
@@ -468,7 +489,7 @@ function catPaintSteps(topic) {
 }
 // Saving inside a card must not redraw it, or a half-typed answer would be lost.
 async function catStepsChanged() {
- try { catData = await catApi('/admin/categories'); catData.topics.forEach(catPaintSteps); } catch (_error) { /* The marks catch up on the next load. */ }
+ try { catData = await catApi('/admin/categories'); catData.topics.forEach(catPaintSteps); catLoadPreview(); } catch (_error) { /* The marks catch up on the next load. */ }
 }
 function catLinksStep(topic) {
  const linked = topic.menu_category_id || topic.qa_context;
@@ -534,6 +555,40 @@ function catMasterRow(topic) {
  card.onclick = () => catOpenPanel(topic.topic_id);
  return card;
 }
+// Built by the server from the code that sends category answers, so it cannot drift.
+const CAT_PREVIEW_EMPTY = {empty: 'No answer is set, so this goes to staff.', expired: 'This answer has expired, so this goes to staff.', unsendable: 'Part of this answer cannot be sent here, so this goes to staff.'};
+function catPreviewBox() {
+ const box = document.createElement('aside'); box.className = 'cat-preview'; box.id = 'catPreview'; box.setAttribute('aria-label', 'Customer preview');
+ const title = document.createElement('b'); title.textContent = 'What the customer sees';
+ const label = document.createElement('label'); label.style.cssText = 'display:block;margin-top:6px;font-size:.85rem;'; label.textContent = 'Customer asks';
+ const select = document.createElement('select'); select.className = 'field-control'; select.id = 'catPreviewSlot'; select.onchange = () => { catPreviewSlot = select.value; catLoadPreview(); };
+ label.append(select);
+ const chat = document.createElement('div'); chat.className = 'cat-preview-chat'; chat.id = 'catPreviewChat';
+ const note = document.createElement('small'); note.className = 'ig-media-muted'; note.style.cssText = 'display:block;margin-top:10px;'; note.textContent = "Testing: customers don't get this yet.";
+ box.append(title, label, chat, note);
+ return box;
+}
+async function catLoadPreview() {
+ const chat = document.getElementById('catPreviewChat'), select = document.getElementById('catPreviewSlot');
+ if (!catPanelTopic || !chat) return;
+ const stamp = ++catPreviewStamp, topic = catPanelTopic;
+ try {
+  const {slots} = await catApi('/admin/categories/slots/topic/' + encodeURIComponent(topic));
+  if (!slots.some(slot => slot.slot === catPreviewSlot)) catPreviewSlot = 'details';
+  select.replaceChildren(...slots.map(slot => new Option(slot.label, slot.slot))); select.value = catPreviewSlot;
+  const data = await catApi('/admin/categories/preview/' + encodeURIComponent(topic) + '/' + encodeURIComponent(catPreviewSlot));
+  if (stamp !== catPreviewStamp) return;
+  const bubble = (text, mine) => { const item = document.createElement('div'); item.className = 'cat-preview-bubble' + (mine ? ' mine' : ''); item.textContent = text; return item; };
+  const parts = [bubble(select.selectedOptions[0]?.textContent || '', true)];
+  for (const block of data.blocks) {
+   if (block.kind === 'TEXT') parts.push(bubble(block.text));
+   else (block.urls || []).forEach(url => { const image = document.createElement('img'); image.src = url; image.alt = 'Menu image'; parts.push(image); });
+  }
+  if (data.state !== 'ok') parts.push(bubble(CAT_PREVIEW_EMPTY[data.state]));
+  if (data.buttons.length) { const row = document.createElement('div'); row.className = 'cat-preview-buttons'; row.append(...data.buttons.map(label => { const chip = document.createElement('span'); chip.textContent = label; return chip; })); parts.push(row); }
+  chat.replaceChildren(...parts);
+ } catch (error) { if (stamp === catPreviewStamp) chat.textContent = error.message; }
+}
 function catShowTab(key) {
  catPanelTab = key;
  document.querySelectorAll('#catPanel [data-pane]').forEach(pane => { pane.hidden = pane.dataset.pane !== key; });
@@ -549,7 +604,11 @@ function catDrawPanel(topic) {
  const title = document.createElement('div'); title.style.cssText = 'flex:1;min-width:0;';
  const name = document.createElement('h3'); name.id = 'catPanelTitle'; name.textContent = topic.name; name.style.margin = '0';
  const progress = document.createElement('small'); progress.dataset.progress = topic.topic_id;
- title.append(name, progress); head.append(back, title, catPanelMenu(topic));
+ title.append(name, progress);
+ const previewBox = catPreviewBox();
+ const toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'btn-secondary cat-preview-toggle'; toggle.textContent = 'Preview';
+ toggle.onclick = () => { previewBox.classList.toggle('open'); if (previewBox.classList.contains('open')) previewBox.scrollIntoView({block:'center'}); };
+ head.append(back, title, toggle, catPanelMenu(topic));
  const tabs = document.createElement('div'); tabs.setAttribute('role', 'tablist'); tabs.style.cssText = 'display:flex;gap:4px;overflow-x:auto;margin:14px 0;border-bottom:1px solid var(--border);';
  for (const [key, label] of CAT_TABS) {
   const tab = document.createElement('button'); tab.type = 'button'; tab.setAttribute('role', 'tab'); tab.dataset.tab = key;
@@ -560,9 +619,11 @@ function catDrawPanel(topic) {
  const answers = catStep(topic, 'answers'), buttons = catStep(topic, 'buttons');
  const answerBox = document.createElement('div'); answerBox.id = 'catAnswers-' + topic.topic_id; answers.append(answerBox);
  const buttonBox = document.createElement('div'); buttons.append(buttonBox);
- panel.replaceChildren(head, tabs, answers, buttons, catNameStep(topic), catLinksStep(topic));
+ const main = document.createElement('div'); main.className = 'cat-panel-main'; main.append(tabs, answers, buttons, catNameStep(topic), catLinksStep(topic));
+ const layout = document.createElement('div'); layout.className = 'cat-panel-layout'; layout.append(main, previewBox);
+ panel.replaceChildren(head, layout);
  catSlotEditor(answerBox, 'topic', topic.topic_id); catQuestionButtons(buttonBox, 'topic', topic.topic_id);
- catPaintSteps(topic); catShowTab(catPanelTab);
+ catPaintSteps(topic); catShowTab(catPanelTab); catLoadPreview();
 }
 function catOpenPanel(topicId, tab) {
  const topic = catData?.topics.find(item => item.topic_id === topicId);
@@ -625,7 +686,7 @@ async function catQuestionButtons(box, owner, ownerId) {
    } catch (error) { note.textContent = error.message; }
   };
   rows.forEach(item => { item.tick.onchange = store; item.label.oninput = () => catSoon(store); });
-  box.replaceChildren(heading, help, ...rows.map(item => item.row), note);
+  box.replaceChildren(...(owner === 'topic' ? [] : [heading, help]), ...rows.map(item => item.row), note);
  } catch (error) { box.textContent = error.message; }
 }
 function catOwnQuestionForm(box, topicId) {
