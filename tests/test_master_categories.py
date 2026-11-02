@@ -163,6 +163,7 @@ def test_the_page_keeps_other_lists_under_advanced():
 def test_setup_steps_say_what_is_done(monkeypatch):
     from camellia import answer_slots, category_buttons
     monkeypatch.setattr(answer_slots, "effective", lambda route, slot: {"kind": "CUSTOM"} if slot == "details" else None)
+    monkeypatch.setattr(category_buttons, "blocks_for", lambda topic, slot: [{"kind": "TEXT", "text": "x"}])
     monkeypatch.setattr(category_buttons, "stored_buttons", lambda owner, key: [{"slot": "price", "label": "Price"}])
     steps = {step["key"]: step for step in admin_categories._setup_steps({"topic_id": "t", "qa_context": "x", "button_name": "Sondesh"})}
     assert all(step["done"] for step in steps.values())
@@ -190,3 +191,13 @@ def test_answers_are_one_line_rows_and_small_fields_save_themselves():
     assert "Pick an approved answer" in script and "Write your own" in script and "[data-slot-editor]" in script
     assert "catToast(async () =>" in script and "Save buttons" not in script
     assert "catSoon(() => catSaveLinks(topic, {button_name" in script
+
+
+def test_an_answer_that_cannot_be_sent_is_not_a_finished_step(monkeypatch):
+    from camellia import answer_slots, category_buttons
+    monkeypatch.setattr(answer_slots, "effective", lambda route, slot: {"kind": "APPROVED_QA"} if slot == "details" else None)
+    monkeypatch.setattr(category_buttons, "blocks_for", lambda topic, slot: None)
+    monkeypatch.setattr(category_buttons, "stored_buttons", lambda owner, key: None)
+    steps = {step["key"]: step for step in admin_categories._setup_steps({"topic_id": "t", "button_name": "Sondesh"})}
+    assert not steps["answers"]["done"] and "1 can't be sent yet" in steps["answers"]["status"]
+    assert steps["name"]["status"] == "Needs a Details answer first"

@@ -41,17 +41,20 @@ def _setup_steps(topic):
     slots = answer_slots.labels(topic["topic_id"])
     answered = [label for slot, label in slots.items()
                 if answer_slots.effective({"topic_id": topic["topic_id"]}, slot)]
+    sendable = [label for slot, label in slots.items() if label in answered and category_buttons.blocks_for(topic["topic_id"], slot)]
+    stuck = len(answered) - len(sendable)
     buttons = category_buttons.stored_buttons("topic", topic["topic_id"]) or []
     name = topic.get("button_name")
     return [
         {"key": "links", "done": bool(topic.get("menu_category_id") or topic.get("qa_context")),
          "status": "Linked" if topic.get("menu_category_id") or topic.get("qa_context") else "Not linked yet"},
-        {"key": "answers", "done": bool(answered),
-         "status": f"{len(answered)} of {len(slots)} set" + (": " + ", ".join(answered) if answered else "")},
+        {"key": "answers", "done": bool(sendable),
+         "status": f"{len(sendable)} of {len(slots)} set" + (": " + ", ".join(sendable) if sendable else "")
+                   + (f" · {stuck} can't be sent yet" if stuck else "")},
         {"key": "buttons", "done": bool(buttons),
          "status": ", ".join(button["label"] for button in buttons) or "None chosen yet"},
-        {"key": "name", "done": bool(name) and "Details" in answered,
-         "status": ("Needs a Details answer first" if "Details" not in answered else name) if name else "No name yet"},
+        {"key": "name", "done": bool(name) and "Details" in sendable,
+         "status": ("Needs a Details answer first" if "Details" not in sendable else name) if name else "No name yet"},
     ]
 
 
@@ -261,7 +264,11 @@ async def rename_master(topic_id: str, request: Request, actor=Depends(reviewer)
 @router.get("/slots/{owner_type}/{owner_id}")
 def slots(owner_type: str, owner_id: str, _actor=Depends(reviewer)):
     _slot_owner(owner_type)
-    return {"slots": answer_slots.list_slots(owner_type, owner_id)}
+    found = answer_slots.list_slots(owner_type, owner_id)
+    if owner_type == "topic":
+        for item in found:
+            item["sendable"] = bool(item["answer"] and category_buttons.blocks_for(owner_id, item["slot"]))
+    return {"slots": found}
 
 
 @router.put("/slots/{owner_type}/{owner_id}/{slot}")
@@ -733,7 +740,8 @@ function catSlotRow(box, owner, ownerId, base, slot, records, menus) {
  const title = document.createElement('b'); title.textContent = slot.label;
  const summary = document.createElement('small'); summary.className = 'ig-media-muted'; summary.style.cssText = 'display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
  const chosen = records.find(record => record.qa_id === answer.qa_id);
- summary.textContent = !answer.kind ? 'Not set' : (answer.expired ? 'Expired · ' : '') + (answer.kind === 'CUSTOM' ? answer.text : chosen?.question || 'Approved answer');
+ const stuck = answer.kind && !answer.expired && slot.sendable === false;
+ summary.textContent = !answer.kind ? 'Not set' : (answer.expired ? 'Expired · ' : stuck ? "Set, but can't be sent yet · " : '') + (answer.kind === 'CUSTOM' ? answer.text : chosen?.question || 'Approved answer');
  text.append(title, summary);
  const open = document.createElement('button'); open.type = 'button'; open.className = answer.kind ? 'btn-secondary' : 'btn-primary'; open.style.flex = 'none';
  open.textContent = answer.kind ? 'Change' : 'Set answer'; open.setAttribute('aria-label', open.textContent + ' ' + slot.label);
@@ -796,6 +804,14 @@ function catSlotRow(box, owner, ownerId, base, slot, records, menus) {
  actions.append(cancel);
  if (answer.kind) actions.append(act('Remove answer', () => catApi(base + '/' + slot.slot, 'DELETE')));
  if (slot.own) actions.append(act('Remove question', () => catApi('/admin/categories/own-questions/' + encodeURIComponent(ownerId) + '/' + encodeURIComponent(slot.slot), 'DELETE')));
+ if (answer.kind === 'APPROVED_QA') {
+  const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'btn-secondary'; edit.textContent = 'Edit in Approved Q&A'; edit.setAttribute('aria-label', 'Edit ' + slot.label + ' in Approved Q&A');
+  edit.title = 'This answer is shared, so a change applies everywhere it is used.';
+  edit.onclick = async () => { catClosePanel(); switchTab('tab-approved-qa', null); await loadApprovedQa(); aqEdit(answer.qa_id); };
+  actions.append(edit);
+  const shared = document.createElement('small'); shared.className = 'ig-media-muted'; shared.style.cssText = 'display:block;flex-basis:100%;'; shared.textContent = 'This answer is shared, so a change applies everywhere it is used.';
+  actions.append(shared);
+ }
  if (answer.kind === 'CUSTOM') actions.append(act('Save to Approved Q&A', () => catApi(base + '/' + slot.slot + '/save-to-approved', 'POST')));
  const asked = owner === 'topic' ? catNeedGroups.find(group => group.topic_id === ownerId && group.slot === slot.slot) : null;
  if (asked) {

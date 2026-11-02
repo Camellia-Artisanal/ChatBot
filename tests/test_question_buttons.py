@@ -160,3 +160,29 @@ def test_preview_route(admin, store):  # noqa: F811
     topic = _preview_topic()
     assert client.get(f"/admin/categories/preview/{topic}/details", headers=headers).json()["state"] == "ok"
     assert client.get("/admin/categories/preview/missing/details", headers=headers).status_code == 404
+
+
+def _approved_topic(qa_id):
+    topic = _topic()
+    answer_slots.save("topic", topic, "details", {"kind": "APPROVED_QA", "qa_id": qa_id})
+    return topic
+
+
+def test_built_in_answers_use_the_same_images_as_normal_replies(store):
+    with patch("camellia.responder.current_menu_image", side_effect=lambda key, *a: f"/menu/{key}.jpg"), \
+            patch("camellia.responder.current_weekly_url", return_value="/menu/weekly.jpg"):
+        blocks = buttons.blocks_for(_approved_topic("sondesh_details_client"), "details")
+    assert [block["urls"] for block in blocks if block["kind"] != "TEXT"] == [["/menu/aamar_mishti.jpg"], ["/menu/signature.jpg"], ["/menu/weekly.jpg"]]
+
+
+def test_a_missing_weekly_menu_is_left_out_as_in_normal_replies(store):
+    with patch("camellia.responder.current_menu_image", side_effect=lambda key, *a: f"/menu/{key}.jpg"), \
+            patch("camellia.responder.current_weekly_url", return_value=None):
+        blocks = buttons.blocks_for(_approved_topic("sondesh_details_client"), "details")
+    assert blocks and "weekly_menu" not in [block.get("asset_key") for block in blocks]
+
+
+def test_a_missing_required_menu_still_goes_to_staff(store):
+    with patch("camellia.responder.current_menu_image", return_value=None), \
+            patch("camellia.responder.current_weekly_url", return_value="/menu/weekly.jpg"):
+        assert buttons.blocks_for(_approved_topic("sondesh_details_client"), "details") is None

@@ -154,6 +154,26 @@ def _approved_chicken_kosha_price_question(message: str, facts: Dict[str, Any]) 
 _WEEKLY_MENU_CONTEXTS = {"general", "savoury", "savoury_deliveries"}
 
 
+WEEKLY_ATTACHMENT_SENTENCE = "I\u2019ve attached this week\u2019s menu in case you\u2019d like to have a look."
+
+
+def approved_asset_urls() -> Dict[str, List[Optional[str]]]:
+    """What each built-in answer's image name sends, for every path that sends one."""
+    return {
+        "sondesh_addon_images": [
+            "/images/sondesh_addon_01.jpeg",
+            "/images/sondesh_addon_02.jpeg",
+            "/images/sondesh_addon_03.jpeg",
+        ],
+        "subscription_rate_chart": [
+            "/images/Everyday%20Meal%20Subscription%20Rate%20Chart.jpeg",
+        ],
+        "aamar_menu": [current_menu_image("aamar_mishti")],
+        "signature_menu": [current_menu_image("signature")],
+        "weekly_menu": [current_weekly_url()],
+    }
+
+
 def _mapped_answer_independent_of_weekly_menu(match) -> bool:
     """A post's own approved answer that never sends the weekly savoury menu."""
     if not match:
@@ -3958,19 +3978,7 @@ class DeterministicResponder:
             asset_urls: List[str] = []
             asset_missing: List[str] = []
             ordered_response_blocks: List[Dict[str, Any]] = []
-            asset_map = {
-                "sondesh_addon_images": [
-                    "/images/sondesh_addon_01.jpeg",
-                    "/images/sondesh_addon_02.jpeg",
-                    "/images/sondesh_addon_03.jpeg",
-                ],
-                "subscription_rate_chart": [
-                    "/images/Everyday%20Meal%20Subscription%20Rate%20Chart.jpeg",
-                ],
-                "aamar_menu": [current_menu_image("aamar_mishti")],
-                "signature_menu": [current_menu_image("signature")],
-                "weekly_menu": [current_weekly_url()],
-            }
+            asset_map = approved_asset_urls()
             weekly_missing = "weekly_menu" in entry.asset_keys and not asset_map["weekly_menu"][0]
             mapped_image = None
             if (
@@ -3990,11 +3998,8 @@ class DeterministicResponder:
                     and block.kind == "TEXT"
                     and entry.qa_id in {"sondesh_details_client", "sondesh_price_client"}
                 ):
-                    weekly_attachment_sentence = (
-                        "I\u2019ve attached this week\u2019s menu in case you\u2019d like to have a look."
-                    )
-                    if weekly_attachment_sentence in entry.answer and weekly_attachment_sentence in block.value:
-                        block_text = block.value.replace(weekly_attachment_sentence + " ", "", 1)
+                    if WEEKLY_ATTACHMENT_SENTENCE in entry.answer and WEEKLY_ATTACHMENT_SENTENCE in block.value:
+                        block_text = block.value.replace(WEEKLY_ATTACHMENT_SENTENCE + " ", "", 1)
                         if block_text:
                             ordered_response_blocks.append({"kind": "TEXT", "text": block_text})
                         continue

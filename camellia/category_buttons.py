@@ -77,19 +77,31 @@ def blocks_for(topic_id: str, slot: str) -> Optional[List[Dict[str, Any]]]:
     match = client_qa.resolve_effective_approved_qa_by_id(answer["qa_id"])
     if not match:
         return None
+    # Imported here because the responder is far larger and only this path needs it.
+    from camellia.responder import WEEKLY_ATTACHMENT_SENTENCE, approved_asset_urls
+    assets = approved_asset_urls()
+    weekly_missing = "weekly_menu" in match.entry.asset_keys and not assets["weekly_menu"][0]
     blocks: List[Dict[str, Any]] = []
     for block in match.entry.blocks:
         if block.kind == "TEXT":
+            if weekly_missing and WEEKLY_ATTACHMENT_SENTENCE in block.value:
+                text = block.value.replace(WEEKLY_ATTACHMENT_SENTENCE + " ", "", 1)
+                if text:
+                    blocks.append({"kind": "TEXT", "text": text})
+                continue
             if client_qa.HOME_TABLE_VIDEO_ANCHOR in block.value:
                 blocks.extend(client_qa.build_home_table_reel_blocks(block.value))
             else:
                 blocks.append({"kind": "TEXT", "text": block.value})
             continue
-        key = block.value.split(":", 1)[-1]
-        url = menu_images.current_url(key)
-        if block.kind == "REEL" or not url:
+        if weekly_missing and block.value == "weekly_menu":
+            continue  # The main path sends the answer without an unpublished weekly menu too.
+        urls = ([menu_images.current_url(block.value.split(":", 1)[1])] if block.value.startswith("catalogue:")
+                else assets.get(block.value, []))
+        urls = [url for url in urls if url]
+        if block.kind == "REEL" or not urls:
             return None  # The bot's main path resolves Reels; a part-sent answer is worse than staff.
-        blocks.append({"kind": block.kind, "asset_key": block.value, "urls": [url]})
+        blocks.append({"kind": block.kind, "asset_key": block.value, "urls": urls})
     return blocks or None
 
 
