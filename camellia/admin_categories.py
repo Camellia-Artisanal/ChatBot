@@ -483,11 +483,17 @@ function catLinksStep(topic) {
  const [customerField, customer] = catLinkSelect('Customer message topic (optional)', 'Not linked',
   catData.menu_topics.map(item => [item.topic_id, item.name]), topic.customer_topic_id ?? '');
  fields.append(qaField, menuField, customerField);
- const save = document.createElement('button'); save.type = 'button'; save.className = 'btn-secondary'; save.style.marginTop = '8px'; save.textContent = 'Save';
- save.setAttribute('aria-label', 'Save the lists for ' + topic.name);
- save.onclick = () => catSaveLinks(topic, {menu_category_id: menu.value ? Number(menu.value) : null, qa_context: qa.value || null, customer_topic_id: customer.value || null});
- step.append(fields, save);
- if (!linked) { const note = document.createElement('small'); note.className = 'ig-media-muted'; note.style.display = 'block'; note.textContent = 'These are suggestions. Check them, then press Save.'; step.append(note); }
+ const fill = values => { qa.value = values.qa_context ?? ''; menu.value = String(values.menu_category_id ?? ''); customer.value = values.customer_topic_id ?? ''; };
+ const store = () => catSaveLinks(topic, {menu_category_id: menu.value ? Number(menu.value) : null, qa_context: qa.value || null, customer_topic_id: customer.value || null}, fill);
+ [qa, menu, customer].forEach(select => { select.onchange = store; });
+ step.append(fields);
+ if (!linked) {
+  const note = document.createElement('small'); note.className = 'ig-media-muted'; note.style.display = 'block'; note.textContent = 'These are suggestions, and they are not saved yet.';
+  const accept = document.createElement('button'); accept.type = 'button'; accept.className = 'btn-primary'; accept.style.marginTop = '8px'; accept.textContent = 'Use these';
+  accept.setAttribute('aria-label', 'Use these lists for ' + topic.name);
+  accept.onclick = async () => { if (await store()) { note.remove(); accept.remove(); } };
+  step.append(note, accept);
+ }
  return step;
 }
 function catNameStep(topic) {
@@ -497,12 +503,10 @@ function catNameStep(topic) {
  const chat = document.createElement('p'); chat.style.cssText = 'margin:8px 0;font-size:.85rem;';
  const chip = document.createElement('span'); chip.style.cssText = 'display:inline-block;margin-top:4px;padding:4px 12px;border:1px solid var(--border);border-radius:999px;';
  const draw = () => { chip.textContent = input.value.trim() || 'Your name here'; };
- input.oninput = draw; draw();
+ draw();
  chat.append('Customers will see: ', chip);
- const save = document.createElement('button'); save.type = 'button'; save.className = 'btn-secondary'; save.textContent = 'Save';
- save.setAttribute('aria-label', 'Save the button name for ' + topic.name);
- save.onclick = () => catSaveLinks(topic, {button_name: input.value || null});
- step.append(input, chat, save);
+ input.oninput = () => { draw(); catSoon(() => catSaveLinks(topic, {button_name: input.value.trim() || null}, values => { input.value = values.button_name ?? ''; draw(); })); };
+ step.append(input, chat);
  return step;
 }
 function catPanelMenu(topic) {
@@ -608,12 +612,20 @@ async function catQuestionButtons(box, owner, ownerId) {
    row.append(tick, label);
    return {slot: choice.slot, tick, label, row};
   });
-  const save = document.createElement('button'); save.type = 'button'; save.className = 'btn-secondary'; save.textContent = 'Save buttons';
-  save.onclick = async () => {
-   try { await catApi(url, 'PUT', {buttons: rows.filter(item => item.tick.checked).map(item => ({slot: item.slot, label: item.label.value}))}); note.textContent = 'Buttons saved.'; if (owner === 'topic') catStepsChanged(); }
-   catch (error) { note.textContent = error.message; }
+  const read = () => rows.filter(item => item.tick.checked).map(item => ({slot: item.slot, label: item.label.value}));
+  const fill = buttons => { const chosen = Object.fromEntries(buttons.map(button => [button.slot, button.label])); rows.forEach(item => { item.tick.checked = item.slot in chosen; if (item.slot in chosen) item.label.value = chosen[item.slot]; }); };
+  let last = read();
+  const store = async () => {
+   const buttons = read(), previous = last;
+   if (JSON.stringify(buttons) === JSON.stringify(previous)) return;
+   try {
+    await catApi(url, 'PUT', {buttons}); last = buttons; note.textContent = '';
+    if (owner === 'topic') catStepsChanged();
+    catToast(async () => { await catApi(url, 'PUT', {buttons: previous}); fill(previous); last = previous; if (owner === 'topic') catStepsChanged(); });
+   } catch (error) { note.textContent = error.message; }
   };
-  box.replaceChildren(heading, help, ...rows.map(item => item.row), save, note);
+  rows.forEach(item => { item.tick.onchange = store; item.label.oninput = () => catSoon(store); });
+  box.replaceChildren(heading, help, ...rows.map(item => item.row), note);
  } catch (error) { box.textContent = error.message; }
 }
 function catOwnQuestionForm(box, topicId) {
@@ -630,27 +642,58 @@ function catOwnQuestionForm(box, topicId) {
  form.append(input, add, note);
  return form;
 }
+// One line per question; only one opens at a time. Written answers keep a Save
+// button, because customers read them word for word.
 function catSlotRow(box, owner, ownerId, base, slot, records, menus) {
  const answer = slot.answer || {};
- const row = document.createElement('div'); row.style.cssText = 'padding:8px 0;border-top:1px solid var(--border);';
- const title = document.createElement('b');
- title.textContent = slot.label + (answer.kind === 'CUSTOM' ? ' · Custom' : '') + (answer.expired ? ' · Expired' : '');
- const kind = document.createElement('select'); kind.className = 'field-control'; kind.setAttribute('aria-label', slot.label + ' answer type');
- kind.replaceChildren(new Option('Not set', ''), new Option('Approved Q&A', 'APPROVED_QA'), new Option('Custom response', 'CUSTOM'));
- kind.value = answer.kind || '';
+ const row = document.createElement('div'); row.style.cssText = 'padding:10px 0;border-top:1px solid var(--border);';
+ const line = document.createElement('div'); line.style.cssText = 'display:flex;gap:10px;align-items:center;';
+ const text = document.createElement('div'); text.style.cssText = 'flex:1;min-width:0;';
+ const title = document.createElement('b'); title.textContent = slot.label;
+ const summary = document.createElement('small'); summary.className = 'ig-media-muted'; summary.style.cssText = 'display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+ const chosen = records.find(record => record.qa_id === answer.qa_id);
+ summary.textContent = !answer.kind ? 'Not set' : (answer.expired ? 'Expired · ' : '') + (answer.kind === 'CUSTOM' ? answer.text : chosen?.question || 'Approved answer');
+ text.append(title, summary);
+ const open = document.createElement('button'); open.type = 'button'; open.className = answer.kind ? 'btn-secondary' : 'btn-primary'; open.style.flex = 'none';
+ open.textContent = answer.kind ? 'Change' : 'Set answer'; open.setAttribute('aria-label', open.textContent + ' ' + slot.label);
+ line.append(text, open);
+ const editor = document.createElement('div'); editor.dataset.slotEditor = slot.slot; editor.hidden = true; editor.style.marginTop = '10px';
+ open.onclick = () => {
+  const opening = editor.hidden;
+  box.querySelectorAll('[data-slot-editor]').forEach(item => { item.hidden = true; });
+  editor.hidden = !opening;
+ };
+ let kind = answer.kind || 'APPROVED_QA';
+ const choices = document.createElement('div'); choices.setAttribute('role', 'group'); choices.setAttribute('aria-label', slot.label + ' answer type'); choices.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;';
+ const pick = document.createElement('div'), write = document.createElement('div');
+ const search = document.createElement('input'); search.type = 'search'; search.className = 'field-control'; search.placeholder = 'Search approved answers'; search.setAttribute('aria-label', 'Search answers for ' + slot.label);
  const approved = document.createElement('select'); approved.className = 'field-control'; approved.setAttribute('aria-label', slot.label + ' approved answer');
- approved.replaceChildren(new Option('Choose an answer', ''), ...records.map(record => new Option(record.question, record.qa_id)));
- approved.value = answer.qa_id || '';
- const text = document.createElement('textarea'); text.className = 'field-control'; text.rows = 3; text.maxLength = 2000; text.value = answer.kind === 'CUSTOM' ? answer.text : '';
- text.setAttribute('aria-label', slot.label + ' custom answer');
- const end = document.createElement('input'); end.type = 'date'; end.className = 'field-control'; end.value = (answer.valid_until || '').slice(0, 10);
- end.setAttribute('aria-label', slot.label + ' end date');
+ const list = () => {
+  const words = search.value.trim().toLowerCase(), current = approved.value || answer.qa_id || '';
+  approved.replaceChildren(new Option('Choose an answer', ''), ...records.filter(record => record.qa_id === current || !words || record.question.toLowerCase().includes(words)).map(record => new Option(record.question, record.qa_id)));
+  approved.value = current;
+ };
+ search.oninput = list; list();
+ pick.append(search, approved);
+ const custom = document.createElement('textarea'); custom.className = 'field-control'; custom.rows = 3; custom.maxLength = 2000; custom.value = answer.kind === 'CUSTOM' ? answer.text : '';
+ custom.setAttribute('aria-label', slot.label + ' custom answer'); custom.placeholder = 'Write the answer customers should get';
+ const endLabel = document.createElement('label'); endLabel.className = 'field-label'; endLabel.textContent = 'Stop using it after (optional for most questions)';
+ const end = document.createElement('input'); end.type = 'date'; end.className = 'field-control'; end.value = (answer.valid_until || '').slice(0, 10); end.setAttribute('aria-label', slot.label + ' end date');
  const menu = document.createElement('select'); menu.className = 'field-control'; menu.setAttribute('aria-label', slot.label + ' menu');
  menu.replaceChildren(new Option('No menu', ''), ...menus.map(item => new Option(item.name, item.menu_id)));
  menu.value = answer.menu_id || '';
- const custom = document.createElement('div'); custom.append(text, end, menu);
- const show = () => { approved.hidden = kind.value !== 'APPROVED_QA'; custom.hidden = kind.value !== 'CUSTOM'; };
- kind.onchange = show; show();
+ write.append(custom, endLabel, end, menu);
+ const choice = (value, label) => {
+  const button = document.createElement('button'); button.type = 'button'; button.textContent = label; button.dataset.kind = value;
+  button.onclick = () => { kind = value; show(); };
+  return button;
+ };
+ const show = () => {
+  pick.hidden = kind !== 'APPROVED_QA'; write.hidden = kind !== 'CUSTOM';
+  choices.querySelectorAll('button').forEach(button => { const active = button.dataset.kind === kind; button.className = active ? 'btn-primary' : 'btn-secondary'; button.setAttribute('aria-pressed', String(active)); });
+ };
+ choices.append(choice('APPROVED_QA', 'Pick an approved answer'), choice('CUSTOM', 'Write your own'));
+ show();
  const note = document.createElement('small'); note.setAttribute('role', 'status'); note.style.display = 'block';
  const act = (label, handler) => {
   const button = document.createElement('button'); button.type = 'button'; button.className = 'btn-secondary'; button.textContent = label;
@@ -664,15 +707,17 @@ function catSlotRow(box, owner, ownerId, base, slot, records, menus) {
   };
   return button;
  };
- const actions = document.createElement('div'); actions.className = 'source-secondary-actions';
- actions.append(act('Save answer', () => {
-  if (!kind.value) return catApi(base + '/' + slot.slot, 'DELETE');
-  return catApi(base + '/' + slot.slot, 'PUT', kind.value === 'APPROVED_QA' ? {kind: kind.value, qa_id: approved.value}
-   : {kind: kind.value, custom_text: text.value, menu_id: menu.value || null, valid_until: end.value ? end.value + 'T23:59:59+05:30' : null});
- }));
+ const actions = document.createElement('div'); actions.className = 'source-secondary-actions'; actions.style.marginTop = '8px';
+ const saveAnswer = act('Save answer', () => catApi(base + '/' + slot.slot, 'PUT', kind === 'APPROVED_QA' ? {kind, qa_id: approved.value}
+  : {kind, custom_text: custom.value, menu_id: menu.value || null, valid_until: end.value ? end.value + 'T23:59:59+05:30' : null}));
+ saveAnswer.className = 'btn-primary'; actions.append(saveAnswer);
+ const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'btn-secondary'; cancel.textContent = 'Cancel'; cancel.setAttribute('aria-label', 'Cancel ' + slot.label); cancel.onclick = () => { editor.hidden = true; };
+ actions.append(cancel);
+ if (answer.kind) actions.append(act('Remove answer', () => catApi(base + '/' + slot.slot, 'DELETE')));
  if (slot.own) actions.append(act('Remove question', () => catApi('/admin/categories/own-questions/' + encodeURIComponent(ownerId) + '/' + encodeURIComponent(slot.slot), 'DELETE')));
  if (answer.kind === 'CUSTOM') actions.append(act('Save to Approved Q&A', () => catApi(base + '/' + slot.slot + '/save-to-approved', 'POST')));
- row.append(title, kind, approved, custom, actions, note);
+ editor.append(choices, pick, write, actions, note);
+ row.append(line, editor);
  return row;
 }
 function catRenderNeeds(groups) {
@@ -771,13 +816,47 @@ async function catAddMaster() {
   await catChanged('Added ' + name + '.');
  } catch (error) { catNote(error.message, true); }
 }
-// Each step saves its own fields; the rest of the category's links are kept.
-async function catSaveLinks(topic, changes) {
+// Waits for a pause in typing, so each word is not saved on its own.
+let catSoonTimer = null;
+function catSoon(action) { clearTimeout(catSoonTimer); catSoonTimer = setTimeout(action, 800); }
+// One small message: Saved, with Undo for the last change only.
+let catToastTimer = null;
+function catToast(undo, text = 'Saved') {
+ let toast = document.getElementById('catToast');
+ if (!toast) {
+  toast = document.createElement('div'); toast.id = 'catToast'; toast.setAttribute('role', 'status');
+  toast.style.cssText = 'position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:5002;display:flex;gap:12px;align-items:center;padding:10px 16px;border-radius:10px;background:var(--text-dark);color:#fff;box-shadow:0 4px 16px rgba(0,0,0,.25);';
+  document.body.append(toast);
+ }
+ const label = document.createElement('span'); label.textContent = text;
+ toast.replaceChildren(label); toast.hidden = false;
+ if (undo) {
+  const button = document.createElement('button'); button.type = 'button'; button.textContent = 'Undo'; button.style.cssText = 'background:none;border:0;color:inherit;font:inherit;font-weight:700;text-decoration:underline;cursor:pointer;';
+  button.onclick = async () => { clearTimeout(catToastTimer); try { await undo(); catToast(null, 'Undone'); } catch (error) { catToast(null, error.message); } };
+  toast.append(button);
+ }
+ clearTimeout(catToastTimer); catToastTimer = setTimeout(() => { toast.hidden = true; }, 8000);
+}
+const CAT_LINK_FIELDS = ['menu_category_id', 'qa_context', 'customer_topic_id', 'button_name'];
+function catLinkValues(topicId) {
+ const topic = catData.topics.find(item => item.topic_id === topicId);
+ return Object.fromEntries(CAT_LINK_FIELDS.map(key => [key, topic[key] ?? null]));
+}
+async function catPutLinks(topicId, values) {
+ await catApi('/admin/categories/master/' + encodeURIComponent(topicId) + '/links', 'PUT', values);
+ await catStepsChanged();
+ if (typeof loadTopicsAndMenus === 'function') await loadTopicsAndMenus();
+}
+// Each field saves on its own and keeps the category's other links. restore puts
+// the screen back when Undo is pressed.
+async function catSaveLinks(topic, changes, restore) {
+ const previous = catLinkValues(topic.topic_id), values = {...previous, ...changes};
+ if (JSON.stringify(values) === JSON.stringify(previous)) return true;
  try {
-  await catApi('/admin/categories/master/' + encodeURIComponent(topic.topic_id) + '/links', 'PUT',
-               {menu_category_id: topic.menu_category_id ?? null, qa_context: topic.qa_context ?? null, customer_topic_id: topic.customer_topic_id ?? null, button_name: topic.button_name ?? null, ...changes});
-  await catChanged('Saved ' + topic.name + '.');
- } catch (error) { catNote(error.message, true); }
+  await catPutLinks(topic.topic_id, values);
+  catToast(async () => { await catPutLinks(topic.topic_id, previous); restore?.(previous); });
+  return true;
+ } catch (error) { catToast(null, error.message); return false; }
 }
 async function catRenameMaster(topic, suggested) {
  const name = (suggested || prompt('New name', topic.name) || '').trim();

@@ -183,3 +183,10 @@ def test_a_category_opens_in_a_panel_on_its_first_unfinished_tab():
     assert "function catOpenPanel(topicId, tab)" in script and "find(key => !topic.setup.find" in script
     assert [name in script for name in ("'Answers'", "'Buttons'", "'Button name'", "'Links'")] == [True] * 4
     assert 'id="catPanel"' in admin_categories.HTML
+
+
+def test_answers_are_one_line_rows_and_small_fields_save_themselves():
+    script = admin_categories.SCRIPT
+    assert "Pick an approved answer" in script and "Write your own" in script and "[data-slot-editor]" in script
+    assert "catToast(async () =>" in script and "Save buttons" not in script
+    assert "catSoon(() => catSaveLinks(topic, {button_name" in script
