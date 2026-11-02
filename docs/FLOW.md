@@ -178,4 +178,4 @@ uses a human handoff; it cannot fall through to the city-specific generic food i
 
 ## Admin forms
 
-- Categories: each master category is a card of four steps. `_setup_steps` decides what is done; the page only draws it, and saving a step redraws only the marks.
+- Categories: each master category opens in a side panel with four tabs. `_setup_steps` decides what is done; the page only draws it. Staff can add their own questions per category, and Not needed sets a gap aside until a customer asks again.

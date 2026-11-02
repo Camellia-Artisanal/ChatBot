@@ -11,6 +11,7 @@ the reply path reads a slot, so a customer never sees one.
 import json
 import threading
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -28,9 +29,46 @@ SLOTS = {"price": "Price", "details": "Details", "booking": "Booking",
 OWNERS = ("topic", "route")
 END_DATE_REQUIRED = ("price", "date")
 WOULD_SEND_CONFIDENCE = 0.85
+OWN_LIMIT = 10
 KEEP_DAYS = 90  # These rows hold customer wording, so they do not outlive the review.
 _SHADOW_WORKERS = 2
 _SHADOW_QUEUE_LIMIT = 64
+
+
+def own_questions(topic_id: Optional[str]) -> Dict[str, str]:
+    """Question types staff added to one category, by slot."""
+    if not topic_id:
+        return {}
+    with db.get_connection() as conn:
+        return {row["slot"]: row["label"] for row in conn.execute(
+            "SELECT slot, label FROM answer_own_questions WHERE topic_id=? ORDER BY label", (str(topic_id),))}
+
+
+def add_own_question(topic_id: str, label: Any) -> str:
+    label = " ".join(str(label or "").split())
+    own = own_questions(topic_id)
+    if not 1 <= len(label) <= 60:
+        raise ValueError("Write the question in 1 to 60 characters.")
+    if label.casefold() in {name.casefold() for name in [*SLOTS.values(), *own.values()]}:
+        raise ValueError("This category already has that question.")
+    if len(own) >= OWN_LIMIT:
+        raise ValueError(f"A category can hold {OWN_LIMIT} of its own questions.")
+    slot = "own_" + uuid.uuid4().hex[:10]
+    with db.get_connection() as conn:
+        conn.execute("INSERT INTO answer_own_questions (topic_id, slot, label) VALUES (?, ?, ?)", (str(topic_id), slot, label))
+        conn.commit()
+    return slot
+
+
+def remove_own_question(topic_id: str, slot: str) -> None:
+    with db.get_connection() as conn:
+        conn.execute("DELETE FROM answer_own_questions WHERE topic_id=? AND slot=?", (str(topic_id), slot))
+        conn.execute("DELETE FROM answer_slots WHERE owner_type='topic' AND owner_id=? AND slot=?", (str(topic_id), slot))
+        conn.commit()
+
+
+def labels(topic_id: Optional[str]) -> Dict[str, str]:
+    return {**SLOTS, **own_questions(topic_id)}
 
 
 def _row(owner_type: str, owner_id: str, slot: str) -> Optional[Dict[str, Any]]:
@@ -80,11 +118,12 @@ def effective(route: Dict[str, Any], slot: str) -> Optional[Dict[str, Any]]:
 def list_slots(owner_type: str, owner_id: str) -> List[Dict[str, Any]]:
     return [{"slot": key, "label": label,
              "answer": _answer(row, "post" if owner_type == "route" else "category") if (row := _row(owner_type, owner_id, key)) else None}
-            for key, label in SLOTS.items()]
+            | ({"own": True} if key not in SLOTS else {})
+            for key, label in (labels(owner_id) if owner_type == "topic" else SLOTS).items()]
 
 
 def save(owner_type: str, owner_id: str, slot: str, body: Dict[str, Any]) -> None:
-    if owner_type not in OWNERS or slot not in SLOTS:
+    if owner_type not in OWNERS or slot not in (labels(owner_id) if owner_type == "topic" else SLOTS):
         raise ValueError("Unknown answer slot.")
     kind = body.get("kind")
     qa_id = custom_text = menu_id = valid_until = None
@@ -132,9 +171,9 @@ def save_to_approved(owner_type: str, owner_id: str, slot: str, actor: str) -> s
         raise ValueError("Only a Custom answer can be saved to Approved Q&A.")
     topic_id = owner_id if owner_type == "topic" else (db.get_instagram_source_route(int(owner_id)) or {}).get("topic_id")
     topic = db.get_instagram_topic(topic_id) if topic_id else None
-    body = {"create": True, "question": f"{SLOTS[slot]}: {(topic or {}).get('name') or 'custom answer'}",
+    body = {"create": True, "question": f"{labels(topic_id).get(slot, 'Answer')}: {(topic or {}).get('name') or 'custom answer'}",
             "answer": row["custom_text"], "context": (topic or {}).get("qa_context") or "general",
-            "valid_until": row["valid_until"], "mapped_role": slot,
+            "valid_until": row["valid_until"], "mapped_role": slot if slot in SLOTS else "none",
             "blocks": [{"type": "menu", "menu_id": row["menu_id"]}] if row["menu_id"] else []}
     token = approved_qa.preview(body)
     saved = approved_qa.publish({**body, "qa_id": token["qa_id"], "preview_token": token["preview_token"]}, actor)
@@ -142,16 +181,17 @@ def save_to_approved(owner_type: str, owner_id: str, slot: str, actor: str) -> s
     return saved["qa_id"]
 
 
-def classify(message: str) -> Dict[str, Any]:
+def classify(message: str, own: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     """The question's type in any language, and whether it names a specific case."""
     prompt = (
         "A customer sent this Instagram message to a food brand.\n"
-        'Return exactly one JSON object: {"slot":"price|details|booking|date|location|other",'
+        'Return exactly one JSON object: {"slot":"' + "|".join([*SLOTS, *(own or {}), "other"]) + '",'
         '"specific":true|false,"confidence":<0 to 1>}.\n\n'
         "RULES:\n"
         "- price: cost, rate or fees. details: what this is, or asking for more information.\n"
         "- booking: how to book, order or pay. date: when or where an event is held.\n"
         "- location: delivery areas, address or how to reach. other: anything else.\n"
+        + "".join(f"- {key}: {json.dumps(label, ensure_ascii=False)}\n" for key, label in (own or {}).items()) +
         "- specific is true if the message names a particular place, date, quantity or custom request.\n"
         "- The message may be English, Hindi, Bengali or a mix, in any script.\n\n"
         f"MESSAGE:\n{message}\n"
@@ -165,7 +205,7 @@ def classify(message: str) -> Dict[str, Any]:
     try:
         parsed = json.loads(raw)
         slot = str(parsed.get("slot") or "other")
-        return {"ok": True, "slot": slot if slot in SLOTS else None, "specific": parsed.get("specific") is True,
+        return {"ok": True, "slot": slot if slot in SLOTS or slot in (own or {}) else None, "specific": parsed.get("specific") is True,
                 "confidence": min(max(float(parsed.get("confidence") or 0), 0.0), 1.0)}
     except (AttributeError, TypeError, ValueError):
         return {"ok": False, "reason": "invalid_json"}
@@ -212,7 +252,7 @@ class SlotShadow:
     def _run(self, message: str, route: Dict[str, Any]) -> None:
         started = time.perf_counter()
         try:
-            result = classify(message)
+            result = classify(message, own_questions(route.get("topic_id")))
             answer = effective(route, result["slot"]) if result.get("slot") else None
             with db.get_connection() as conn:
                 conn.execute(
@@ -250,6 +290,15 @@ def shadow_report(days: int = 7, limit: int = 100) -> Dict[str, Any]:
             "shadow_enabled": config.VARIATION_SHADOW_ENABLED}
 
 
+def dismiss_gap(topic_id: str, slot: str) -> None:
+    """Sets this gap aside. A customer asking again brings it back."""
+    with db.get_connection() as conn:
+        conn.execute(
+            """INSERT INTO answer_slot_dismissed (topic_id, slot) VALUES (?, ?)
+               ON CONFLICT(topic_id, slot) DO UPDATE SET dismissed_at=CURRENT_TIMESTAMP""", (str(topic_id), str(slot)))
+        conn.commit()
+
+
 def needs_answers(days: int = 14) -> List[Dict[str, Any]]:
     """Questions with no usable answer, grouped by category and type. Fixed gaps drop off."""
     since = f"-{int(days)} days"
@@ -257,7 +306,9 @@ def needs_answers(days: int = 14) -> List[Dict[str, Any]]:
         rows = [dict(row) for row in conn.execute(
             """SELECT s.topic_id, t.name AS topic_name, s.slot, s.routing_id, s.user_message, s.timestamp
                FROM answer_slot_shadow s JOIN instagram_topics t ON t.topic_id = s.topic_id
+               LEFT JOIN answer_slot_dismissed d ON d.topic_id = s.topic_id AND d.slot = s.slot
                WHERE s.outcome IN ('empty', 'expired') AND s.timestamp >= datetime('now', ?)
+                 AND (d.dismissed_at IS NULL OR s.timestamp > d.dismissed_at)
                ORDER BY s.id DESC""",
             (since,),
         )]
@@ -268,7 +319,7 @@ def needs_answers(days: int = 14) -> List[Dict[str, Any]]:
             continue
         group = groups.setdefault((row["topic_id"], row["slot"]), {
             "topic_id": row["topic_id"], "topic_name": row["topic_name"], "slot": row["slot"],
-            "label": SLOTS[row["slot"]], "state": "expired" if answer else "empty", "count": 0, "examples": [],
+            "label": labels(row["topic_id"]).get(row["slot"], "Other"), "state": "expired" if answer else "empty", "count": 0, "examples": [],
         })
         group["count"] += 1
         if len(group["examples"]) < 5 and row["user_message"] not in {item["message"] for item in group["examples"]}:

@@ -199,3 +199,59 @@ def test_old_shadow_rows_are_removed(slots):
 
 def test_slot_routes_need_admin():
     assert TestClient(app_module.app).get("/admin/categories/needs-answers").status_code in (401, 403)
+
+
+
+def _gap(topic, message="iye sthaan pawa jabe"):
+    with _groq({"slot": "location", "specific": False, "confidence": 0.9}):
+        answer_slots.SlotShadow()._run(message, {"routing_id": 5, "topic_id": topic})
+
+
+def test_a_dismissed_gap_stays_away_until_a_customer_asks_again(slots):
+    topic = _topic("Dismiss Gap")
+    _gap(topic)
+    answer_slots.dismiss_gap(topic, "location")
+    assert answer_slots.needs_answers() == []
+    with answer_slots.db.get_connection() as conn:
+        conn.execute("UPDATE answer_slot_dismissed SET dismissed_at=datetime('now', '-1 hour')")
+        conn.execute("UPDATE answer_slot_shadow SET timestamp=datetime('now', '-2 hours')")
+        conn.commit()
+    _gap(topic, "again please")
+    group = answer_slots.needs_answers()[0]
+    assert group["count"] == 1 and group["examples"][0]["message"] == "again please"
+
+
+def test_own_questions_are_answered_classified_and_removed(slots):
+    topic, other = _topic("Own A"), _topic("Own B")
+    slot = answer_slots.add_own_question(topic, "  Are seats   available? ")
+    assert answer_slots.own_questions(topic) == {slot: "Are seats available?"} and answer_slots.own_questions(other) == {}
+    answer_slots.save("topic", topic, slot, _custom())
+    row = next(item for item in answer_slots.list_slots("topic", topic) if item["slot"] == slot)
+    assert row["own"] and row["answer"]["text"] == "Rs 500 a box"
+    assert not any(item.get("own") for item in answer_slots.list_slots("topic", other))
+    with pytest.raises(ValueError):
+        answer_slots.save("topic", other, slot, _custom())
+    with _groq({"slot": slot, "specific": False, "confidence": 0.9}):
+        assert answer_slots.classify("sthaan pawa jabe", answer_slots.own_questions(topic))["slot"] == slot
+    with _groq({"slot": slot, "specific": False, "confidence": 0.9}):
+        assert answer_slots.classify("sthaan pawa jabe")["slot"] is None
+    answer_slots.remove_own_question(topic, slot)
+    assert answer_slots.own_questions(topic) == {} and answer_slots.effective({"topic_id": topic}, slot) is None
+
+
+@pytest.mark.parametrize("label", ["", "x" * 61, "Price", "price"])
+def test_bad_own_questions_are_refused(slots, label):
+    with pytest.raises(ValueError):
+        answer_slots.add_own_question(_topic("Own Bad"), label)
+
+
+def test_own_question_and_dismiss_routes(admin, slots):  # noqa: F811
+    client, headers = admin
+    topic = _topic("Own Route")
+    made = client.post(f"/admin/categories/own-questions/{topic}", headers=headers, json={"label": "Parking?"})
+    assert made.status_code == 200
+    assert client.post("/admin/categories/own-questions/missing", headers=headers, json={"label": "x"}).status_code == 404
+    assert client.post("/admin/categories/own-questions/" + topic, headers=headers, json={"label": ""}).status_code == 400
+    assert client.delete(f"/admin/categories/own-questions/{topic}/{made.json()['slot']}", headers=headers).status_code == 200
+    assert client.post("/admin/categories/needs-answers/dismiss", headers=headers, json={"topic_id": topic}).status_code == 400
+    assert client.post("/admin/categories/needs-answers/dismiss", headers=headers, json={"topic_id": topic, "slot": "price"}).status_code == 200

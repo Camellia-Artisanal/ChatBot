@@ -271,7 +271,14 @@ function aqEdit(id) {
  const contextSelect=document.getElementById('aqContext');contextSelect.replaceChildren(...aqContexts.map(option=>new Option(aqOptionLabel(option),option.value)));
  const roleSelect=document.getElementById('aqMappedRole');roleSelect.replaceChildren(new Option('Nothing extra','none'),...aqRoles.map(role=>new Option(role.label,role.value)));roleSelect.value=aqDraft?.mapped_role||'none';document.getElementById('aqMappedQuestions').value=(aqDraft?.mapped_questions||[]).join('\n');
  const r=aqDraft||{};document.getElementById('aqQuestion').value=r.question||'';document.getElementById('aqAnswer').value=r.answer||'';document.getElementById('aqContext').value=r.context||(aqCategory!=='all'&&aqContexts.some(option=>option.value===aqCategory)?aqCategory:'general');document.getElementById('aqAliases').value=(r.aliases||[]).join('\n');document.getElementById('aqFrom').value=aqLocal(r.valid_from);document.getElementById('aqUntil').value=aqLocal(r.valid_until);
- aqAutoQuestions=aqSuggestedQuestions(document.getElementById('aqMappedRole').value,document.getElementById('aqContext').value).join('\n');aqRenderCategoryQuestions();aqRenderBuiltIn();aqRenderBlocks();document.getElementById('aqForm').oninput=()=>aqMarkDirty();document.getElementById('aqDialog').showModal();
+ aqAutoQuestions=aqSuggestedQuestions(document.getElementById('aqMappedRole').value,document.getElementById('aqContext').value).join('\n');aqRenderCategoryQuestions();aqRenderBuiltIn();aqRenderBlocks();document.getElementById('aqForm').oninput=()=>aqMarkDirty();aqAddSuggest();document.getElementById('aqDialog').showModal();
+}
+// The same ticked suggestions as the Map form, drawn from this answer's text.
+function aqAddSuggest() {
+ const box=document.getElementById('aqAliases');if(!box?.after)return;
+ const button=document.createElement('button');button.type='button';button.className='btn-secondary';button.textContent='Suggest phrases';
+ const list=document.createElement('div');list.id='aqVariationSuggestions';list.setAttribute('role','status');list.style.marginTop='8px';
+ button.onclick=()=>suggestVariations('aq',box,button,list);box.after(button,list);
 }
 function aqMarkDirty() {
  aqToken=null;

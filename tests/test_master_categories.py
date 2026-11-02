@@ -176,3 +176,10 @@ def test_a_button_name_with_no_details_answer_is_not_done(monkeypatch):
     steps = {step["key"]: step for step in admin_categories._setup_steps({"topic_id": "t", "button_name": "Sondesh"})}
     assert not any(step["done"] for step in steps.values())
     assert steps["name"]["status"] == "Needs a Details answer first"
+
+
+def test_a_category_opens_in_a_panel_on_its_first_unfinished_tab():
+    script = admin_categories.SCRIPT
+    assert "function catOpenPanel(topicId, tab)" in script and "find(key => !topic.setup.find" in script
+    assert [name in script for name in ("'Answers'", "'Buttons'", "'Button name'", "'Links'")] == [True] * 4
+    assert 'id="catPanel"' in admin_categories.HTML

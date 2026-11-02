@@ -299,3 +299,9 @@ def test_dedicated_ui_and_legacy_surface_are_separate(api):
     assert 'id="aqPublishButton"' in page and 'id="aqPublish"' not in page
     assert 'if(!adminAuthenticated)return;' in page
     assert page.count('style.display !== "none") loadApprovedQa();') == 2
+
+
+def test_approved_answers_can_suggest_phrases():
+    from camellia.admin_approved_qa import SCRIPT
+    from camellia.admin_source_response import SCRIPT as SOURCE
+    assert "suggestVariations('aq',box,button,list)" in SCRIPT and "aq:['aqAnswer']" in SOURCE

@@ -354,6 +354,23 @@ class Database:
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             """)
+            # Staff words only: their own question types, and gaps they set aside.
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS answer_own_questions (
+                topic_id TEXT NOT NULL,
+                slot TEXT NOT NULL,
+                label TEXT NOT NULL,
+                PRIMARY KEY (topic_id, slot)
+            );
+            """)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS answer_slot_dismissed (
+                topic_id TEXT NOT NULL,
+                slot TEXT NOT NULL,
+                dismissed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (topic_id, slot)
+            );
+            """)
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS variation_shadow (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

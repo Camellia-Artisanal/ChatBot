@@ -333,7 +333,7 @@ function renderStoryQa(prefix='igStory'){
 }
 // A Custom reply that promises a menu with none selected sent the text alone
 // to customers (19 Oct, sondesh posts and stories).
-const SOURCE_NOTE_FIELDS={ig:['igSourceDescription','igMenuPicker','igTopicPicker'],igStory:['igStorySourceDescription','igStoryMenuPicker','igStoryTopicPicker'],igMedia:['igMediaDescription','igMediaMenu','igMediaTopic']};
+const SOURCE_NOTE_FIELDS={aq:['aqAnswer'],ig:['igSourceDescription','igMenuPicker','igTopicPicker'],igStory:['igStorySourceDescription','igStoryMenuPicker','igStoryTopicPicker'],igMedia:['igMediaDescription','igMediaMenu','igMediaTopic']};
 function sourceNoteMenuMissing(prefix){
  if(sourceResponseFields(prefix).response_mode!=='CUSTOM')return false;
  const [noteId,menuId,topicId]=SOURCE_NOTE_FIELDS[prefix]||[];
