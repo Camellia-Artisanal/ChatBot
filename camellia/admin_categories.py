@@ -31,9 +31,27 @@ def _topics(conn):
              "usage": usage.get(topic["topic_id"], {}), "gallery": gallery.get(topic["topic_id"], 0),
              "menu_category_id": topic.get("menu_category_id"), "qa_context": topic.get("qa_context"),
              "customer_topic_id": topic.get("customer_topic_id"), "button_name": topic.get("button_name"),
-             "suggested_name": _tidy_name(topic["name"]),
+             "suggested_name": _tidy_name(topic["name"]), "setup": _setup_steps(topic),
              **_copyable_defaults(topic)}
             for topic in map(decode_topic, _database().list_instagram_topics())]
+
+
+def _setup_steps(topic):
+    """What is done on a category, worded for staff. The page only draws this."""
+    answered = [label for slot, label in answer_slots.SLOTS.items()
+                if answer_slots.effective({"topic_id": topic["topic_id"]}, slot)]
+    buttons = category_buttons.stored_buttons("topic", topic["topic_id"]) or []
+    name = topic.get("button_name")
+    return [
+        {"key": "links", "done": bool(topic.get("menu_category_id") or topic.get("qa_context")),
+         "status": "Linked" if topic.get("menu_category_id") or topic.get("qa_context") else "Not linked yet"},
+        {"key": "answers", "done": bool(answered),
+         "status": f"{len(answered)} of {len(answer_slots.SLOTS)} set" + (": " + ", ".join(answered) if answered else "")},
+        {"key": "buttons", "done": bool(buttons),
+         "status": ", ".join(button["label"] for button in buttons) or "None chosen yet"},
+        {"key": "name", "done": bool(name) and "Details" in answered,
+         "status": ("Needs a Details answer first" if "Details" not in answered else name) if name else "No name yet"},
+    ]
 
 
 def _copyable_defaults(topic):
@@ -292,22 +310,23 @@ async def add_phrase(request: Request, _actor=Depends(reviewer)):
 
 HTML = r'''
 <div id="tab-categories" class="panel-card" data-group="categories" style="display:none;">
- <div class="admin-page-heading"><div><h2>Categories</h2><p>Master categories are the one list to work from: one for each product and city. Linking only records which lists belong together, so customer replies do not change.</p></div></div>
+ <div class="admin-page-heading"><div><h2>Categories</h2><p>Keep one category for each product and city. Open a category and work down its steps. A tick means that step is done.</p></div></div>
  <div id="catMessage" role="status" class="result-box" style="display:none;"></div>
  <section class="ig-media-card" style="display:block;margin-bottom:16px;" aria-labelledby="catNeedsTitle">
-  <h3 id="catNeedsTitle">Needs answers</h3>
-  <p class="source-map-help">Questions from the last 14 days that went to staff because no answer is set. Set the answer once and the gap clears. Customers already waiting still go through the normal handoff.</p>
+  <h3 id="catNeedsTitle">Customers asked, but no answer is set</h3>
+  <p class="source-map-help">From the last 14 days. Press Set answer and the gap clears. Customers already waiting stay with staff.</p>
   <div id="catNeeds"></div>
  </section>
  <section class="ig-media-card" style="display:block;margin-bottom:16px;" aria-labelledby="catTopicsTitle">
   <h3 id="catTopicsTitle">Master categories</h3>
-  <p class="source-map-help">Add one name and it creates or links its Menu and Q&amp;A categories. Put the city in the name, such as Sondesh Delivery Mumbai. Check the suggested links on each category, then press Save links.</p>
-  <form class="source-secondary-actions" onsubmit="event.preventDefault();catAddMaster()"><input id="catAddTopics" class="field-control" style="flex:1 1 200px;width:auto;" maxlength="60" placeholder="New master category name" aria-label="New master category name"><select id="catCopyFrom" class="field-control" style="flex:1 1 200px;width:auto;" aria-label="Copy from an existing category" onchange="catRenderCopy()"></select><button class="btn-secondary" type="submit">+ Add</button></form>
+  <div id="catTopics" style="margin:12px 0 16px;"></div>
+  <b>Add a category</b>
+  <p class="source-map-help">Put the product and city in the name, such as Sondesh Delivery Mumbai.</p>
+  <form class="source-secondary-actions" onsubmit="event.preventDefault();catAddMaster()"><input id="catAddTopics" class="field-control" style="flex:1 1 200px;width:auto;" maxlength="60" placeholder="Category name" aria-label="New master category name"><select id="catCopyFrom" class="field-control" style="flex:1 1 200px;width:auto;" aria-label="Copy from an existing category" onchange="catRenderCopy()"></select><button class="btn-secondary" type="submit">+ Add</button></form>
   <div id="catCopyReview" style="margin-top:8px;"></div>
-  <div id="catTopics" style="margin-top:12px;"></div>
  </section>
  <details id="catAdvanced">
- <summary style="cursor:pointer;font-weight:600;margin-bottom:12px;">Advanced: Menu, Customer message and Q&amp;A lists</summary>
+ <summary style="cursor:pointer;font-weight:600;margin-bottom:12px;">Advanced: the separate Menu, Customer message and Q&amp;A lists (most days you will not need these)</summary>
  <section class="ig-media-card" style="display:block;margin-bottom:16px;" aria-labelledby="catMenusTitle">
   <h3 id="catMenusTitle">Menu categories</h3>
   <p class="source-map-help">How menus are filed in the Menu tab. Customers do not see these names.</p>
@@ -342,7 +361,13 @@ HTML = r'''
 SCRIPT = r'''
 <script>
 let catData = null, catMoving = null;
-const catOpenSlots = new Set();
+const catOpenCards = new Set();
+const CAT_STEPS = {
+ links: ['Choose its answers and menus', 'Pick the lists this category uses.'],
+ answers: ['Set its answers', 'One answer for each kind of question customers ask.'],
+ buttons: ['Choose question buttons', 'Shown under the reply. Only questions with an answer appear.'],
+ name: ['Name its button', 'Shown when the bot asks which product a customer means.'],
+};
 const CAT_URLS = {
  topics: '/admin/instagram-topics', menus: '/admin/menu-categories',
  menuTopics: '/admin/weekly-savoury/customer-topics', qa: '/admin/approved-qa/contexts',
@@ -396,53 +421,104 @@ function catLinkSelect(label, none, options, value) {
  field.append(label, select);
  return [field, select];
 }
-function catMasterRow(topic) {
+function catStep(topic, key, number) {
+ const step = document.createElement('section');
+ step.style.cssText = 'padding:12px 0;border-top:1px solid var(--border);';
+ const title = document.createElement('b'); title.textContent = number + '. ' + CAT_STEPS[key][0];
+ const mark = document.createElement('span'); mark.dataset.step = topic.topic_id + ':' + key; mark.style.cssText = 'display:block;font-size:.85rem;margin-top:2px;';
+ const help = document.createElement('p'); help.className = 'source-map-help'; help.textContent = CAT_STEPS[key][1];
+ step.append(title, mark, help);
+ return step;
+}
+function catPaintSteps(topic) {
+ for (const step of topic.setup) {
+  const mark = document.querySelector('[data-step="' + topic.topic_id + ':' + step.key + '"]');
+  if (mark) { mark.textContent = (step.done ? '✓ ' : '○ ') + step.status; mark.style.color = step.done ? 'var(--success, #2e7d32)' : 'var(--text-muted)'; }
+ }
+ const done = topic.setup.filter(step => step.done).length;
+ const progress = document.querySelector('[data-progress="' + topic.topic_id + '"]');
+ if (progress) progress.textContent = done === topic.setup.length ? '✓ Ready' : done + ' of ' + topic.setup.length + ' steps done';
+}
+// Saving inside a card must not redraw it, or a half-typed answer would be lost.
+async function catStepsChanged() {
+ try { catData = await catApi('/admin/categories'); catData.topics.forEach(catPaintSteps); } catch (_error) { /* The marks catch up on the next load. */ }
+}
+function catLinksStep(topic) {
  const linked = topic.menu_category_id || topic.qa_context;
- const actions = [
-  ...(topic.suggested_name !== topic.name ? [['Fix capitals: ' + topic.suggested_name, () => catRenameMaster(topic, topic.suggested_name)]] : []),
-  ['Answers', () => catOpenAnswers(topic.topic_id)],
-  ['Rename', () => catRenameMaster(topic)],
-  [topic.active ? 'Turn off' : 'Turn on', () => catToggleMaster(topic)],
-  ['Delete', () => catDeleteTopic(topic)],
- ];
- const row = catRow(topic.name, catTopicUsage(topic), actions, !topic.active);
- const wrap = document.createElement('div'); wrap.style.cssText = 'border-bottom:1px solid var(--border);padding-bottom:10px;margin-bottom:10px;';
- const links = document.createElement('div'); links.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:6px;';
- const [menuField, menu] = catLinkSelect('Menu category', 'Not linked',
-  catData.menu_categories.map(item => [String(item.category_id), item.name + ' (' + catPlural(item.menus, 'menu') + ')']),
-  String((linked ? topic.menu_category_id : topic.suggested_menu_category_id) ?? ''));
- const [qaField, qa] = catLinkSelect('Q&A category', 'Not linked',
+ const step = catStep(topic, 'links', 1);
+ const [qaField, qa] = catLinkSelect('Answers', 'Not linked',
   catData.qa_categories.map(item => [item.value, item.label + ' (' + catPlural(item.answers, 'answer') + ')']),
   (linked ? topic.qa_context : topic.suggested_qa_context) ?? '');
+ const [menuField, menu] = catLinkSelect('Menus', 'Not linked',
+  catData.menu_categories.map(item => [String(item.category_id), item.name + ' (' + catPlural(item.menus, 'menu') + ')']),
+  String((linked ? topic.menu_category_id : topic.suggested_menu_category_id) ?? ''));
+ const fields = document.createElement('div'); fields.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;';
+ fields.append(qaField, menuField);
+ const save = document.createElement('button'); save.type = 'button'; save.className = 'btn-secondary'; save.style.marginTop = '8px'; save.textContent = 'Save';
+ save.setAttribute('aria-label', 'Save the lists for ' + topic.name);
+ save.onclick = () => catSaveLinks(topic, {menu_category_id: menu.value ? Number(menu.value) : null, qa_context: qa.value || null});
+ step.append(fields, save);
+ if (!linked) { const note = document.createElement('small'); note.className = 'ig-media-muted'; note.style.display = 'block'; note.textContent = 'These are suggestions. Check them, then press Save.'; step.append(note); }
+ return step;
+}
+function catNameStep(topic) {
+ const step = catStep(topic, 'name', 4);
+ const input = document.createElement('input'); input.className = 'field-control'; input.maxLength = 20; input.value = topic.button_name || '';
+ input.setAttribute('aria-label', 'Button name for ' + topic.name); input.placeholder = 'Up to 20 letters, such as Sondesh';
+ const chat = document.createElement('p'); chat.style.cssText = 'margin:8px 0;font-size:.85rem;';
+ const chip = document.createElement('span'); chip.style.cssText = 'display:inline-block;margin-top:4px;padding:4px 12px;border:1px solid var(--border);border-radius:999px;';
+ const draw = () => { chip.textContent = input.value.trim() || 'Your name here'; };
+ input.oninput = draw; draw();
+ chat.append('Customers will see: ', chip);
+ const save = document.createElement('button'); save.type = 'button'; save.className = 'btn-secondary'; save.textContent = 'Save';
+ save.setAttribute('aria-label', 'Save the button name for ' + topic.name);
+ save.onclick = () => catSaveLinks(topic, {button_name: input.value || null});
+ step.append(input, chat, save);
+ return step;
+}
+function catMoreOptions(topic) {
+ const more = document.createElement('details'); more.style.cssText = 'padding-top:12px;border-top:1px solid var(--border);';
+ const summary = document.createElement('summary'); summary.style.cssText = 'cursor:pointer;font-weight:600;'; summary.textContent = 'More options'; more.append(summary);
  const [customerField, customer] = catLinkSelect('Customer message topic (optional)', 'Not linked',
   catData.menu_topics.map(item => [item.topic_id, item.name]), topic.customer_topic_id ?? '');
- const buttonField = document.createElement('label'); buttonField.style.cssText = 'flex:1 1 150px;min-width:0;font-size:.85rem;';
- const buttonName = document.createElement('input'); buttonName.className = 'field-control'; buttonName.maxLength = 20; buttonName.value = topic.button_name || '';
- buttonField.append('Button name (optional)', buttonName);
- const save = document.createElement('button');
- save.type = 'button'; save.className = 'btn-secondary'; save.textContent = 'Save links';
- save.setAttribute('aria-label', 'Save links for ' + topic.name);
- save.onclick = () => catSaveLinks(topic, menu.value, qa.value, customer.value, buttonName.value);
- links.append(menuField, qaField, customerField, buttonField, save);
- const answers = document.createElement('div'); answers.id = 'catAnswers-' + topic.topic_id;
- wrap.append(row, links, answers);
- // The list redraws after every change, so an open editor is reopened here.
- if (catOpenSlots.has(topic.topic_id)) catSlotEditor(answers, 'topic', topic.topic_id);
- if (!linked) {
-  const note = document.createElement('small'); note.className = 'ig-media-muted'; note.style.display = 'block';
-  note.textContent = 'Not saved yet. These are suggestions, so check them before saving.';
-  wrap.append(note);
- }
- return wrap;
+ customer.onchange = () => catSaveLinks(topic, {customer_topic_id: customer.value || null});
+ const actions = document.createElement('div'); actions.className = 'source-secondary-actions'; actions.style.marginTop = '8px';
+ [...(topic.suggested_name !== topic.name ? [['Fix capitals: ' + topic.suggested_name, () => catRenameMaster(topic, topic.suggested_name)]] : []),
+  ['Rename', () => catRenameMaster(topic)], [topic.active ? 'Turn off' : 'Turn on', () => catToggleMaster(topic)], ['Delete', () => catDeleteTopic(topic)]]
+  .forEach(([label, handler]) => {
+   const button = document.createElement('button'); button.type = 'button'; button.className = 'btn-secondary'; button.textContent = label;
+   button.setAttribute('aria-label', label + ' ' + topic.name); button.onclick = handler; actions.append(button);
+  });
+ more.append(customerField, actions);
+ return more;
 }
-// Slots answer nobody yet: they run in shadow until the results are reviewed.
-function catOpenAnswers(topicId, focus) {
- const box = document.getElementById('catAnswers-' + topicId);
- if (!box) return;
- if (catOpenSlots.has(topicId) && !focus) { catOpenSlots.delete(topicId); box.replaceChildren(); return; }
- catOpenSlots.add(topicId);
- catSlotEditor(box, 'topic', topicId);
- if (focus) box.scrollIntoView({block:'center'});
+function catMasterRow(topic) {
+ const card = document.createElement('details'); card.id = 'catCard-' + topic.topic_id;
+ card.style.cssText = 'border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px;';
+ const head = document.createElement('summary'); head.style.cssText = 'cursor:pointer;';
+ const name = document.createElement('b'); name.textContent = topic.name;
+ const progress = document.createElement('span'); progress.dataset.progress = topic.topic_id; progress.style.cssText = 'margin-left:8px;font-size:.85rem;';
+ const usage = document.createElement('small'); usage.className = 'ig-media-muted'; usage.style.display = 'block';
+ usage.textContent = (topic.active ? '' : 'Turned off · ') + 'Used on: ' + catTopicUsage(topic);
+ head.append(name, progress, usage);
+ const body = document.createElement('div'); body.style.marginTop = '12px';
+ const answers = catStep(topic, 'answers', 2), buttons = catStep(topic, 'buttons', 3);
+ const answerBox = document.createElement('div'); answerBox.id = 'catAnswers-' + topic.topic_id; answers.append(answerBox);
+ const buttonBox = document.createElement('div'); buttons.append(buttonBox);
+ body.append(catLinksStep(topic), answers, buttons, catNameStep(topic), catMoreOptions(topic));
+ card.append(head, body);
+ let loaded = false;
+ const load = () => { if (loaded) return; loaded = true; catSlotEditor(answerBox, 'topic', topic.topic_id); catQuestionButtons(buttonBox, 'topic', topic.topic_id); };
+ card.ontoggle = () => { if (card.open) { catOpenCards.add(topic.topic_id); load(); } else catOpenCards.delete(topic.topic_id); };
+ // The list redraws after a saved change, so an open card is reopened here.
+ card.open = catOpenCards.has(topic.topic_id);
+ return card;
+}
+function catOpenAnswers(topicId) {
+ const card = document.getElementById('catCard-' + topicId);
+ if (!card) return;
+ card.open = true;
+ document.getElementById('catAnswers-' + topicId).scrollIntoView({block:'center'});
 }
 async function catSlotEditor(box, owner, ownerId) {
  const base = '/admin/categories/slots/' + owner + '/' + encodeURIComponent(ownerId);
@@ -452,7 +528,6 @@ async function catSlotEditor(box, owner, ownerId) {
   const [{slots}, options] = await Promise.all([catApi(base), catApi('/admin/instagram-routes/approved-qa-options')]);
   const menus = typeof igMenus === 'undefined' ? [] : igMenus;
   box.replaceChildren(...slots.map(slot => catSlotRow(box, owner, ownerId, base, slot, options.records || [], menus)));
-  if (owner === 'topic') { const buttons = document.createElement('div'); box.append(buttons); catQuestionButtons(buttons, owner, ownerId); }
  } catch (error) { box.textContent = error.message; }
 }
 // A post with no choice of its own uses its category's buttons, as do ads promoting it.
@@ -476,7 +551,7 @@ async function catQuestionButtons(box, owner, ownerId) {
   });
   const save = document.createElement('button'); save.type = 'button'; save.className = 'btn-secondary'; save.textContent = 'Save buttons';
   save.onclick = async () => {
-   try { await catApi(url, 'PUT', {buttons: rows.filter(item => item.tick.checked).map(item => ({slot: item.slot, label: item.label.value}))}); note.textContent = 'Buttons saved.'; }
+   try { await catApi(url, 'PUT', {buttons: rows.filter(item => item.tick.checked).map(item => ({slot: item.slot, label: item.label.value}))}); note.textContent = 'Buttons saved.'; if (owner === 'topic') catStepsChanged(); }
    catch (error) { note.textContent = error.message; }
   };
   box.replaceChildren(heading, help, ...rows.map(item => item.row), save, note);
@@ -511,6 +586,7 @@ function catSlotRow(box, owner, ownerId, base, slot, records, menus) {
    try {
     await handler(); await catSlotEditor(box, owner, ownerId);
     catRenderNeeds((await catApi('/admin/categories/needs-answers')).groups);
+    if (owner === 'topic') catStepsChanged();
    } catch (error) { note.textContent = error.message; }
   };
   return button;
@@ -527,11 +603,12 @@ function catSlotRow(box, owner, ownerId, base, slot, records, menus) {
 }
 function catRenderNeeds(groups) {
  const box = document.getElementById('catNeeds');
+ box.closest('section').hidden = !groups.length;
  if (!groups.length) { box.textContent = 'Nothing waiting. Gaps appear here as customers ask.'; return; }
  box.replaceChildren(...groups.map(group => {
   const row = catRow(group.topic_name + ': ' + catPlural(group.count, group.label + ' question'),
    group.state === 'expired' ? 'The answer has expired' : 'No answer set',
-   [['Set answer', () => catOpenAnswers(group.topic_id, true)]]);
+   [['Set answer', () => catOpenAnswers(group.topic_id)]]);
   const wrap = document.createElement('div'); wrap.style.marginBottom = '10px'; wrap.append(row);
   group.examples.forEach(example => {
    const line = document.createElement('div'); line.className = 'source-secondary-actions'; line.style.alignItems = 'center';
@@ -567,6 +644,7 @@ function catRenderCopy() {
 function catRender() {
  const data = catData;
  catFill('catTopics', data.topics.map(catMasterRow));
+ data.topics.forEach(catPaintSteps);
  const copyFrom = document.getElementById('catCopyFrom'), copying = copyFrom.value;
  copyFrom.replaceChildren(new Option('Start blank', ''), ...data.topics.map(topic => new Option('Copy from ' + topic.name, topic.topic_id)));
  copyFrom.value = copying;
@@ -610,11 +688,12 @@ async function catAddMaster() {
   await catChanged('Added ' + name + '.');
  } catch (error) { catNote(error.message, true); }
 }
-async function catSaveLinks(topic, menu, qa, customer, buttonName) {
+// Each step saves its own fields; the rest of the category's links are kept.
+async function catSaveLinks(topic, changes) {
  try {
   await catApi('/admin/categories/master/' + encodeURIComponent(topic.topic_id) + '/links', 'PUT',
-               {menu_category_id: menu ? Number(menu) : null, qa_context: qa || null, customer_topic_id: customer || null, button_name: buttonName || null});
-  await catChanged('Saved links for ' + topic.name + '.');
+               {menu_category_id: topic.menu_category_id ?? null, qa_context: topic.qa_context ?? null, customer_topic_id: topic.customer_topic_id ?? null, button_name: topic.button_name ?? null, ...changes});
+  await catChanged('Saved ' + topic.name + '.');
  } catch (error) { catNote(error.message, true); }
 }
 async function catRenameMaster(topic, suggested) {

@@ -157,3 +157,22 @@ def test_the_page_keeps_other_lists_under_advanced():
     assert '<details id="catAdvanced">' in admin_categories.HTML
     assert admin_categories.HTML.index("Master categories") < admin_categories.HTML.index('id="catAdvanced"')
     assert admin_categories.HTML.index('id="catAdvanced"') < admin_categories.HTML.index('id="catMenus"')
+
+
+
+def test_setup_steps_say_what_is_done(monkeypatch):
+    from camellia import answer_slots, category_buttons
+    monkeypatch.setattr(answer_slots, "effective", lambda route, slot: {"kind": "CUSTOM"} if slot == "details" else None)
+    monkeypatch.setattr(category_buttons, "stored_buttons", lambda owner, key: [{"slot": "price", "label": "Price"}])
+    steps = {step["key"]: step for step in admin_categories._setup_steps({"topic_id": "t", "qa_context": "x", "button_name": "Sondesh"})}
+    assert all(step["done"] for step in steps.values())
+    assert steps["answers"]["status"].endswith("Details") and steps["buttons"]["status"] == "Price"
+
+
+def test_a_button_name_with_no_details_answer_is_not_done(monkeypatch):
+    from camellia import answer_slots, category_buttons
+    monkeypatch.setattr(answer_slots, "effective", lambda route, slot: None)
+    monkeypatch.setattr(category_buttons, "stored_buttons", lambda owner, key: None)
+    steps = {step["key"]: step for step in admin_categories._setup_steps({"topic_id": "t", "button_name": "Sondesh"})}
+    assert not any(step["done"] for step in steps.values())
+    assert steps["name"]["status"] == "Needs a Details answer first"

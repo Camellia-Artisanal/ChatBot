@@ -175,3 +175,7 @@ Escalations stay separate from suggested answer drafts. Verified knowledge still
 a human to provide and approve the answer facts.
 The exact Meta “more info on this” button prompt without referral or mapped-source context
 uses a human handoff; it cannot fall through to the city-specific generic food introduction.
+
+## Admin forms
+
+- Categories: each master category is a card of four steps. `_setup_steps` decides what is done; the page only draws it, and saving a step redraws only the marks.
