@@ -295,6 +295,17 @@ def needs_answers(_actor=Depends(reviewer)):
     return {"groups": answer_slots.needs_answers()}
 
 
+@router.post("/needs-answers/move")
+async def move_gap(request: Request, _actor=Depends(reviewer)):
+    body = await _body(request)
+    try:
+        answer_slots.move_gap(str(body.get("topic_id") or ""), str(body.get("slot") or ""),
+                              str(body.get("message") or ""), str(body.get("to") or ""))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"status": "success"}
+
+
 @router.post("/needs-answers/dismiss")
 async def dismiss_gap(request: Request, _actor=Depends(reviewer)):
     body = await _body(request)
@@ -410,7 +421,7 @@ HTML = r'''
 SCRIPT = r'''
 <script>
 let catData = null, catMoving = null;
-let catPanelTopic = null, catPanelTab = null, catPreviewSlot = 'details', catPreviewStamp = 0;
+let catPanelTopic = null, catPanelTab = null, catPreviewSlot = 'details', catPreviewStamp = 0, catNeedGroups = [], catFocusSlot = null;
 // Tab order: most-used first. Each key matches a step from _setup_steps.
 const CAT_TABS = [
  ['answers', 'Answers', 'One answer for each kind of question customers ask. Add your own question at the end of the list.'],
@@ -551,7 +562,8 @@ function catMasterRow(topic) {
  const progress = document.createElement('span'); progress.dataset.progress = topic.topic_id; progress.style.cssText = 'margin-left:8px;font-size:.85rem;';
  const usage = document.createElement('small'); usage.className = 'ig-media-muted'; usage.style.display = 'block';
  usage.textContent = (topic.active ? '' : 'Turned off · ') + 'Used on: ' + catTopicUsage(topic);
- card.append(name, progress, usage);
+ const waiting = document.createElement('small'); waiting.dataset.waiting = topic.topic_id; waiting.style.cssText = 'display:block;color:var(--danger);font-weight:600;';
+ card.append(name, progress, usage, waiting);
  card.onclick = () => catOpenPanel(topic.topic_id);
  return card;
 }
@@ -642,7 +654,13 @@ function catClosePanel() {
  document.getElementById('catPanel').hidden = true; document.getElementById('catPanelBackdrop').hidden = true;
 }
 document.addEventListener('keydown', event => { if (event.key === 'Escape' && catPanelTopic && !document.getElementById('catMoveDialog').open) catClosePanel(); });
-function catOpenAnswers(topicId) { catOpenPanel(topicId, 'answers'); }
+function catOpenAnswers(topicId, slot) { catFocusSlot = slot || null; if (slot) catPreviewSlot = slot; catOpenPanel(topicId, 'answers'); }
+function catPaintWaiting() {
+ document.querySelectorAll('[data-waiting]').forEach(mark => {
+  const count = catNeedGroups.filter(group => group.topic_id === mark.dataset.waiting).reduce((total, group) => total + group.count, 0);
+  mark.textContent = count ? catPlural(count, 'question') + ' waiting' : '';
+ });
+}
 async function catSlotEditor(box, owner, ownerId) {
  const base = '/admin/categories/slots/' + owner + '/' + encodeURIComponent(ownerId);
  box.textContent = 'Loading answers...';
@@ -652,6 +670,8 @@ async function catSlotEditor(box, owner, ownerId) {
   const menus = typeof igMenus === 'undefined' ? [] : igMenus;
   box.replaceChildren(...slots.map(slot => catSlotRow(box, owner, ownerId, base, slot, options.records || [], menus)));
   if (owner === 'topic') box.append(catOwnQuestionForm(box, ownerId));
+  const focus = owner === 'topic' && catFocusSlot && box.querySelector('[data-slot-editor="' + catFocusSlot + '"]');
+  if (focus) { catFocusSlot = null; focus.hidden = false; focus.scrollIntoView({block:'center'}); }
  } catch (error) { box.textContent = error.message; }
 }
 // A post with no choice of its own uses its category's buttons, as do ads promoting it.
@@ -777,18 +797,43 @@ function catSlotRow(box, owner, ownerId, base, slot, records, menus) {
  if (answer.kind) actions.append(act('Remove answer', () => catApi(base + '/' + slot.slot, 'DELETE')));
  if (slot.own) actions.append(act('Remove question', () => catApi('/admin/categories/own-questions/' + encodeURIComponent(ownerId) + '/' + encodeURIComponent(slot.slot), 'DELETE')));
  if (answer.kind === 'CUSTOM') actions.append(act('Save to Approved Q&A', () => catApi(base + '/' + slot.slot + '/save-to-approved', 'POST')));
+ const asked = owner === 'topic' ? catNeedGroups.find(group => group.topic_id === ownerId && group.slot === slot.slot) : null;
+ if (asked) {
+  const waiting = document.createElement('small'); waiting.style.cssText = 'display:block;color:var(--danger);font-weight:600;'; waiting.textContent = catPlural(asked.count, 'question') + ' waiting';
+  text.append(waiting);
+  const words = document.createElement('div'); words.style.cssText = 'margin-bottom:8px;padding:8px 10px;border-radius:8px;background:var(--bg);font-size:.85rem;';
+  const heading = document.createElement('b'); heading.textContent = 'Customers asked'; words.append(heading);
+  asked.examples.forEach(example => { const line = document.createElement('div'); line.textContent = '“' + example.message + '”'; words.append(line); });
+  editor.append(words);
+ }
  editor.append(choices, pick, write, actions, note);
  row.append(line, editor);
  return row;
 }
+function catMoveSelect(group, example) {
+ const label = document.createElement('label'); label.style.cssText = 'display:flex;gap:6px;align-items:center;font-size:.85rem;';
+ const select = document.createElement('select'); select.className = 'field-control'; select.style.width = 'auto';
+ select.setAttribute('aria-label', 'Change type of: ' + example.message);
+ select.replaceChildren(...group.choices.map(choice => new Option(choice.label, choice.slot))); select.value = group.slot;
+ select.onchange = async () => {
+  try {
+   await catApi('/admin/categories/needs-answers/move', 'POST', {topic_id: group.topic_id, slot: group.slot, message: example.message, to: select.value});
+   catRenderNeeds((await catApi('/admin/categories/needs-answers')).groups);
+   catNote('Moved to ' + select.selectedOptions[0].textContent + '.');
+  } catch (error) { select.value = group.slot; catNote(error.message, true); }
+ };
+ label.append('Change type', select);
+ return label;
+}
 function catRenderNeeds(groups) {
+ catNeedGroups = groups; catPaintWaiting();
  const box = document.getElementById('catNeeds');
  box.closest('section').style.display = groups.length ? 'block' : 'none';
  if (!groups.length) { box.textContent = 'Nothing waiting. Gaps appear here as customers ask.'; return; }
  box.replaceChildren(...groups.map(group => {
-  const row = catRow(group.topic_name + ': ' + catPlural(group.count, group.label + ' question'),
+  const row = catRow(group.topic_name + ': ' + group.label + ' · ' + catPlural(group.count, 'question'),
    group.state === 'expired' ? 'The answer has expired' : 'No answer set',
-   [['Set answer', () => catOpenAnswers(group.topic_id)], ['Not needed', () => catDismissGap(group)]]);
+   [['Set answer', () => catOpenAnswers(group.topic_id, group.slot)], ['Not needed', () => catDismissGap(group)]]);
   const wrap = document.createElement('div'); wrap.style.marginBottom = '10px'; wrap.append(row);
   group.examples.forEach(example => {
    const line = document.createElement('div'); line.className = 'source-secondary-actions'; line.style.alignItems = 'center';
@@ -799,7 +844,7 @@ function catRenderNeeds(groups) {
     try { await catApi('/admin/categories/needs-answers/phrase', 'POST', {routing_id: example.routing_id, phrase: example.message}); catNote('Added the phrase.'); }
     catch (error) { catNote(error.message, true); }
    };
-   line.append(words, add); wrap.append(line);
+   line.append(words, catMoveSelect(group, example), add); wrap.append(line);
   });
   return wrap;
  }));

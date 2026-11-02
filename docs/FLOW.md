@@ -178,4 +178,4 @@ uses a human handoff; it cannot fall through to the city-specific generic food i
 
 ## Admin forms
 
-- Categories: each master category opens in a side panel with four tabs. `_setup_steps` decides what is done; the page only draws it. Staff can add their own questions per category, and Not needed sets a gap aside until a customer asks again. Ticks, dropdowns and names save themselves with an 8-second Undo; written answers keep Save. The panel's preview comes from `category_buttons.preview` and stays labelled as testing until category answers go live.
+- Categories: each master category opens in a side panel with four tabs. `_setup_steps` decides what is done; the page only draws it. Staff can add their own questions per category, and Not needed sets a gap aside until a customer asks again. Change type refiles a waiting question without teaching the AI. Ticks, dropdowns and names save themselves with an 8-second Undo; written answers keep Save. The panel's preview comes from `category_buttons.preview` and stays labelled as testing until category answers go live.

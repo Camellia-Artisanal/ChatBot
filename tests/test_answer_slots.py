@@ -255,3 +255,33 @@ def test_own_question_and_dismiss_routes(admin, slots):  # noqa: F811
     assert client.delete(f"/admin/categories/own-questions/{topic}/{made.json()['slot']}", headers=headers).status_code == 200
     assert client.post("/admin/categories/needs-answers/dismiss", headers=headers, json={"topic_id": topic}).status_code == 400
     assert client.post("/admin/categories/needs-answers/dismiss", headers=headers, json={"topic_id": topic, "slot": "price"}).status_code == 200
+
+
+def test_a_wrongly_typed_question_can_be_moved_to_the_right_one(slots):
+    topic = _topic("Move Gap")
+    seats = answer_slots.add_own_question(topic, "Are seats available?")
+    _gap(topic)
+    assert {item["slot"] for item in answer_slots.needs_answers()[0]["choices"]} >= {"price", seats}
+    answer_slots.move_gap(topic, "location", "iye sthaan pawa jabe", seats)
+    group = answer_slots.needs_answers()[0]
+    assert (group["slot"], group["label"]) == (seats, "Are seats available?")
+    answer_slots.save("topic", topic, seats, _custom())
+    assert answer_slots.needs_answers() == []
+
+
+def test_a_question_cannot_move_to_an_unknown_type(slots):
+    topic = _topic("Move Bad")
+    _gap(topic)
+    with pytest.raises(ValueError):
+        answer_slots.move_gap(topic, "location", "iye sthaan pawa jabe", "nope")
+    assert answer_slots.needs_answers()[0]["slot"] == "location"
+
+
+def test_move_route(admin, slots):  # noqa: F811
+    client, headers = admin
+    topic = _topic("Move Route")
+    _gap(topic)
+    body = {"topic_id": topic, "slot": "location", "message": "iye sthaan pawa jabe"}
+    assert client.post("/admin/categories/needs-answers/move", headers=headers, json={**body, "to": "x"}).status_code == 400
+    assert client.post("/admin/categories/needs-answers/move", headers=headers, json={**body, "to": "booking"}).status_code == 200
+    assert answer_slots.needs_answers()[0]["slot"] == "booking"

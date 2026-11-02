@@ -290,6 +290,19 @@ def shadow_report(days: int = 7, limit: int = 100) -> Dict[str, Any]:
             "shadow_enabled": config.VARIATION_SHADOW_ENABLED}
 
 
+def move_gap(topic_id: str, slot: str, message: str, to: str) -> None:
+    """Refiles a waiting question the AI typed wrongly. The AI itself does not learn from this."""
+    if to not in labels(topic_id):
+        raise ValueError("Choose a question from the list.")
+    with db.get_connection() as conn:
+        conn.execute(
+            """UPDATE answer_slot_shadow SET slot=?, detail='moved_by_staff'
+               WHERE topic_id=? AND slot=? AND user_message=? AND outcome IN ('empty', 'expired')""",
+            (to, str(topic_id), slot, message),
+        )
+        conn.commit()
+
+
 def dismiss_gap(topic_id: str, slot: str) -> None:
     """Sets this gap aside. A customer asking again brings it back."""
     with db.get_connection() as conn:
@@ -319,7 +332,8 @@ def needs_answers(days: int = 14) -> List[Dict[str, Any]]:
             continue
         group = groups.setdefault((row["topic_id"], row["slot"]), {
             "topic_id": row["topic_id"], "topic_name": row["topic_name"], "slot": row["slot"],
-            "label": labels(row["topic_id"]).get(row["slot"], "Other"), "state": "expired" if answer else "empty", "count": 0, "examples": [],
+            "label": labels(row["topic_id"]).get(row["slot"], "Other"),
+            "choices": [{"slot": key, "label": label} for key, label in labels(row["topic_id"]).items()], "state": "expired" if answer else "empty", "count": 0, "examples": [],
         })
         group["count"] += 1
         if len(group["examples"]) < 5 and row["user_message"] not in {item["message"] for item in group["examples"]}:
