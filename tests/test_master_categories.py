@@ -190,7 +190,7 @@ def test_answers_are_one_line_rows_and_small_fields_save_themselves():
     script = admin_categories.SCRIPT
     assert "Pick an approved answer" in script and "Write your own" in script and "[data-slot-editor]" in script
     assert "catToast(async () =>" in script and "Save buttons" not in script
-    assert "catSoon(() => catSaveLinks(topic, {button_name" in script
+    assert "catSoon('name:' + topic.topic_id, () => catSaveLinks(topic, {button_name" in script
 
 
 def test_an_answer_that_cannot_be_sent_is_not_a_finished_step(monkeypatch):
@@ -201,3 +201,15 @@ def test_an_answer_that_cannot_be_sent_is_not_a_finished_step(monkeypatch):
     steps = {step["key"]: step for step in admin_categories._setup_steps({"topic_id": "t", "button_name": "Sondesh"})}
     assert not steps["answers"]["done"] and "1 can't be sent yet" in steps["answers"]["status"]
     assert steps["name"]["status"] == "Needs a Details answer first"
+
+
+def test_each_field_waits_on_its_own_and_a_dropdown_saves_only_itself():
+    script = admin_categories.SCRIPT
+    assert "catSoonTimers[field]" in script and "catSoon(url, store)" in script
+    assert "qa.onchange = () => catSaveLinks(topic, {qa_context: values.qa_context()}, fill);" in script
+
+
+def test_the_preview_shows_reel_links_and_back_closes_the_panel():
+    script = admin_categories.SCRIPT
+    assert "block.kind === 'LINK') parts.push(bubble(block.url))" in script
+    assert "addEventListener('popstate'" in script

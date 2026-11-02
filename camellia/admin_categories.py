@@ -523,8 +523,12 @@ function catLinksStep(topic) {
   catData.menu_topics.map(item => [item.topic_id, item.name]), topic.customer_topic_id ?? '');
  fields.append(qaField, menuField, customerField);
  const fill = values => { qa.value = values.qa_context ?? ''; menu.value = String(values.menu_category_id ?? ''); customer.value = values.customer_topic_id ?? ''; };
- const store = () => catSaveLinks(topic, {menu_category_id: menu.value ? Number(menu.value) : null, qa_context: qa.value || null, customer_topic_id: customer.value || null}, fill);
- [qa, menu, customer].forEach(select => { select.onchange = store; });
+ const values = {menu_category_id: () => menu.value ? Number(menu.value) : null, qa_context: () => qa.value || null, customer_topic_id: () => customer.value || null};
+ // A dropdown saves only itself, so an unchecked suggestion beside it stays unsaved.
+ qa.onchange = () => catSaveLinks(topic, {qa_context: values.qa_context()}, fill);
+ menu.onchange = () => catSaveLinks(topic, {menu_category_id: values.menu_category_id()}, fill);
+ customer.onchange = () => catSaveLinks(topic, {customer_topic_id: values.customer_topic_id()}, fill);
+ const store = () => catSaveLinks(topic, Object.fromEntries(Object.entries(values).map(([key, read]) => [key, read()])), fill);
  step.append(fields);
  if (!linked) {
   const note = document.createElement('small'); note.className = 'ig-media-muted'; note.style.display = 'block'; note.textContent = 'These are suggestions, and they are not saved yet.';
@@ -544,7 +548,7 @@ function catNameStep(topic) {
  const draw = () => { chip.textContent = input.value.trim() || 'Your name here'; };
  draw();
  chat.append('Customers will see: ', chip);
- input.oninput = () => { draw(); catSoon(() => catSaveLinks(topic, {button_name: input.value.trim() || null}, values => { input.value = values.button_name ?? ''; draw(); })); };
+ input.oninput = () => { draw(); catSoon('name:' + topic.topic_id, () => catSaveLinks(topic, {button_name: input.value.trim() || null}, values => { input.value = values.button_name ?? ''; draw(); })); };
  step.append(input, chat);
  return step;
 }
@@ -601,6 +605,7 @@ async function catLoadPreview() {
   const parts = [bubble(select.selectedOptions[0]?.textContent || '', true)];
   for (const block of data.blocks) {
    if (block.kind === 'TEXT') parts.push(bubble(block.text));
+   else if (block.kind === 'LINK') parts.push(bubble(block.url));
    else (block.urls || []).forEach(url => { const image = document.createElement('img'); image.src = url; image.alt = 'Menu image'; parts.push(image); });
   }
   if (data.state !== 'ok') parts.push(bubble(CAT_PREVIEW_EMPTY[data.state]));
@@ -660,6 +665,7 @@ function catClosePanel() {
  catPanelTopic = null;
  document.getElementById('catPanel').hidden = true; document.getElementById('catPanelBackdrop').hidden = true;
 }
+window.addEventListener('popstate', () => { if (catPanelTopic) catClosePanel(); });
 document.addEventListener('keydown', event => { if (event.key === 'Escape' && catPanelTopic && !document.getElementById('catMoveDialog').open) catClosePanel(); });
 function catOpenAnswers(topicId, slot) { catFocusSlot = slot || null; if (slot) catPreviewSlot = slot; catOpenPanel(topicId, 'answers'); }
 function catPaintWaiting() {
@@ -712,7 +718,7 @@ async function catQuestionButtons(box, owner, ownerId) {
     catToast(async () => { await catApi(url, 'PUT', {buttons: previous}); fill(previous); last = previous; if (owner === 'topic') catStepsChanged(); });
    } catch (error) { note.textContent = error.message; }
   };
-  rows.forEach(item => { item.tick.onchange = store; item.label.oninput = () => catSoon(store); });
+  rows.forEach(item => { item.tick.onchange = store; item.label.oninput = () => catSoon(url, store); });
   box.replaceChildren(...(owner === 'topic' ? [] : [heading, help]), ...rows.map(item => item.row), note);
  } catch (error) { box.textContent = error.message; }
 }
@@ -939,8 +945,8 @@ async function catAddMaster() {
  } catch (error) { catNote(error.message, true); }
 }
 // Waits for a pause in typing, so each word is not saved on its own.
-let catSoonTimer = null;
-function catSoon(action) { clearTimeout(catSoonTimer); catSoonTimer = setTimeout(action, 800); }
+const catSoonTimers = {};
+function catSoon(field, action) { clearTimeout(catSoonTimers[field]); catSoonTimers[field] = setTimeout(action, 800); }
 // One small message: Saved, with Undo for the last change only.
 let catToastTimer = null;
 function catToast(undo, text = 'Saved') {

@@ -285,3 +285,24 @@ def test_move_route(admin, slots):  # noqa: F811
     assert client.post("/admin/categories/needs-answers/move", headers=headers, json={**body, "to": "x"}).status_code == 400
     assert client.post("/admin/categories/needs-answers/move", headers=headers, json={**body, "to": "booking"}).status_code == 200
     assert answer_slots.needs_answers()[0]["slot"] == "booking"
+
+
+def test_removing_an_own_question_clears_its_waiting_questions(slots):
+    topic = _topic("Remove Own")
+    seats = answer_slots.add_own_question(topic, "Seats?")
+    _gap(topic)
+    answer_slots.move_gap(topic, "location", "iye sthaan pawa jabe", seats)
+    assert answer_slots.needs_answers()
+    with answer_slots.db.get_connection() as conn:
+        conn.execute("UPDATE answer_slot_shadow SET timestamp=datetime('now', '-1 hour')")
+        conn.commit()
+    answer_slots.remove_own_question(topic, seats)
+    assert answer_slots.needs_answers() == []
+
+
+def test_a_question_moved_into_a_dismissed_type_stays_on_show(slots):
+    topic = _topic("Move Dismissed")
+    answer_slots.dismiss_gap(topic, "booking")
+    _gap(topic)
+    answer_slots.move_gap(topic, "location", "iye sthaan pawa jabe", "booking")
+    assert [item["slot"] for item in answer_slots.needs_answers()] == ["booking"]

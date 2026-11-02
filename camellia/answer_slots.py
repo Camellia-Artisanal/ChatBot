@@ -65,6 +65,7 @@ def remove_own_question(topic_id: str, slot: str) -> None:
         conn.execute("DELETE FROM answer_own_questions WHERE topic_id=? AND slot=?", (str(topic_id), slot))
         conn.execute("DELETE FROM answer_slots WHERE owner_type='topic' AND owner_id=? AND slot=?", (str(topic_id), slot))
         conn.commit()
+    dismiss_gap(topic_id, slot)  # Its waiting questions have no answer left to set.
 
 
 def labels(topic_id: Optional[str]) -> Dict[str, str]:
@@ -296,7 +297,8 @@ def move_gap(topic_id: str, slot: str, message: str, to: str) -> None:
         raise ValueError("Choose a question from the list.")
     with db.get_connection() as conn:
         conn.execute(
-            """UPDATE answer_slot_shadow SET slot=?, detail='moved_by_staff'
+            # A fresh time keeps it on show even if its new type was set aside earlier.
+            """UPDATE answer_slot_shadow SET slot=?, detail='moved_by_staff', timestamp=datetime('now', '+1 second')
                WHERE topic_id=? AND slot=? AND user_message=? AND outcome IN ('empty', 'expired')""",
             (to, str(topic_id), slot, message),
         )
