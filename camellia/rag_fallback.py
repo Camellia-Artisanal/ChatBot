@@ -93,6 +93,7 @@ class RAGFallbackEngine:
 
     def grounding_report(
         self, answer: str, context_chunks: List[str], strict: bool = True,
+        customer_words: Tuple[str, ...] = (),
     ) -> Tuple[bool, str]:
         """
         True when a generated answer states no number the approved excerpts
@@ -107,6 +108,10 @@ class RAGFallbackEngine:
 
         Separators are stripped before comparing so "₹1,500" in the answer
         still matches "₹1500" in the source.
+
+        `customer_words` may only excuse ordinary wording in the final coverage
+        check. A customer who types "sondesh ₹10, free delivery" must not be
+        able to approve that claim for a model that obeys them.
         """
         if not answer:
             return False, "empty_answer"
@@ -210,7 +215,7 @@ class RAGFallbackEngine:
         # wording, so it is checked for new claims but not for full coverage.
         # Generation from retrieval has no such anchor and is checked strictly.
         if strict:
-            unsupported = self._unsupported_content_word(answer, context_chunks)
+            unsupported = self._unsupported_content_word(answer, [*context_chunks, *customer_words])
             if unsupported:
                 return False, f"unsupported_statement:{unsupported}"
 

@@ -152,6 +152,7 @@ class AIResponder:
 
     def status(self) -> Dict[str, Any]:
         """Reports whether the AI layer is configured AND actually working."""
+        from camellia.monitoring import provider_events
         provider = self.get_active_provider()
         now = time.time()
         paused = {
@@ -177,6 +178,7 @@ class AIResponder:
                 "hits": self._refinement_hits,
                 "misses": self._refinement_misses,
             },
+            "tokens": provider_events.token_summary(),
         }
 
     def _load_json(self, path: str) -> Dict[str, Any]:
@@ -427,11 +429,16 @@ class AIResponder:
                     return "", False, f"groq_http_{resp.status_code}"
 
                 data = resp.json()
+                # A refused or empty generation still spends the minute's budget.
+                usage = {
+                    "model": payload["model"],
+                    "tokens": int((data.get("usage") or {}).get("total_tokens") or 0),
+                }
                 choices = data.get("choices", [])
                 if not choices:
                     if not on_side_model:
                         self._record_call(False, "invalid_response")
-                    provider_events.record(operation, "invalid_response", started, fallback=True)
+                    provider_events.record(operation, "invalid_response", started, fallback=True, **usage)
                     return "", False, "groq_no_choices"
 
                 assistant_text = choices[0].get("message", {}).get("content", "").strip()
@@ -439,7 +446,7 @@ class AIResponder:
                 if "OUT_OF_CONTEXT" in assistant_text.upper() or not assistant_text:
                     if not assistant_text and not on_side_model:
                         self._record_call(False, "invalid_response")
-                    provider_events.record(operation, "refused" if assistant_text else "invalid_response", started, fallback=True)
+                    provider_events.record(operation, "refused" if assistant_text else "invalid_response", started, fallback=True, **usage)
                     fallback = self.qa_data.get("escalation_triggers", {}).get(
                         "fallback_response",
                         "Thanks for reaching out! I can only help with questions about Camellia Artisanal menu, prices, and delivery. Let me connect you with our team. 🙏"
@@ -448,7 +455,7 @@ class AIResponder:
 
                 if not on_side_model:
                     self._record_call(True, "ok")
-                provider_events.record(operation, "success", started)
+                provider_events.record(operation, "success", started, **usage)
                 return assistant_text, True, "groq_rag"
 
         except Exception as e:
@@ -798,14 +805,15 @@ class AIResponder:
             # introduce protected business claims or numbers absent from the
             # approved template and known conversation context.
             from camellia.rag_fallback import rag_fallback_engine
-            grounding_context = [template_text, user_context or "", history_str, user_message or ""]
             # Strict: a refinement rewrites approved copy conversationally, so
             # every word carrying meaning has to come from that copy, the
             # customer's own message or the conversation so far. A refinement
             # that introduces a claim of its own ("prepared fresh every
             # morning") is discarded and the approved text is sent instead.
+            # Prices and protected claims must come from the template alone.
             grounded, grounding_reason = rag_fallback_engine.grounding_report(
-                resp_text, grounding_context, strict=True,
+                resp_text, [template_text], strict=True,
+                customer_words=(user_context or "", history_str, user_message or ""),
             )
             if not grounded:
                 log.warning(

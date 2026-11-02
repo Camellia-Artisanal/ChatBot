@@ -90,6 +90,9 @@ breaks the whole page ([MEMORY.md](MEMORY.md)).
 Any generated text must pass grounding checks against approved content. If Groq fails, the
 bot falls back to deterministic rules or a human handoff, never to a guess.
 
+Groq token use is held in memory by `ProviderEvents`, since process start by operation and over
+the last minute by model. `/health` shows it under `ai.tokens`.
+
 ## 3. What happens to a customer message
 
 ```mermaid

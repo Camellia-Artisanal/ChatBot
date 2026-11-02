@@ -66,10 +66,12 @@ class ProviderEvents:
     def __init__(self):
         self._events = deque(maxlen=50)
         self._counts = Counter()
+        self._tokens = Counter()
+        self._token_window = deque()
         self._lock = Lock()
         self.started_at = datetime.now(timezone.utc).isoformat()
 
-    def record(self, operation, outcome, started, *, fallback=False):
+    def record(self, operation, outcome, started, *, fallback=False, model=None, tokens=0):
         if operation not in {"answer", "refinement", "structured", "menu_extraction"}:
             operation = "structured"
         if outcome not in {"success", "timeout", "rate_limited", "auth_config_failure",
@@ -78,16 +80,32 @@ class ProviderEvents:
         event = {"timestamp": datetime.now(timezone.utc).isoformat(),
                  "operation": operation, "outcome": outcome,
                  "latency_ms": round(max(0, time.monotonic() - started) * 1000, 1),
-                 "fallback_used": bool(fallback)}
+                 "fallback_used": bool(fallback), "model": model, "tokens": tokens}
         with self._lock:
             self._events.append(event)
             self._counts[outcome] += 1
+            if tokens:
+                self._tokens[operation] += tokens
+                self._token_window.append((time.monotonic(), model, tokens))
         log.info("groq.%s %s", outcome, json.dumps(event, sort_keys=True))
 
+    def token_summary(self):
+        """Groq's rate limits are per model and per minute, so report them that way."""
+        cutoff = time.monotonic() - 60
+        last_minute = Counter()
+        with self._lock:
+            while self._token_window and self._token_window[0][0] < cutoff:
+                self._token_window.popleft()
+            for _, model, tokens in self._token_window:
+                last_minute[model or "unknown"] += tokens
+            return {"since_start_by_operation": dict(self._tokens),
+                    "last_minute_by_model": dict(last_minute)}
+
     def snapshot(self):
+        tokens = self.token_summary()
         with self._lock:
             return {"scope": "since_process_start", "started_at": self.started_at,
-                    "counts": dict(self._counts), "recent": list(self._events)}
+                    "counts": dict(self._counts), "tokens": tokens, "recent": list(self._events)}
 
 
 def provider_http_outcome(status):
