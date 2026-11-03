@@ -141,3 +141,13 @@ def test_a_story_or_missing_mapping_cannot_be_shared(store):  # noqa: F811
 
 def test_admin_needs_a_login():
     assert TestClient(app_module.app).post(ATTACH, json={"routing_id": 1, "item_ids": [1]}).status_code in {401, 403}
+
+
+def test_a_custom_response_saves_without_a_topic(store, assets):  # noqa: F811
+    client = _client()
+    item = _media(client, "post", "NOTOPIC1")
+    response = client.put(f"/admin/instagram-media/{item['id']}/mapping", headers=auth(), json={
+        "topic_id": "", "response_mode": "CUSTOM", "source_description": NOTE, "menu_mode": "NONE"})
+    assert response.status_code == 200, response.text
+    route = response.json()["route"]
+    assert route["topic_id"] is None and route["response_mode"] == "CUSTOM" and route["source_description"] == NOTE

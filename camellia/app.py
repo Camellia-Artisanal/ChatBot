@@ -4431,9 +4431,8 @@ async def save_instagram_media_mapping(item_id: int, request: Request, x_admin_k
     _require_verified_current_instagram_media(item)
     manual = item.get("sync_status") == "MANUAL_EXACT_LINK"
     body = await request.json()
-    topic_id = str(body.get("topic_id") or "").strip()
-    if not topic_id and body.get("response_mode", "CUSTOM") != "APPROVED_QA":
-        raise HTTPException(status_code=400, detail="Choose a Topic.")
+    # Topic is optional on every mapping (3 Nov); a Custom reply works without one.
+    topic_id = str(body.get("topic_id") or "").strip() or None
     existing = db.get_instagram_media_mapping(item_id, for_edit=True)
     opened = str(body.get("expected_updated_at") or "")
     if existing and opened and str(existing.get("updated_at") or "") > opened:
@@ -8625,7 +8624,7 @@ def get_admin_dashboard():
             <div id="igPostConnectionStatus" style="display:none; font-size:0.82rem; margin:10px 0; padding:8px 10px; border-radius:8px;"></div>
 
             <div class="source-map-form"><div class="source-map-field">
-                <label class="field-label" for="igTopicPicker">Topic</label>
+                <label class="field-label" for="igTopicPicker">Topic <span class="ig-media-muted">Optional</span></label>
                     <select class="field-control" id="igTopicPicker" onchange="onIgTopicChange()"><option value="">Select Topic</option></select>
                 <div class="source-secondary-actions">
                     <button class="btn-secondary" type="button" onclick="openTopicModal('', 'igTopicPicker')">+ Add Topic</button>
@@ -8733,7 +8732,7 @@ def get_admin_dashboard():
                         <input class="field-control ig-story-readonly" id="igStoryMediaId" readonly aria-readonly="true" autocomplete="off">
                     </div>
                     <div class="source-map-field">
-                        <label class="field-label" for="igStoryTopicPicker">Topic</label>
+                        <label class="field-label" for="igStoryTopicPicker">Topic <span class="ig-media-muted">Optional</span></label>
                             <select class="field-control" id="igStoryTopicPicker"><option value="">Select Topic</option></select>
                         <div class="source-secondary-actions">
                             <button class="btn-secondary" type="button" onclick="openTopicModal('', 'igStoryTopicPicker')">+ Add Topic</button>
@@ -10368,7 +10367,7 @@ THIS WEEK'S BENGAL SPECIALS
                 const menuOptions = `<option value="__none__">No attachment</option>${selectedMenu === '__inherit__' ? '<option value="__inherit__" selected>Use existing Topic-linked menu</option>' : ''}${igMenus.map(menu => `<option value="${escapeHtml(menu.menu_id)}" ${menu.menu_id === selectedMenu ? 'selected' : ''}>${escapeHtml(menu.name)}</option>`).join('')}`;
                 document.getElementById('contentDetailsActions').innerHTML = `<div class="source-map-form">
                     ${sourceResponseHtml('igMedia')}
-                    <div class="source-map-field"><label class="field-label" for="igMediaTopic">Topic</label><select class="field-control" id="igMediaTopic" onchange="renderSourceAssetCard('igMediaMenu','igMediaMenuSelected'); renderMediaTopicAnswers()">${topicOptions}</select><div class="source-secondary-actions"><button class="btn-secondary" type="button" onclick="openTopicModal('', 'igMediaTopic')">+ Add Topic</button><button class="btn-secondary" type="button" onclick="openManageTopics('igMediaTopic')">Manage Topics</button></div></div>
+                    <div class="source-map-field"><label class="field-label" for="igMediaTopic">Topic <span class="ig-media-muted">Optional</span></label><select class="field-control" id="igMediaTopic" onchange="renderSourceAssetCard('igMediaMenu','igMediaMenuSelected'); renderMediaTopicAnswers()">${topicOptions}</select><div class="source-secondary-actions"><button class="btn-secondary" type="button" onclick="openTopicModal('', 'igMediaTopic')">+ Add Topic</button><button class="btn-secondary" type="button" onclick="openManageTopics('igMediaTopic')">Manage Topics</button></div></div>
                     <div class="source-map-field" id="igMediaTopicAnswersField"><label class="field-label">When customers ask the price or details, reply with</label><p class="source-map-help">Approved answers, sent word for word. Turn on the option below the Custom response to use it for generic “tell me more” questions. These answers apply to every Post/Reel in this Topic.</p><div id="igMediaTopicAnswers" style="max-height:220px;overflow-y:auto;border:1px solid #e5e5e5;border-radius:8px;padding:8px;"></div></div>
                     <input type="hidden" id="igMediaOpenedAt" value="${escapeHtml(item.mapping_route?.updated_at || '')}">
                     <div class="source-map-field"><label class="field-label" for="igMediaDescription">Description for this ${item.source_type}</label><p class="source-map-help">Used when someone asks what this ${item.source_type} is about.</p><textarea class="field-control" id="igMediaDescription" rows="5">${escapeHtml(item.source_description || '')}</textarea><label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;"><input type="checkbox" id="igMediaCustomInfoQuestions" ${item.mapping_route?.custom_info_questions_enabled ? 'checked' : ''}><span><b>Use this response for general “tell me more” questions</b><br><small class="source-map-help">Covers phrases like “Tell me more about this” and “Can I get more info?”. Specific questions still use approved answers.</small></span></label></div>
@@ -11970,7 +11969,6 @@ THIS WEEK'S BENGAL SPECIALS
             const mediaId = document.getElementById('igStoryMediaId')?.value.trim() || '';
             const topicId = document.getElementById('igStoryTopicPicker')?.value || '';
             if (!mediaId) return showInstagramStoryResult('error', 'Choose a captured Story before mapping it.');
-            if (!topicId && sourceResponseFields('igStory').response_mode === 'CUSTOM') return showInstagramStoryResult('error', 'Select a Topic before saving the Story mapping.');
             if (!confirmSourceNoteMenu('igStory')) return;
             if (sourceResponseFields('igStory').response_mode === 'CUSTOM' && updateMenuChoiceWarning('igStoryMenuPicker', 'igStoryMenuWarning')) return showInstagramStoryResult('error', 'Choose an active menu or No menu before saving.');
             const menuChoice = menuChoiceParts(document.getElementById('igStoryMenuPicker').value);

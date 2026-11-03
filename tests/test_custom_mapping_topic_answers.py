@@ -208,3 +208,14 @@ def test_every_logged_message_says_why(ad_customer):
     _ask(ad_customer, "Hello?")
     muted = json.loads(db.get_conversations(limit=1, channel="instagram", user_id=sender)[0]["decision_reason"])
     assert muted["silent"].startswith("open handoff CAM-")
+
+
+def test_a_custom_mapping_with_no_topic_still_sends_its_note(ad_customer):
+    route = instagram_routing.decode_route(_custom_route(ad_customer, custom_info_questions_enabled=True))
+    route["topic_id"] = None
+    ad_customer[2].save_instagram_source_route(route, int(route["routing_id"]))
+    sender, _facts, db = ad_customer
+    _ask(ad_customer, "Hello, can I get more info on this?")
+    assert db.get_active_handoff("instagram", sender) is None
+    stored = db.get_conversations(limit=1, channel="instagram", user_id=sender)[0]
+    assert stored["bot_response"] == NOTE and stored["template_id"] == "source_description"
