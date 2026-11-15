@@ -1110,9 +1110,12 @@ def _process_instagram_event(
         # A Custom mapping's note is the client's own reply for that ad/post.
         # A generic price/details question nothing else answered gets it
         # (once) instead of the manager handoff. Specific requests, orders and
-        # later unanswered questions still go to a person.
+        # later unanswered questions still go to a person. A note that states a
+        # price answers every price question, "for 2 people" included (15 Nov).
+        note_intent = responder_module.source_referential_intent(customer_message) if note else None
+        priced_note = note_intent == "price" and bool(_NOTE_PRICE_RE.search(note))
         if (not was_matched and template_id is None and note and mapped.get("active", True)
-                and (responder_module.source_referential_intent(customer_message) in {"price", "details"}
+                and (note_intent in {"price", "details"}
                      # Meta's ad button "Hello, can I get more info on this?" reads as an
                      # order ("get ... this") but is a request for details.
                      or re.search(r"\bmore\s+(?:info|information|details?)\b|"
@@ -1120,12 +1123,13 @@ def _process_instagram_event(
                                   customer_message, re.I))
                 and mapped.get("response_mode", "CUSTOM") == "CUSTOM"
                 and not facts.get("source_context_superseded")
-                and facts.get("source_note_sent_routing_id") != mapped.get("routing_id")
+                and (priced_note or facts.get("source_note_sent_routing_id") != mapped.get("routing_id"))
                 and not is_human_help_request(customer_message)
                 # The client's always-forward words ("complaint", "discount") win over the note (19 Oct).
                 and not responder.check_explicit_escalation_triggers(customer_message)
                 # A price for something not on the menu (e.g. paneer) needs a person, not the note.
-                and not responder_module._unknown_named_price(customer_message)):
+                and (priced_note and _PEOPLE_COUNT_RE.search(customer_message)
+                     or not responder_module._unknown_named_price(customer_message))):
             menu_id = mapped.get("menu_id")
             if str(mapped.get("menu_mode") or "INHERIT").upper() == "INHERIT" and not menu_id and mapped.get("topic_id"):
                 menu_id = (db.get_instagram_topic(mapped["topic_id"]) or {}).get("default_menu_id")
@@ -1779,6 +1783,9 @@ def _answered_since(sender_id: str, since_epoch: float) -> bool:
     return False
 
 
+# A Custom note states a price; a customer names how many people.
+_NOTE_PRICE_RE = re.compile(r"₹\s*\d|\b(?:rs|inr)\.?\s*\d|\d\s*/-", re.I)
+_PEOPLE_COUNT_RE = re.compile(r"\b\d+\s*(?:people|persons?|pax|heads?|guests?|members?|adults?)\b", re.I)
 SHARE_REPLY_DELAY_SECONDS = 5
 SHARE_REPLY_STALE_SECONDS = 120
 

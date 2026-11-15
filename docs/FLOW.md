@@ -26,7 +26,7 @@ Meta webhook (signed)  POST /webhook/instagram
       │      → approved Q&A (approved_qa.match) → menus → grounded/RAG fallbacks
       ├─ post-rules in app.py:
       │      enabled Custom mapping + exact generic “tell me more” phrases → source note
-      │      unmatched price/details on a Custom mapping → client's note once (legacy fallback)
+      │      unmatched price/details on a Custom mapping → client's note once (legacy fallback); a note stating a price (₹, Rs, /-) answers every price ask, "for 2 people" included
       │      not matched → handoff: get_or_create_handoff + default_handoff_message()
       └─ queue outbound sends (instagram_outbound_jobs), log conversation
 ```
