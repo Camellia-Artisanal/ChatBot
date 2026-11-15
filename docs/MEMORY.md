@@ -63,6 +63,9 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
 - `data/client_approved_qa_source.txt` only seeds `approved_qa_builtin`, so editing it changes nothing for an answer already
   stored (3 Nov). Change built-in wording in Admin. The file stays as the fallback if the database cannot be read.
 
+- A share with no text never replies inside the webhook job: waiting there would hold the customer's own
+  typed message behind it. The wait lives in `instagram_share_replies`, fired by the job loop (15 Nov).
+
 ## Business rules (client decisions)
 
 - **Approved wording is sent word for word.** The model may choose an approved answer,

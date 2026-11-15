@@ -1015,6 +1015,22 @@ class Database:
                 occurred_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
             """)
+            # A mapped Custom post shared with no text is answered after a short wait,
+            # once per customer and post (15 Nov). Rows name the customer, so they
+            # join the retention and erasure lists below.
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS instagram_share_replies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sender_id TEXT NOT NULL,
+                media_key TEXT NOT NULL,
+                routing_id INTEGER NOT NULL,
+                received_at REAL NOT NULL,
+                due_at REAL NOT NULL,
+                status TEXT NOT NULL DEFAULT 'PENDING',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (sender_id, media_key)
+            );
+            """)
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS instagram_pending_media_events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2668,6 +2684,40 @@ class Database:
             row = conn.execute("SELECT * FROM instagram_pending_media_events WHERE event_key=?", (event_key,)).fetchone()
             conn.commit()
         return dict(row)
+
+    def schedule_share_reply(self, sender_id: str, media_key: str, routing_id: int, delay: float) -> bool:
+        """False when this customer already had a reply scheduled for this post."""
+        now = time.time()
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "INSERT OR IGNORE INTO instagram_share_replies (sender_id, media_key, routing_id, received_at, due_at) "
+                "VALUES (?, ?, ?, ?, ?)", (str(sender_id), str(media_key), int(routing_id), now, now + delay))
+            conn.commit()
+        return cursor.rowcount == 1
+
+    def claim_due_share_replies(self, limit: int = 50) -> List[Dict[str, Any]]:
+        with self.get_connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            rows = [dict(row) for row in conn.execute(
+                "SELECT * FROM instagram_share_replies WHERE status='PENDING' AND due_at<=? ORDER BY due_at LIMIT ?",
+                (time.time(), int(limit)))]
+            for row in rows:
+                conn.execute("UPDATE instagram_share_replies SET status='SENDING' WHERE id=?", (row["id"],))
+            conn.commit()
+        return rows
+
+    def finish_share_reply(self, reply_id: int, status: str) -> None:
+        with self.get_connection() as conn:
+            conn.execute("UPDATE instagram_share_replies SET status=? WHERE id=?", (status, int(reply_id)))
+            conn.commit()
+
+    def has_inbound_text_since(self, sender_id: str, since: float) -> bool:
+        """True when the customer sent a message, not just a share, from `since` on."""
+        with self.get_connection() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM instagram_inbound_jobs WHERE sender_id=? AND task_name='_process_instagram_event' "
+                "AND created_at >= datetime(?, 'unixepoch') LIMIT 1", (str(sender_id), float(since))).fetchone()
+        return bool(row)
 
     def has_pending_instagram_media(self, sender_id: str, media_id: str) -> bool:
         with self.get_connection() as conn:
@@ -5953,6 +6003,7 @@ class Database:
         ("router_shadow", "timestamp"), ("rag_audit_logs", "timestamp"),
         ("assisted_resolution_suggestions", "created_at"), ("auto_resolve_decisions", "created_at"),
         ("instagram_pending_media_events", "created_at"), ("instagram_customer_identities", "updated_at"),
+        ("instagram_share_replies", "created_at"),
     )
     _HANDOFF_CLOSED = ("(status IN ('RESOLVED', 'EXPIRED', 'RESUMED') "
                        "OR (expires_at IS NOT NULL AND expires_at <= CURRENT_TIMESTAMP))")
@@ -6047,6 +6098,7 @@ class Database:
             cursor.execute("DELETE FROM instagram_outbound_jobs WHERE recipient_id = ?", (user_id,))
             cursor.execute("DELETE FROM instagram_inbound_jobs WHERE sender_id = ?", (user_id,))
             cursor.execute("DELETE FROM instagram_pending_media_events WHERE sender_id = ?", (user_id,))
+            cursor.execute("DELETE FROM instagram_share_replies WHERE sender_id = ?", (user_id,))
             cursor.execute("DELETE FROM instagram_customer_identities WHERE customer_external_id = ?", (user_id,))
             cursor.execute("UPDATE instagram_story_sources SET last_sender_id = NULL WHERE last_sender_id = ?", (user_id,))
             for table in ("message_route_audit", "triage_shadow", "assisted_resolution_suggestions",

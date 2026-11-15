@@ -1018,7 +1018,9 @@ def _process_instagram_event(
         if source_media_present and not str(message_text or "").strip():
             # A media-only webhook is context, not a customer question. Exact
             # mapped state was saved above; unmapped media remains unmapped.
-            # Neither case may trigger a reply, QA fallback, or handoff.
+            # Neither case may trigger a reply now, QA fallback, or handoff. A
+            # mapped Custom post alone gets its note after a short wait (15 Nov).
+            _schedule_share_reply(sender_id, source_route, entry, shared_reel, shared_post_id or trace.get("media_id"))
             return
         customer_message = str(message_text or "").strip() or "[shared media]"
         response_input = str(message_text or "").strip() or "Tell me more"
@@ -1777,6 +1779,80 @@ def _answered_since(sender_id: str, since_epoch: float) -> bool:
     return False
 
 
+SHARE_REPLY_DELAY_SECONDS = 5
+SHARE_REPLY_STALE_SECONDS = 120
+
+
+def _source_note_image(mapped: Dict[str, Any]) -> Optional[str]:
+    """The menu a Custom mapping's note is sent with, as the typed-question path picks it."""
+    menu_id = mapped.get("menu_id")
+    if str(mapped.get("menu_mode") or "INHERIT").upper() == "INHERIT" and not menu_id and mapped.get("topic_id"):
+        menu_id = (db.get_instagram_topic(mapped["topic_id"]) or {}).get("default_menu_id")
+    return menu_images.current_url(str(menu_id)) if menu_id and str(mapped.get("menu_mode") or "").upper() != "NONE" else None
+
+
+def _custom_note_route(route: Optional[Dict[str, Any]]) -> bool:
+    return bool(route and route.get("active", True) and route.get("routing_id")
+                and str(route.get("response_mode") or "CUSTOM").upper() == "CUSTOM"
+                and str(route.get("source_description") or "").strip())
+
+
+def _schedule_share_reply(sender_id, route, entry, shared_reel, media_id) -> None:
+    """A mapped Custom Post or Reel shared alone is answered once, unless the customer types."""
+    media_key = (shared_reel or {}).get("shortcode") or media_id
+    if entry.source == "story_reply" or not media_key or not _custom_note_route(route):
+        return
+    db.schedule_share_reply(sender_id, str(media_key), int(route["routing_id"]), SHARE_REPLY_DELAY_SECONDS)
+
+
+def _send_due_share_replies() -> None:
+    """Fires the waits that ended. Everything is checked now, not when the post was shared."""
+    for row in db.claim_due_share_replies():
+        sender_id = row["sender_id"]
+        try:
+            status = _send_share_reply(sender_id, row)
+        except Exception:
+            log.exception("Share reply failed for sender_hash=%s.", _safe_identifier_hash(sender_id))
+            status = "FAILED"
+        db.finish_share_reply(int(row["id"]), status)
+
+
+def _send_share_reply(sender_id: str, row: Dict[str, Any]) -> str:
+    if time.time() - float(row["due_at"]) > SHARE_REPLY_STALE_SECONDS:
+        return "STALE"  # Held up (a restart), and a late reply would arrive out of the blue.
+    # Instagram may deliver the typed words a moment before the share.
+    if db.has_inbound_text_since(sender_id, float(row["received_at"]) - 3):
+        return "TEXT"
+    if not instagram_chatbot_control.is_sender_allowed(sender_id, database=db):
+        return "BLOCKED"
+    if db.get_active_handoff("instagram", sender_id):
+        return "HANDOFF"
+    stored = db.get_instagram_source_route(int(row["routing_id"]))
+    route = decode_route(stored) if stored and not stored.get("archived_at") else None
+    if not _custom_note_route(route):
+        return "NOT_CUSTOM"
+    facts = session_memory.get_facts(sender_id, "instagram")
+    if facts.get("cart") or facts.get("order_intake_draft"):
+        return "ORDER"
+    note = str(route["source_description"]).strip()
+    image_url = _source_note_image(route)
+    conversation_id = db.log_conversation(
+        sender_id, "instagram", "[shared post]", note, True, "source_description",
+        message_source="shared_media", source_routing_id=route["routing_id"], source_type=route.get("source_type"),
+        shortcode=route.get("shortcode"), source_match_method="shared_media_alone",
+        source_context_available=True, source_context_used=True, source_media_present=True,
+    )
+    buttons = category_buttons.after_mapped_reply(sender_id, facts, route) if not image_url else None
+    _send_or_queue_instagram_reply(
+        sender_id, note, image_url=image_url, inbound_message_id=conversation_id, response_type="reply",
+        **({"quick_replies": buttons} if buttons else {}),
+    )
+    # A later "price?" on the same post then uses its answers, not this note again.
+    facts["source_note_sent_routing_id"] = route["routing_id"]
+    session_memory.touch(sender_id, "instagram")
+    return "SENT"
+
+
 def _finalize_expired_unmapped_posts() -> None:
     """Lazily finalize durable unpaired Post events after the ad-race window."""
     for event in db.claim_expired_pending_instagram_media(limit=100):
@@ -2338,6 +2414,7 @@ async def _instagram_job_loop(stop_event: asyncio.Event) -> None:
         try:
             await asyncio.to_thread(_process_instagram_inbound_jobs)
             await asyncio.to_thread(_finalize_expired_unmapped_posts)
+            await asyncio.to_thread(_send_due_share_replies)
             await asyncio.to_thread(_process_instagram_outbound_jobs)
         except asyncio.CancelledError:
             raise

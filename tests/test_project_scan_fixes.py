@@ -44,7 +44,8 @@ def test_retention_reaches_every_customer_history_table(database):
         for table, column in Database._CUSTOMER_HISTORY_TABLES:
             for stamp in (OLD, NOW):
                 key = {"instagram_customer_identities": {"customer_external_id": stamp},
-                       "instagram_pending_media_events": {"event_key": stamp}}.get(table, {})
+                       "instagram_pending_media_events": {"event_key": stamp},
+                       "instagram_share_replies": {"media_key": stamp}}.get(table, {})
                 _row(conn, table, **{column: stamp}, **key)
         conn.commit()
 
