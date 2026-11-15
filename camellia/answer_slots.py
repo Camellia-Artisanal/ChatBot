@@ -343,6 +343,21 @@ def needs_answers(days: int = 14) -> List[Dict[str, Any]]:
                ORDER BY s.id DESC""",
             (since, REMOVED),
         )]
+        # Rows saved before 16 Nov have no sender: take the customer whose Instagram
+        # message with the same words was logged nearest in time, within 10 minutes.
+        for row in rows:
+            if row["sender_id"]:
+                continue
+            found = conn.execute(
+                """SELECT c.user_id, i.customer_username FROM conversations c
+                   LEFT JOIN instagram_customer_identities i ON i.customer_external_id = c.user_id
+                   WHERE c.channel = 'instagram' AND c.user_message = ?
+                     AND c.timestamp BETWEEN datetime(?, '-10 minutes') AND datetime(?, '+10 minutes')
+                   ORDER BY ABS(julianday(c.timestamp) - julianday(?)) LIMIT 1""",
+                (row["user_message"], row["timestamp"], row["timestamp"], row["timestamp"]),
+            ).fetchone()
+            if found:
+                row["sender_id"], row["customer_username"] = found["user_id"], found["customer_username"]
     groups: Dict[tuple, Dict[str, Any]] = {}
     seen: set = set()
     for row in rows:

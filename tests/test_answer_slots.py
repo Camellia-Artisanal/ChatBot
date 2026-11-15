@@ -332,3 +332,15 @@ def test_waiting_questions_name_who_asked(slots):
     assert sorted(example["askers"]) == ["", "rina.cooks"]
     answer_slots.db.delete_user_data("cust-1")
     assert answer_slots.needs_answers()[0]["examples"][0]["askers"] == [""]
+
+
+def test_an_older_question_without_a_sender_finds_its_customer(slots):
+    topic = _topic("Older Gap")
+    answer_slots.db.save_instagram_customer_identity("cust-old", username="old.friend")
+    answer_slots.db.log_conversation("cust-old", "instagram", "About the food.", "reply", False, None)
+    answer_slots.db.log_conversation("cust-far", "instagram", "About the food.", "reply", False, None)
+    with answer_slots.db.get_connection() as conn:
+        conn.execute("UPDATE conversations SET timestamp=datetime('now', '-1 hour') WHERE user_id='cust-far'")
+        conn.commit()
+    _gap(topic, "About the food.")
+    assert answer_slots.needs_answers()[0]["examples"][0]["askers"] == ["old.friend"]
