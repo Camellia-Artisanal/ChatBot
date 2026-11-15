@@ -232,7 +232,7 @@ class SlotShadow:
         self._pending = 0
         self._lock = threading.Lock()
 
-    def record_shadow(self, message: str, route: Dict[str, Any]) -> None:
+    def record_shadow(self, message: str, route: Dict[str, Any], sender_id: Optional[str] = None) -> None:
         """Queues the check and returns at once. Never raises: the reply is already decided."""
         if not config.VARIATION_SHADOW_ENABLED or not route.get("topic_id"):
             return
@@ -244,13 +244,13 @@ class SlotShadow:
                 self._pending += 1
                 if self._pool is None:
                     self._pool = ThreadPoolExecutor(max_workers=_SHADOW_WORKERS, thread_name_prefix="slot-shadow")
-            self._pool.submit(self._run, message, dict(route))
+            self._pool.submit(self._run, message, dict(route), sender_id)
         except Exception as e:
             with self._lock:
                 self._pending = max(0, self._pending - 1)
             log.warning("Could not queue an answer slot check: %s", e)
 
-    def _run(self, message: str, route: Dict[str, Any]) -> None:
+    def _run(self, message: str, route: Dict[str, Any], sender_id: Optional[str] = None) -> None:
         started = time.perf_counter()
         try:
             result = classify(message, own_questions(route.get("topic_id")))
@@ -258,11 +258,11 @@ class SlotShadow:
             with db.get_connection() as conn:
                 conn.execute(
                     """INSERT INTO answer_slot_shadow
-                       (routing_id, topic_id, user_message, slot, confidence, specific, outcome, answer_source, detail, latency_ms)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       (routing_id, topic_id, user_message, slot, confidence, specific, outcome, answer_source, detail, latency_ms, sender_id)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (route.get("routing_id"), route.get("topic_id"), message, result.get("slot"), result.get("confidence"),
                      int(bool(result.get("specific"))), outcome_for(result, answer), (answer or {}).get("source"),
-                     result.get("reason", "ok"), round((time.perf_counter() - started) * 1000, 1)),
+                     result.get("reason", "ok"), round((time.perf_counter() - started) * 1000, 1), sender_id),
                 )
                 conn.execute("DELETE FROM answer_slot_shadow WHERE timestamp < datetime('now', ?)", (f"-{KEEP_DAYS} days",))
                 conn.commit()
@@ -333,8 +333,10 @@ def needs_answers(days: int = 14) -> List[Dict[str, Any]]:
     since = f"-{int(days)} days"
     with db.get_connection() as conn:
         rows = [dict(row) for row in conn.execute(
-            """SELECT s.topic_id, t.name AS topic_name, s.slot, s.routing_id, s.user_message, s.timestamp
+            """SELECT s.topic_id, t.name AS topic_name, s.slot, s.routing_id, s.user_message, s.timestamp,
+                      s.sender_id, i.customer_username
                FROM answer_slot_shadow s JOIN instagram_topics t ON t.topic_id = s.topic_id
+               LEFT JOIN instagram_customer_identities i ON i.customer_external_id = s.sender_id
                LEFT JOIN answer_slot_dismissed d ON d.topic_id = s.topic_id AND d.slot = s.slot
                WHERE s.outcome IN ('empty', 'expired') AND s.timestamp >= datetime('now', ?)
                  AND (d.dismissed_at IS NULL OR s.timestamp > d.dismissed_at) AND COALESCE(s.detail, '') != ?
@@ -342,6 +344,7 @@ def needs_answers(days: int = 14) -> List[Dict[str, Any]]:
             (since, REMOVED),
         )]
     groups: Dict[tuple, Dict[str, Any]] = {}
+    seen: set = set()
     for row in rows:
         answer = effective({"routing_id": row["routing_id"], "topic_id": row["topic_id"]}, row["slot"])
         if answer and not answer["expired"]:
@@ -352,6 +355,13 @@ def needs_answers(days: int = 14) -> List[Dict[str, Any]]:
             "choices": [{"slot": key, "label": label} for key, label in labels(row["topic_id"]).items()], "state": "expired" if answer else "empty", "count": 0, "examples": [],
         })
         group["count"] += 1
-        if len(group["examples"]) < 20 and row["user_message"] not in {item["message"] for item in group["examples"]}:
-            group["examples"].append({"message": row["user_message"], "routing_id": row["routing_id"]})
+        example = next((item for item in group["examples"] if item["message"] == row["user_message"]), None)
+        if example is None and len(group["examples"]) < 20:
+            example = {"message": row["user_message"], "routing_id": row["routing_id"], "askers": []}
+            group["examples"].append(example)
+        # Newest first, one per customer; a customer with no known username is "".
+        key = (id(example), row["sender_id"])
+        if example is not None and row["sender_id"] and key not in seen:
+            seen.add(key)
+            example["askers"].append(row["customer_username"] or "")
     return sorted(groups.values(), key=lambda item: -item["count"])

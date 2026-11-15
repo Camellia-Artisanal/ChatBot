@@ -1359,7 +1359,7 @@ def _process_instagram_event(
                 and not facts.get("source_context_superseded") and str(message_text or "").strip()
                 and not is_human_help_request(customer_message)
                 and not responder.check_explicit_escalation_triggers(customer_message)):
-            slot_shadow.record_shadow(customer_message, mapped)
+            slot_shadow.record_shadow(customer_message, mapped, sender_id)
             if mapped.get("response_mode", "CUSTOM") == "CUSTOM":
                 variation_shadow.record_shadow(customer_message, mapped)
         conversation_id = db.log_conversation(

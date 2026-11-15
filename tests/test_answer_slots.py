@@ -320,3 +320,15 @@ def test_a_removed_question_stays_in_the_results_and_a_new_ask_still_shows(slots
     assert [item["message"] for item in answer_slots.needs_answers()[0]["examples"]] == ["address please"]
     _gap(topic, "kothay pawa jabe")
     assert {item["message"] for item in answer_slots.needs_answers()[0]["examples"]} == {"kothay pawa jabe", "address please"}
+
+
+def test_waiting_questions_name_who_asked(slots):
+    topic = _topic("Askers Gap")
+    answer_slots.db.save_instagram_customer_identity("cust-1", username="rina.cooks")
+    with _groq({"slot": "location", "specific": False, "confidence": 0.9}):
+        for sender in ("cust-1", "cust-2", "cust-1", None):
+            answer_slots.SlotShadow()._run("kothay pawa jabe", {"routing_id": 5, "topic_id": topic}, sender)
+    example = answer_slots.needs_answers()[0]["examples"][0]
+    assert sorted(example["askers"]) == ["", "rina.cooks"]
+    answer_slots.db.delete_user_data("cust-1")
+    assert answer_slots.needs_answers()[0]["examples"][0]["askers"] == [""]

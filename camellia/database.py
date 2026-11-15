@@ -354,6 +354,8 @@ class Database:
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             """)
+            # Who asked, so the waiting box can name them; erased with the customer.
+            self._ensure_column(cursor, "answer_slot_shadow", "sender_id", "TEXT")
             # Staff words only: their own question types, and gaps they set aside.
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS answer_own_questions (
@@ -6114,6 +6116,7 @@ class Database:
             # are client knowledge by now, so only pending drafts go.
             own_messages = "user_message IN (SELECT user_message FROM conversations WHERE user_id = ?)"
             cursor.execute(f"DELETE FROM router_shadow WHERE {own_messages}", (user_id,))
+            cursor.execute(f"DELETE FROM answer_slot_shadow WHERE sender_id = ? OR {own_messages}", (user_id, user_id))
             cursor.execute(f"DELETE FROM rag_audit_logs WHERE {own_messages}", (user_id,))
             cursor.execute(
                 f"DELETE FROM candidate_templates WHERE status = 'PENDING_APPROVAL' AND {own_messages}",

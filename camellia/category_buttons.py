@@ -105,12 +105,12 @@ def blocks_for(topic_id: str, slot: str) -> Optional[List[Dict[str, Any]]]:
     return blocks or None
 
 
-def _record_gap(topic_id: str, slot: str, message: str) -> None:
+def _record_gap(topic_id: str, slot: str, message: str, sender_id: Optional[str] = None) -> None:
     """Puts a missing answer on the Needs answers page."""
     with db.get_connection() as conn:
         conn.execute(
-            "INSERT INTO answer_slot_shadow (topic_id, user_message, slot, outcome, detail) VALUES (?, ?, ?, 'empty', 'category_button')",
-            (topic_id, message, slot),
+            "INSERT INTO answer_slot_shadow (topic_id, user_message, slot, outcome, detail, sender_id) VALUES (?, ?, ?, 'empty', 'category_button', ?)",
+            (topic_id, message, slot, sender_id),
         )
         conn.commit()
 
@@ -126,7 +126,7 @@ def tap(sender_id: str, facts: Dict[str, Any], message: str) -> Optional[List[Di
     slot = pending.get("slot") or "details"
     blocks = blocks_for(topic_id, slot)
     if not blocks:
-        _record_gap(topic_id, slot, pending.get("message") or str(message))
+        _record_gap(topic_id, slot, pending.get("message") or str(message), sender_id)
     return blocks
 
 
@@ -141,7 +141,7 @@ def next_step(sender_id: str, facts: Dict[str, Any], message: str, ad_button: bo
             return None
         blocks = blocks_for(chosen, slot)
         if not blocks:
-            _record_gap(chosen, slot, message)
+            _record_gap(chosen, slot, message, sender_id)
             return None
         return {"blocks": blocks}
     if facts.get("category_question_asked") or not (ad_button or slot):

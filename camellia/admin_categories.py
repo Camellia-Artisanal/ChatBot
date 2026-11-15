@@ -876,7 +876,13 @@ function catNeedRow(group, example) {
  wrong.setAttribute('aria-expanded', 'false');
  const move = document.createElement('div'); move.hidden = true; move.style.marginTop = '6px'; move.append(catMoveSelect(group, example));
  wrong.onclick = () => { move.hidden = !move.hidden; wrong.setAttribute('aria-expanded', String(!move.hidden)); };
- text.append(words, where, wrong, move);
+ // Who asked: up to three usernames, newest first; unknown names count as others.
+ const askers = example.askers || [], named = askers.filter(Boolean).slice(0, 3);
+ const who = document.createElement('small'); who.style.display = askers.length ? 'block' : 'none';
+ const others = askers.length - named.length;
+ who.textContent = 'Asked by ' + named.map(name => '@' + name).join(', ')
+  + (others ? (named.length ? ' and ' : '') + catPlural(others, named.length ? 'other' : 'customer') : '');
+ text.append(words, where, who, wrong, move);
  const buttons = document.createElement('div'); buttons.className = 'source-secondary-actions';
  const answer = document.createElement('button'); answer.type = 'button'; answer.className = 'btn-primary'; answer.textContent = 'Answer';
  answer.setAttribute('aria-label', 'Answer: ' + example.message);
