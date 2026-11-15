@@ -306,3 +306,17 @@ def test_a_question_moved_into_a_dismissed_type_stays_on_show(slots):
     _gap(topic)
     answer_slots.move_gap(topic, "location", "iye sthaan pawa jabe", "booking")
     assert [item["slot"] for item in answer_slots.needs_answers()] == ["booking"]
+
+
+def test_a_removed_question_stays_in_the_results_and_a_new_ask_still_shows(slots):
+    topic = _topic("Remove Gap")
+    _gap(topic, "kothay pawa jabe")
+    _gap(topic, "address please")
+    answer_slots.remove_gap(topic, "location", "kothay pawa jabe")
+    group = answer_slots.needs_answers()[0]
+    assert [item["message"] for item in group["examples"]] == ["address please"] and group["count"] == 1
+    assert answer_slots.shadow_report()["outcomes"] == {"empty": 2}
+    answer_slots.move_gap(topic, "location", "kothay pawa jabe", "price")
+    assert [item["message"] for item in answer_slots.needs_answers()[0]["examples"]] == ["address please"]
+    _gap(topic, "kothay pawa jabe")
+    assert {item["message"] for item in answer_slots.needs_answers()[0]["examples"]} == {"kothay pawa jabe", "address please"}

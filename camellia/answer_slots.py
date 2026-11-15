@@ -299,9 +299,23 @@ def move_gap(topic_id: str, slot: str, message: str, to: str) -> None:
         conn.execute(
             # A fresh time keeps it on show even if its new type was set aside earlier.
             """UPDATE answer_slot_shadow SET slot=?, detail='moved_by_staff', timestamp=datetime('now', '+1 second')
-               WHERE topic_id=? AND slot=? AND user_message=? AND outcome IN ('empty', 'expired')""",
-            (to, str(topic_id), slot, message),
+               WHERE topic_id=? AND slot=? AND user_message=? AND outcome IN ('empty', 'expired')
+                 AND COALESCE(detail, '') != ?""",
+            (to, str(topic_id), slot, message, REMOVED),
         )
+        conn.commit()
+
+
+REMOVED = "removed_by_staff"
+
+
+def remove_gap(topic_id: str, slot: str, message: str) -> None:
+    """Hides one waiting question for good. The row stays for the answer test results,
+    and a customer asking again, even in the same words, shows up as a new question."""
+    with db.get_connection() as conn:
+        conn.execute(
+            """UPDATE answer_slot_shadow SET detail=? WHERE topic_id=? AND slot=? AND user_message=?
+               AND outcome IN ('empty', 'expired')""", (REMOVED, str(topic_id), str(slot), str(message)))
         conn.commit()
 
 
@@ -323,9 +337,9 @@ def needs_answers(days: int = 14) -> List[Dict[str, Any]]:
                FROM answer_slot_shadow s JOIN instagram_topics t ON t.topic_id = s.topic_id
                LEFT JOIN answer_slot_dismissed d ON d.topic_id = s.topic_id AND d.slot = s.slot
                WHERE s.outcome IN ('empty', 'expired') AND s.timestamp >= datetime('now', ?)
-                 AND (d.dismissed_at IS NULL OR s.timestamp > d.dismissed_at)
+                 AND (d.dismissed_at IS NULL OR s.timestamp > d.dismissed_at) AND COALESCE(s.detail, '') != ?
                ORDER BY s.id DESC""",
-            (since,),
+            (since, REMOVED),
         )]
     groups: Dict[tuple, Dict[str, Any]] = {}
     for row in rows:
@@ -338,6 +352,6 @@ def needs_answers(days: int = 14) -> List[Dict[str, Any]]:
             "choices": [{"slot": key, "label": label} for key, label in labels(row["topic_id"]).items()], "state": "expired" if answer else "empty", "count": 0, "examples": [],
         })
         group["count"] += 1
-        if len(group["examples"]) < 5 and row["user_message"] not in {item["message"] for item in group["examples"]}:
+        if len(group["examples"]) < 20 and row["user_message"] not in {item["message"] for item in group["examples"]}:
             group["examples"].append({"message": row["user_message"], "routing_id": row["routing_id"]})
     return sorted(groups.values(), key=lambda item: -item["count"])
