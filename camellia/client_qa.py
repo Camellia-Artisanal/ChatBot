@@ -504,7 +504,7 @@ def contextual_price_subject(state: Dict[str, Any]) -> str:
         "sondesh": "sondesh", "sondesh general": "sondesh", "aamar mishti": "sondesh",
         "signature": "sondesh", "signature collection": "sondesh",
         "bento": "bento", "bengali bento": "bento", "bento meal": "bento",
-        "home table": "home_table", "bengali home table": "home_table",
+        "home table": "home_table", "bengali home table": "home_table", "kolkata bengali home table": "home_table",
         "subscription": "subscription",
     }
 

@@ -195,6 +195,35 @@ async def save_master_links(topic_id: str, request: Request, _actor=Depends(revi
     return {"status": "success"}
 
 
+# Master names that should read like the Q&A dropdown. The two Delhi NCR categories keep their city.
+MATCH_NAMES = {"kolkata sondesh delivery": "Kolkata Sondesh", "talk shows kolkata": "Kolkata story telling sessions",
+               "bengali home table": "Kolkata Bengali Home Table"}
+
+
+def _planned_renames():
+    database = _database()
+    return [{"topic_id": topic["topic_id"], "from": topic["name"], "to": MATCH_NAMES[topic["name"].casefold()]}
+            for topic in database.list_instagram_topics()
+            if topic["name"].casefold() in MATCH_NAMES and not database.find_instagram_topic_by_name(MATCH_NAMES[topic["name"].casefold()])]
+
+
+@router.get("/match-names")
+def match_names_preview(_actor=Depends(reviewer)):
+    return {"renames": _planned_renames()}
+
+
+@router.post("/match-names")
+def match_names_apply(_actor=Depends(reviewer)):
+    """Renames only the categories listed by the preview; customers see these names, so staff confirm first."""
+    renames = _planned_renames()
+    try:
+        for item in renames:
+            update_topic(item["topic_id"], name=item["to"])
+    except InstagramTopicError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return {"renamed": renames}
+
+
 @router.get("/question-buttons/{owner_type}/{owner_id}")
 def question_buttons(owner_type: str, owner_id: str, _actor=Depends(reviewer)):
     _slot_owner(owner_type)
@@ -394,6 +423,7 @@ HTML = r'''
  <section class="ig-media-card" style="display:block;margin-bottom:16px;" aria-labelledby="catTopicsTitle">
   <h3 id="catTopicsTitle">Master categories</h3>
   <div id="catTopics" style="margin:12px 0 16px;"></div>
+ <button class="btn-secondary" type="button" onclick="catMatchNames()" style="margin-bottom:16px;">Match names to the Q&amp;A dropdown…</button>
   <b>Add a category</b>
   <p class="source-map-help">Put the product and city in the name, such as Sondesh Delivery Mumbai.</p>
   <form class="source-secondary-actions" onsubmit="event.preventDefault();catAddMaster()"><input id="catAddTopics" class="field-control" style="flex:1 1 200px;width:auto;" maxlength="60" placeholder="Category name" aria-label="New master category name"><select id="catCopyFrom" class="field-control" style="flex:1 1 200px;width:auto;" aria-label="Copy from an existing category" onchange="catRenderCopy()"></select><button class="btn-secondary" type="submit">+ Add</button></form>
@@ -1026,6 +1056,18 @@ async function catRenameMaster(topic, suggested) {
  try {
   const result = await catApi('/admin/categories/master/' + encodeURIComponent(topic.topic_id), 'PATCH', {name});
   await catChanged('Renamed to ' + name + '.' + (result.kept_names.length ? ' Kept the name of ' + result.kept_names.join(' and ') + '.' : ''));
+ } catch (error) { catNote(error.message, true); }
+}
+async function catMatchNames() {
+ try {
+  const plan = (await catApi('/admin/categories/match-names')).renames;
+  if (!plan.length) return catNote('Nothing to rename: these names already match.');
+  if (!confirm('Customers see these names at the top of bot replies. Rename?
+
+' + plan.map(item => item.from + ' -> ' + item.to).join('
+'))) return;
+  await catApi('/admin/categories/match-names', 'POST');
+  await catChanged('Renamed ' + catPlural(plan.length, 'category') + '.');
  } catch (error) { catNote(error.message, true); }
 }
 async function catToggleMaster(topic) {

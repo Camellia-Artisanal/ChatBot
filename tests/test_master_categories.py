@@ -213,3 +213,21 @@ def test_the_preview_shows_reel_links_and_back_closes_the_panel():
     script = admin_categories.SCRIPT
     assert "block.kind === 'LINK') parts.push(bubble(block.url))" in script
     assert "addEventListener('popstate'" in script
+
+
+def test_match_names_renames_only_the_listed_categories(admin):  # noqa: F811
+    client, headers = admin
+    sondesh = _add(admin, name="Kolkata Sondesh Delivery")
+    delhi = _add(admin, name="Sondesh Delivery Delhi NCR")
+    preview = client.get("/admin/categories/match-names", headers=headers).json()["renames"]
+    assert [(i["from"], i["to"]) for i in preview] == [("Kolkata Sondesh Delivery", "Kolkata Sondesh")]
+    assert client.post("/admin/categories/match-names", headers=headers).status_code == 200
+    assert _row(admin, sondesh)["name"] == "Kolkata Sondesh"
+    assert _row(admin, delhi)["name"] == "Sondesh Delivery Delhi NCR"  # city kept
+    assert client.get("/admin/categories/match-names", headers=headers).json()["renames"] == []
+
+
+def test_renamed_home_table_category_still_counts_as_home_table():
+    from camellia import client_qa
+    state = {"source_route": {"active": True, "priority_products": [], "routing_topic": "Kolkata Bengali Home Table"}}
+    assert client_qa.contextual_price_subject(state) == "home_table"

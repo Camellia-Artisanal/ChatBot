@@ -193,3 +193,6 @@ area it names. Structure is in `ARCHITECTURE.md`, message paths in `FLOW.md`.
 - Admin API probing uses the `X-Admin-Key` header from the local `.env` (never paste it).
 - The owner's Railway CLI is not logged into the client account; use `/health` and the
   admin API instead of `railway logs`.
+- Renaming a Master category (Topic) rewrites `routing_topic` on its routes, and the name is shown to customers
+  as the reply heading. Reply rules read it as text (`responder.py` Home Table reel rule, `client_qa.contextual_price_subject`),
+  so check those before renaming a Topic. Names that must keep matching the Q&A dropdown go through `/admin/categories/match-names`.

@@ -3601,7 +3601,7 @@ class DeterministicResponder:
                 if (
                     source.get("routing_id")
                     and source.get("source_type") in {"story", "post", "reel"}
-                    and str(source.get("routing_topic") or "").strip().casefold() == "bengali home table"
+                    and re.fullmatch(r"(?:kolkata )?bengali home table", str(source.get("routing_topic") or "").strip().casefold())
                     and client_qa.HOME_TABLE_VIDEO_ANCHOR in source_description
                 ):
                     source_blocks = client_qa.build_home_table_reel_blocks(source_description)
