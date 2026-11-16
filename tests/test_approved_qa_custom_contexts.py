@@ -114,3 +114,16 @@ def test_general_heading_still_matches_everywhere(store):
     with pytest.raises(ValueError, match="already matches"):
         approved_qa.preview(dict(question="Story heading", answer="X", context="kolkata_story_telling_sessions",
                                  aliases=["Do you run story sessions?"]))
+
+
+def test_answers_dropdown_shows_the_master_category_name(store, monkeypatch):
+    from camellia.config import config
+    db = approved_qa._database()
+    monkeypatch.setattr(config, "ADMIN_API_KEY", "contexts-admin")
+    topic = db.create_instagram_topic("sondesh-delhi", "Sondesh Delivery Delhi NCR", "", None, [], [])
+    db.set_instagram_topic_links(topic["topic_id"], qa_context="sondesh")
+    client = TestClient(app_module.app)
+    options = {o["value"]: o["label"] for o in client.get("/admin/approved-qa", headers=HEADERS).json()["contexts"]}
+    assert options["sondesh"] == "Sondesh Delivery Delhi NCR"
+    assert options["savoury_deliveries"] == "Savoury Deliveries"  # no master link: unchanged
+    assert approved_qa.CANONICAL_CONTEXTS["sondesh"] == "Sondesh"  # stored value untouched
