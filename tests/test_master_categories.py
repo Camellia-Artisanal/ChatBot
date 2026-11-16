@@ -231,3 +231,15 @@ def test_renamed_home_table_category_still_counts_as_home_table():
     from camellia import client_qa
     state = {"source_route": {"active": True, "priority_products": [], "routing_topic": "Kolkata Bengali Home Table"}}
     assert client_qa.contextual_price_subject(state) == "home_table"
+
+
+def test_categories_page_script_is_valid_javascript(tmp_path):
+    """A syntax error here silently kills the whole admin page ("Restoring secure session")."""
+    import re, shutil, subprocess
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not installed")
+    path = tmp_path / "categories.js"
+    path.write_text(re.sub(r"</?script>", "", admin_categories.SCRIPT), encoding="utf-8")
+    result = subprocess.run([node, "--check", str(path)], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr

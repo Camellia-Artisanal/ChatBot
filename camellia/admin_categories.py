@@ -1062,10 +1062,7 @@ async function catMatchNames() {
  try {
   const plan = (await catApi('/admin/categories/match-names')).renames;
   if (!plan.length) return catNote('Nothing to rename: these names already match.');
-  if (!confirm('Customers see these names at the top of bot replies. Rename?
-
-' + plan.map(item => item.from + ' -> ' + item.to).join('
-'))) return;
+  if (!confirm('Customers see these names at the top of bot replies. Rename?' + String.fromCharCode(10, 10) + plan.map(item => item.from + ' -> ' + item.to).join(String.fromCharCode(10)))) return;
   await catApi('/admin/categories/match-names', 'POST');
   await catChanged('Renamed ' + catPlural(plan.length, 'category') + '.');
  } catch (error) { catNote(error.message, true); }
