@@ -474,22 +474,12 @@ def _record(entry, row):
             **{key: row.get(key) for key in ("created_at", "updated_at", "created_by", "updated_by")}}
 
 
-def _master_named(options):
-    """The Answers dropdown shows the master category name (the one customers see),
-    not the older Q&A label. Display only: values, and so every reply, are unchanged."""
-    names = {}
-    for topic in _database().list_instagram_topics():
-        if topic.get("qa_context"):
-            names.setdefault(topic["qa_context"], topic["name"])
-    return [{**option, "label": names.get(option["value"], option["label"])} for option in options]
-
-
 def listing():
     rows = overlays(strict=True)
     records = [_record(entry, rows.get(entry.qa_id, {})) for entry in registry(rows, active_only=False)]
     counts = {key: sum(record["status"] == key for record in records) for key in ("ACTIVE", "SCHEDULED", "EXPIRED", "ARCHIVED")}
     counts["EXPIRING_SOON"] = sum(record["expiring_soon"] for record in records)
-    return {"records": records, "counts": counts, "timezone": "Asia/Kolkata", "contexts": _master_named(context_options(rows)),
+    return {"records": records, "counts": counts, "timezone": "Asia/Kolkata", "contexts": context_options(rows),
             "mapped_roles": [{"value": key, "label": label, "questions": DEFAULT_MAPPED_QUESTIONS[key]} for key, label in MAPPED_ROLES.items()]}
 
 
